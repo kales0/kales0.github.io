@@ -1,0 +1,303 @@
+html, body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background-color: #2C4058;
+	font-family: Arial,Helvetica Neue,Helvetica,sans-serif; 
+}
+
+div, span {
+	font-family: Arial,Helvetica Neue,Helvetica,sans-serif; 
+}
+
+h1, h2, h3, h4, h5 {
+	font-family: "Open Sans", sans-serif;
+	font-optical-sizing: auto;
+	font-weight: 400;
+	font-style: normal;
+	margin: 0;
+	margin-bottom: 15px;
+}
+
+h4 {
+	color: #FFF;
+	font-size: 1.2em;
+	margin-bottom: 20px;
+	font-weight: 700;
+}
+
+p {
+	font-family: Arial, Helvetica, sans-serif;
+	color: #CEE6FF;
+	line-height: 1.2em;
+	font-size: 1.05em;
+}
+
+.body {
+	margin: 0 30px;
+
+}
+
+.title {
+	display: flex;
+	justify-content: flex-start;
+
+	h1 {
+		font-size: 10.36vh;
+		font-size: 10.36vh;
+		font-family: "Montserrat", sans-serif;
+		font-optical-sizing: auto;
+		text-transform: uppercase;
+		margin: 0;
+		padding: 0;
+		font-weight: 400;
+		white-space: nowrap;
+		letter-spacing: 0.5vh;
+		line-height: 7.9vh;
+		color: #FED55F;
+
+		position: fixed;
+		transform-origin: top left;
+		left:0;
+		top:0;
+		transform: rotate(-90deg) translateX(-100%);
+	}
+
+	h2 {
+		font-size: 1.8vw;
+		margin-bottom: 30px;
+		color: #042131;
+		font-weight: 500;
+		
+		@media only screen and (max-width: 1600px) {
+			font-size: 2.2vw;
+		}
+		
+		@media only screen and (max-width: 1200px) {
+			font-size: 1.8vmax;
+		}
+		
+		@media only screen and (max-width: 767px) {
+			font-size: 1.3em;
+			font-weight: 600;
+		}
+	}
+}
+
+.main {
+	margin-top: 1.3vh;
+	margin-left: 15.65vh;
+	margin-right: 45px;
+	padding-bottom: 45px;
+			
+	@media only screen and (max-width: 900px) {
+		margin-left: 10.65vh;
+	}
+
+	@media only screen and (max-width: 1400px) {
+		margin-right: 0px;
+	}
+	
+	h3 {
+		font-size: 2.8vmin;
+		font-weight: 500;
+		color: #CEE6FF;
+		
+		@media only screen and (max-width: 1200px) {
+			font-size: 2vmax;
+		}
+		
+		@media only screen and (max-width: 767px) {
+			font-size: 1.2em;
+			font-weight: 600;
+		}
+	}
+}
+
+.languages {
+	color: #042131;
+	margin-bottom: 50px;
+	margin-top: 30px;
+	@media only screen and (max-width: 1200px) {
+		font-size: 0.9em;
+	}
+	@media only screen and (max-width: 900px) {
+		display: none;
+	}
+}
+
+.socials {
+	margin-top: 30px;
+	img {
+		height: 25px;
+		width: auto;
+	}
+
+	@media only screen and (max-width: 900px) {
+		margin-bottom: 50px;
+	}
+}
+
+.profile {
+	float: right;
+	margin-left: 60px;
+	margin-bottom: 30px;
+	img {
+		height: 200px;
+		z-index: 998;
+	}
+	& > div {
+		background-color: #FED55F;
+		padding: 12px 12px 8px 12px;
+		margin-top: -5px;
+		border-radius: 8px;
+		margin: -5px -8px 5px;
+		z-index: 999;
+		position: relative;
+		span {
+			display: block;
+			font-size: 0.8em;
+			color: #938300;
+			margin-bottom: 2px;
+		}
+		
+		span:first-child {
+			font-weight: 600;
+			color: #88640c;
+			font-size: 0.9em;
+		}
+	}
+
+	@media only screen and (max-width: 1400px) {
+		display: none;
+	}
+}
+
+.timeline {
+	clear: both;
+
+	@media only screen and (min-width: 1401px) {
+		background-image: linear-gradient(#000, #000);
+		background-size: 2px 100%;
+		background-repeat: no-repeat;
+		background-position: center center;
+	}
+	
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	
+	.timeline-section {
+		&.left, &.right {
+			width: 50%;
+			display: flex;
+			justify-content: flex-end;
+			align-items: flex-start;
+		}
+		@media only screen and (min-width: 1401px) {
+			&.right {
+				align-self: flex-end;
+				justify-content: flex-start;
+				flex-direction: row-reverse;
+			}
+		}
+		@media only screen and (max-width: 1400px) {
+			&.left, &.right {
+				width: 100%;
+				margin-bottom: 30px;
+			}
+		}
+	}
+
+	.company-bio {
+		flex: 1;
+		margin-right: 30px;
+		background-color:#38526F;
+		padding: 25px;
+		padding-top: 18px;
+		div {
+			margin-bottom: 5px;
+			font-size: 1.12em;
+			color:#CEE6FF;
+		}
+		div:last-child {
+			color:#CEE6FF;
+			font-size: 0.95em;
+			margin: 0;
+			margin-top: 15px;
+			line-height: 1.4em;
+		}
+
+		@media only screen and (max-width: 900px) {
+			margin-right: 15px;
+		}
+
+		@media only screen and (max-width: 550px) {
+			margin-right: 0px;
+		}
+	}
+
+	@media only screen and (min-width: 1401px) {
+		.timeline-section.right .company-bio {
+			margin-right: 0px;
+			margin-left: 30px;
+		}
+	}
+
+	.company-image {
+		display: flex;
+
+		@media only screen and (min-width: 1401px) {
+			width: 30%;
+			background: linear-gradient(
+				180deg, 
+		        rgba(0,0,0,0) calc(50% - 1px), 
+		        rgba(0,0,0,1) calc(50%), 
+		        rgba(0,0,0,0) calc(50% + 1px)
+		    );
+		}
+
+		@media only screen and (max-width: 550px) {
+			display: none;
+		}
+
+	    img {
+			max-height: 120px;
+			@media only screen and (max-width: 900px) {
+				max-height: 80px;
+			}
+		}
+
+		position: relative;
+
+		@media only screen and (min-width: 1401px) {
+			&::before {
+		       content: '';
+		       display: inline-block;
+		       width: 10px;
+		       height: 10px;
+		       -moz-border-radius: 5px;
+		       -webkit-border-radius: 5px;
+		       border-radius: 5px;
+		       background-color: #000;
+		       position: absolute;
+		       top: 50%;
+		       right: -5px;
+		       margin-top: -5px;
+		    }
+		}
+	}
+
+	@media only screen and (min-width: 1401px) {
+		.timeline-section.right .company-image {
+			justify-content: flex-end;
+
+			&::before {
+				right: auto;
+				left: -5px;
+			}
+		}
+	}
+}
