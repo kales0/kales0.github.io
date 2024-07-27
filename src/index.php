@@ -50,7 +50,7 @@
 					<h4>EXACT Technology</h4>
 					<div>Software Tech Lead (formerly Track Product Lead)</div>
 					<div>2020 &mdash; Now</div>
-					<div>Concrete monitoring platform.  Real-time data services, hardware products, and suites of tools for managing concrete. Track focused on digitial tools that capture all aspects of planning, qc, and scheduling.  After 2 years I switched to a Tech Lead position overseeing all software teams.</div>
+					<div>Concrete monitoring platform.  Real-time data services, hardware products, and suites of tools for managing concrete. Track focused on digital tools that capture all aspects of planning, qc, and scheduling.  After 2 years I switched to a Tech Lead position overseeing all software teams.</div>
 				</div>
 				<div class="company-image"><img src="assets/projects/exact.png" alt="EXACT Technology" /></div>
 			</div>
