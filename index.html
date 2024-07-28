@@ -1,4 +1,4 @@
-<!doctype html><html>
+<!doctype html><html lang="en">
 <head>
   <title>Kaitlyn Callow | Software</title>
   <meta charset="UTF-8">
@@ -40,6 +40,10 @@ p {
 .body {
   margin: 0 30px;
 }
+.column {
+  margin: 0 auto;
+  max-width: 2380px;
+}
 .title {
   display: flex;
   justify-content: flex-start;
@@ -69,17 +73,33 @@ p {
   color: #041d2b;
   font-weight: 500;
 }
+@media only screen and (min-width: 2400px) {
+  .title h2 {
+    font-size: 2.8em;
+  }
+}
+@media only screen and (max-width: 2100px) {
+  .title h2 {
+    font-size: 2.4em;
+  }
+}
 @media only screen and (max-width: 1600px) {
   .title h2 {
-    font-size: 2.2vw;
+    font-size: 2.3vw;
   }
 }
 @media only screen and (max-width: 1200px) {
   .title h2 {
-    font-size: 1.8vmax;
+    font-size: 2vmax;
   }
 }
-@media only screen and (max-width: 767px) {
+@media only screen and (max-width: 1000px) {
+  .title h2 {
+    font-size: 1.3em;
+    font-weight: 600;
+  }
+}
+@media only screen and (max-width: 900px) {
   .title h2 {
     font-size: 1.3em;
     font-weight: 600;
@@ -87,7 +107,7 @@ p {
 }
 .main {
   margin-top: 1.3vh;
-  margin-left: 15.65vh;
+  margin-left: 12.7vh;
   margin-right: 45px;
   padding-bottom: 45px;
 }
@@ -154,6 +174,7 @@ p {
 .profile {
   margin-left: 60px;
   margin-bottom: 30px;
+  padding-right: 8px;
   align-self: center;
 }
 .profile img {
@@ -163,6 +184,11 @@ p {
 @media only screen and (max-width: 1400px) {
   .profile img {
     height: 167px;
+  }
+}
+@media only screen and (max-width: 767px) {
+  .profile {
+    padding-right: 0;
   }
 }
 .profile > div {
@@ -332,6 +358,7 @@ p {
 </head>
 <body>
 <div class="body">
+<div class="column">
   <div class="main">
     <div class="title">
       <h1>Kaitlyn Callow</h1>
@@ -349,7 +376,7 @@ p {
         </div>
       </div>
       
-      <div>
+      <div style="flex:1;">
         <h3>What I do</h3>
         <p>I help companies grow and thrive.  I have more than 15 years experience developing software products from prototype to production and beyond.</p>
         <div class="socials">
@@ -511,6 +538,7 @@ p {
       </div>
     </div>
   </div>
+</div>
 </div>
 </body>
 </html>

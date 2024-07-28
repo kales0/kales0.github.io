@@ -3,7 +3,7 @@
 	use ScssPhp\ScssPhp\Compiler;
 	$compiler = new Compiler();
 	$compiler->setImportPaths(__DIR__);
-?><html>
+?><html lang="en">
 <head>
 	<title>Kaitlyn Callow | Software</title>
 	<meta charset="UTF-8">
@@ -16,6 +16,7 @@
 </head>
 <body>
 <div class="body">
+<div class="column">
 	<div class="main">
 		<div class="title">
 			<h1>Kaitlyn Callow</h1>
@@ -33,7 +34,7 @@
 				</div>
 			</div>
 			
-			<div>
+			<div style="flex:1;">
 				<h3>What I do</h3>
 				<p>I help companies grow and thrive.  I have more than 15 years experience developing software products from prototype to production and beyond.</p>
 				<div class="socials">
@@ -195,6 +196,7 @@
 			</div>
 		</div>
 	</div>
+</div>
 </div>
 </body>
 </html>
