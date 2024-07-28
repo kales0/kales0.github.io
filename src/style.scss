@@ -120,10 +120,10 @@ p {
 	color: #042131;
 	margin-bottom: 50px;
 	margin-top: 30px;
-	@media only screen and (max-width: 1200px) {
+	/*@media only screen and (max-width: 1200px) {
 		font-size: 0.9em;
-	}
-	@media only screen and (max-width: 900px) {
+	}*/
+	@media only screen and (max-width: 1400px) {
 		display: none;
 	}
 }
@@ -135,18 +135,30 @@ p {
 		width: auto;
 	}
 
-	@media only screen and (max-width: 900px) {
-		margin-bottom: 50px;
+	@media only screen and (max-width: 767px) {
+		margin-bottom: 20px;
+	}
+}
+
+.intro {
+	display: flex;
+	flex-direction: row-reverse;
+
+	@media only screen and (max-width: 767px) {
+		flex-direction: column-reverse;
 	}
 }
 
 .profile {
-	float: right;
 	margin-left: 60px;
 	margin-bottom: 30px;
 	img {
 		height: 200px;
 		z-index: 998;
+
+		@media only screen and (max-width: 1400px) {
+			height: 167px;
+		}
 	}
 	& > div {
 		background-color: #FED55F;
@@ -156,6 +168,11 @@ p {
 		margin: -5px -8px 5px;
 		z-index: 999;
 		position: relative;
+
+		@media only screen and (max-width: 900px) {
+			padding: 5px 5px 3px 5px;
+		}
+
 		span {
 			display: block;
 			font-size: 0.8em;
@@ -170,8 +187,11 @@ p {
 		}
 	}
 
-	@media only screen and (max-width: 1400px) {
-		display: none;
+	align-self: center;
+
+	@media only screen and (max-width: 767px) {
+		margin-left: 0;
+		margin-bottom: 20px;
 	}
 }
 
@@ -215,14 +235,14 @@ p {
 		flex: 1;
 		margin-right: 30px;
 		background-color:#38526F;
-		padding: 25px;
-		padding-top: 18px;
+		padding: 24px;
+		padding-top: 20px;
 		div {
 			margin-bottom: 5px;
 			font-size: 1.12em;
 			color:#CEE6FF;
 		}
-		div:last-child {
+		p {
 			color:#CEE6FF;
 			font-size: 0.95em;
 			margin: 0;
@@ -236,6 +256,25 @@ p {
 
 		@media only screen and (max-width: 550px) {
 			margin-right: 0px;
+		}
+
+		ul {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			margin-top: 15px;
+			display: flex;
+			gap: 5px;
+			flex-wrap: wrap;
+			
+			li {
+				display: inline-flex;
+				padding: 7px;
+				background-color: #00000021;
+				color: #FFF;
+				border-radius: 3px;
+				font-size: 0.8em;
+			}
 		}
 	}
 
