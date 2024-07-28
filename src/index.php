@@ -38,7 +38,8 @@
 				<h3>What I do</h3>
 				<p>I help companies grow and thrive.  I have more than 15 years experience developing software products from prototype to production and beyond.</p>
 				<div class="socials">
-					<a href="https://www.linkedin.com/in/kaitlyncallow/"><img alt="LinkedIn" src="assets/LI-Logo.png" /></a>
+					<a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin"><img alt="LinkedIn" src="assets/LI-Logo-light.png" /></a>
+					<a href="https://github.com/kales0" class="github"><img alt="GitHub" src="assets/GitHub_Logo-light.png" /></a>
 				</div>
 
 				<p class="languages omnom">
@@ -165,7 +166,7 @@
 					<div>2009</div>
 					<p>Book printing company, worked in I.T. migrating data and code from old systems to newer web technologies and languages.</p>
 					<ul><li>
-						MS SQL
+						MSSQL
 					</li><li>
 						MySQL
 					</li><li>

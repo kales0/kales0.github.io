@@ -146,13 +146,34 @@ p {
 
 .socials {
 	margin-top: 30px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 22px;
+	align-items: center;
+	justify-content: flex-start;
+
+	a {
+		display: inline-block;
+		height: 22px;
+		opacity: 0.9;
+		&:hover {
+			opacity: 1;
+		}
+	}
+
 	img {
-		height: 25px;
+		height: 100%;
 		width: auto;
+		box-sizing: border-box;
 	}
 
 	@media only screen and (max-width: 767px) {
 		margin-bottom: 20px;
+	}
+
+	.github {
+		padding: 2px 0;
+		box-sizing: border-box;
 	}
 }
 
