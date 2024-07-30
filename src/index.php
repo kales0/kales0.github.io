@@ -22,29 +22,34 @@
 			<h1>Kaitlyn Callow</h1>
 			<h2>Software Developer — Team Lead — Systems Architect — DevOps</h2>
 		</div>
-		
-		<div class="intro">
-			<div class="profile">
-				<img src="assets/coders2.png" alt="Kaitlyn in action!" />
-				<div>
-					<span>Kaitlyn Callow</span>
-					<span>Coder Extraordinaire</span>
-					<span>Powered by Coffee & Spite</span>
-					<span>Located in Toronto Canada <img src="assets/canada2.png" alt="Flag of Canada" style="height: 11px; margin-left: 5px; margin-bottom: -1px;" /></span>
-				</div>
-			</div>
-			
-			<div style="flex:1;">
-				<h3>What I do</h3>
-				<p>I help companies grow and thrive.  I have more than 15 years' experience developing software products from prototype to production and beyond.</p>
-				<div class="socials">
-					<a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin"><img alt="LinkedIn" src="assets/LI-Logo-light.png" /></a>
-					<a href="https://github.com/kales0" class="github"><img alt="GitHub" src="assets/GitHub_Logo-light.png" /></a>
-				</div>
 
-				<p class="languages omnom">
-					Food for search engines: Programming, Databases, Systems Design, DevOps, AWS, PHP, MySQL, Mobile, Cloud, Distributed, UX, UI, Design, Front-End, Back-End, Apache, Nginx, Linux, OpenGL, WebGL, Jira, Git, Slack, C#, Java, MSSQL, C++, Python, SQL, HTML, CSS, JavaScript, jQuery, React.js, Layout, Planning, Prototyping, ElasticBeanstalk, EC2, RDS, Amplify, Route53, Lamba, IoT, LwM2M, Particle.io, Android, iOS
-				</p>
+		<div class="intro">			
+			<h3>What I do</h3>
+			<p>I help companies grow and thrive.  I have more than 15 years' experience developing software products from prototype to production and beyond.</p>
+			<div class="socials">
+				<a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin"><img alt="LinkedIn" src="assets/LI-Logo-light.png" /></a>
+				<a href="https://github.com/kales0" class="github"><img alt="GitHub" src="assets/GitHub_Logo-light.png" /></a>
+			</div>
+		</div>
+
+		<div class="navigation">
+			<a href="#work">My Work</a>
+			<a href="#projects">Coding</a>
+			<a href="kaitlyn-callow-resume-072024.pdf">Resume</a>
+			<span class="spacer"></span>
+		</div>
+
+		<p class="languages omnom">
+			Food for search engines: Programming, Databases, Systems Design, DevOps, AWS, PHP, MySQL, Mobile, Cloud, Distributed, UX, UI, Design, Front-End, Back-End, Apache, Nginx, Linux, OpenGL, WebGL, Jira, Git, Slack, C#, Java, MSSQL, C++, Python, SQL, HTML, CSS, JavaScript, jQuery, React.js, Layout, Planning, Prototyping, ElasticBeanstalk, EC2, RDS, Amplify, Route53, Lamba, IoT, LwM2M, Particle.io, Android, iOS
+		</p>
+
+		<div class="profile">
+			<img src="assets/coders2.png" alt="Kaitlyn in action!" />
+			<div>
+				<span>Kaitlyn Callow</span>
+				<span>Coder Extraordinaire</span>
+				<span>Powered by Coffee & Spite</span>
+				<span>Canadian <img src="assets/canada2.png" alt="Flag of Canada" style="height: 11px; margin-left: 5px; margin-bottom: -1px;" /></span>
 			</div>
 		</div>
 		

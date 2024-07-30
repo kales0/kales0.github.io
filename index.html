@@ -9,6 +9,7 @@
     html, body {
   margin: 0;
   padding: 0;
+  min-width: 500px;
 }
 body {
   background-color: #2C4058;
@@ -88,9 +89,14 @@ p {
     font-size: 2.3vw;
   }
 }
+@media only screen and (max-width: 1400px) {
+  .title h2 {
+    font-size: 1.9em;
+  }
+}
 @media only screen and (max-width: 1200px) {
   .title h2 {
-    font-size: 2vmax;
+    font-size: 1.5em;
   }
 }
 @media only screen and (max-width: 1000px) {
@@ -110,15 +116,18 @@ p {
   margin-left: 12.7vh;
   margin-right: 45px;
   padding-bottom: 45px;
-}
-@media only screen and (max-width: 900px) {
-  .main {
-    margin-left: 10.65vh;
-  }
+  position: relative;
 }
 @media only screen and (max-width: 1400px) {
   .main {
     margin-right: 0px;
+    display: flex;
+    flex-direction: column;
+  }
+}
+@media only screen and (max-width: 900px) {
+  .main {
+    margin-left: 10.65vh;
   }
 }
 .main h3 {
@@ -140,7 +149,6 @@ p {
 .languages {
   color: #042131;
   margin-bottom: 50px;
-  margin-top: 30px;
   /*@media only screen and (max-width: 1200px) {
     font-size: 0.9em;
   }*/
@@ -180,34 +188,91 @@ p {
   padding: 2px 0;
   box-sizing: border-box;
 }
-.intro {
+.navigation {
+  position: sticky;
+  top: 10px;
   display: flex;
-  flex-direction: row-reverse;
+  gap: 10px;
+  margin-top: 45px;
+  margin-bottom: 45px;
+  z-index: 1000;
 }
-@media only screen and (max-width: 767px) {
+.navigation a {
+  display: flex;
+  background-color: #FED55F;
+  color: #042131;
+  padding: 12px 17px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.15em;
+  font-family: "Open Sans", sans-serif;
+  justify-content: center;
+  min-width: 130px;
+}
+.navigation .spacer {
+  background-color: transparent;
+  display: flex;
+  align-self: stretch;
+  flex: 1;
+}
+@media only screen and (max-width: 1400px) {
+  .navigation .spacer {
+    display: none;
+  }
+}
+@media only screen and (max-width: 1400px) {
+  .navigation {
+    width: 100%;
+  }
+  .navigation a {
+    font-size: 1.1em;
+    padding: 10px 0px;
+    flex: 1;
+  }
+}
+@media only screen and (max-width: 900px) {
+  .navigation {
+    justify-content: center;
+    margin-left: 0;
+    margin-top: 30px;
+    width: auto;
+  }
+  .navigation a {
+    font-size: 1em;
+    min-width: 0;
+  }
+}
+@media only screen and (max-width: 1400px) {
   .intro {
-    flex-direction: column-reverse;
+    padding-right: 230px;
+  }
+}
+@media only screen and (max-width: 1000px) {
+  .intro {
+    padding-right: 0;
   }
 }
 .profile {
+  float: right;
+  position: absolute;
+  right: 0;
   margin-left: 60px;
   margin-bottom: 30px;
   padding-right: 8px;
   align-self: center;
+  margin-left: 0;
+  padding-right: 0;
+  margin-top: 35px;
+  margin-bottom: 30px;
+  width: 418px;
+  height: 167px;
+  margin-bottom: 45px;
+  margin-left: -10px;
 }
 .profile img {
   height: 200px;
   z-index: 998;
-}
-@media only screen and (max-width: 1400px) {
-  .profile img {
-    height: 167px;
-  }
-}
-@media only screen and (max-width: 767px) {
-  .profile {
-    padding-right: 0;
-  }
+  height: 167px;
 }
 .profile > div {
   background-color: #FED55F;
@@ -216,31 +281,72 @@ p {
   margin: -5px -8px 5px;
   z-index: 999;
   position: relative;
-}
-@media only screen and (max-width: 900px) {
-  .profile > div {
-    padding: 5px 5px 3px 5px;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .profile > div span {
   display: block;
-  font-size: 0.8em;
+  font-size: 1em;
   color: #938300;
-  margin-bottom: 2px;
 }
 .profile > div span:first-child {
   font-weight: 600;
   color: #88640c;
-  font-size: 0.9em;
+  font-size: 1.2em;
 }
-@media only screen and (max-width: 767px) {
+.profile > div {
+  margin: 0;
+  margin-left: 148px;
+  position: relative;
+  top: 0;
+  height: 100%;
+  z-index: 998;
+  border-bottom: 2px solid #FED55F;
+  height: 169px;
+  box-sizing: border-box;
+  padding: 15px 15px 14px 15px;
+  padding-left: 60px;
+}
+.profile > img {
+  z-index: 999;
+  position: absolute;
+  border-bottom: 2px solid #FED55F;
+}
+@media only screen and (max-width: 1400px) {
+  .profile {
+    float: none;
+    position: relative;
+  }
+}
+@media only screen and (max-width: 900px) {
   .profile {
     margin-left: 0;
-    margin-bottom: 20px;
+  }
+  .profile > div span {
+    font-size: 1em;
+  }
+  .profile > div span:first-child {
+    font-size: 1.1em;
+  }
+}
+@media only screen and (max-width: 767px) {
+  .profile > div {
+    background: #FED55F;
+  }
+  .profile > div span {
+    font-size: 0.9em;
+  }
+  .profile > div span:first-child {
+    font-size: 0.8em;
+  }
+}
+@media only screen and (max-width: 640px) {
+  .profile {
+    width: 100%;
   }
 }
 .timeline {
-  clear: both;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -382,29 +488,34 @@ p {
       <h1>Kaitlyn Callow</h1>
       <h2>Software Developer — Team Lead — Systems Architect — DevOps</h2>
     </div>
-    
-    <div class="intro">
-      <div class="profile">
-        <img src="assets/coders2.png" alt="Kaitlyn in action!" />
-        <div>
-          <span>Kaitlyn Callow</span>
-          <span>Coder Extraordinaire</span>
-          <span>Powered by Coffee & Spite</span>
-          <span>Located in Toronto Canada <img src="assets/canada2.png" alt="Flag of Canada" style="height: 11px; margin-left: 5px; margin-bottom: -1px;" /></span>
-        </div>
-      </div>
-      
-      <div style="flex:1;">
-        <h3>What I do</h3>
-        <p>I help companies grow and thrive.  I have more than 15 years' experience developing software products from prototype to production and beyond.</p>
-        <div class="socials">
-          <a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin"><img alt="LinkedIn" src="assets/LI-Logo-light.png" /></a>
-          <a href="https://github.com/kales0" class="github"><img alt="GitHub" src="assets/GitHub_Logo-light.png" /></a>
-        </div>
 
-        <p class="languages omnom">
-          Food for search engines: Programming, Databases, Systems Design, DevOps, AWS, PHP, MySQL, Mobile, Cloud, Distributed, UX, UI, Design, Front-End, Back-End, Apache, Nginx, Linux, OpenGL, WebGL, Jira, Git, Slack, C#, Java, MSSQL, C++, Python, SQL, HTML, CSS, JavaScript, jQuery, React.js, Layout, Planning, Prototyping, ElasticBeanstalk, EC2, RDS, Amplify, Route53, Lamba, IoT, LwM2M, Particle.io, Android, iOS
-        </p>
+    <div class="intro">     
+      <h3>What I do</h3>
+      <p>I help companies grow and thrive.  I have more than 15 years' experience developing software products from prototype to production and beyond.</p>
+      <div class="socials">
+        <a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin"><img alt="LinkedIn" src="assets/LI-Logo-light.png" /></a>
+        <a href="https://github.com/kales0" class="github"><img alt="GitHub" src="assets/GitHub_Logo-light.png" /></a>
+      </div>
+    </div>
+
+    <div class="navigation">
+      <a href="#work">My Work</a>
+      <a href="#projects">Coding</a>
+      <a href="kaitlyn-callow-resume-072024.pdf">Resume</a>
+      <span class="spacer"></span>
+    </div>
+
+    <p class="languages omnom">
+      Food for search engines: Programming, Databases, Systems Design, DevOps, AWS, PHP, MySQL, Mobile, Cloud, Distributed, UX, UI, Design, Front-End, Back-End, Apache, Nginx, Linux, OpenGL, WebGL, Jira, Git, Slack, C#, Java, MSSQL, C++, Python, SQL, HTML, CSS, JavaScript, jQuery, React.js, Layout, Planning, Prototyping, ElasticBeanstalk, EC2, RDS, Amplify, Route53, Lamba, IoT, LwM2M, Particle.io, Android, iOS
+    </p>
+
+    <div class="profile">
+      <img src="assets/coders2.png" alt="Kaitlyn in action!" />
+      <div>
+        <span>Kaitlyn Callow</span>
+        <span>Coder Extraordinaire</span>
+        <span>Powered by Coffee & Spite</span>
+        <span>Canadian <img src="assets/canada2.png" alt="Flag of Canada" style="height: 11px; margin-left: 5px; margin-bottom: -1px;" /></span>
       </div>
     </div>
     
