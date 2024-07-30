@@ -8,6 +8,7 @@
 	<title>Kaitlyn Callow | Software</title>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="Software, Leadership, Systems Architect, DevOps - 15+ years experience - I help companies grow and thrive.">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
@@ -21,12 +22,12 @@
 	<div class="main">
 		<div class="title">
 			<h1>Kaitlyn Callow</h1>
-			<h2>Software Developer — Team Lead — Systems Architect — DevOps</h2>
+			<h2>Software — Leadership — Systems Architect — DevOps</h2>
 		</div>
 
 		<div class="intro">			
-			<h3>What I do</h3>
-			<p>I help companies grow and thrive.  I have more than 15 years' experience developing software products from prototype to production and beyond.</p>
+			<h3>I help companies grow and thrive</h3>
+			<p>I have more than 15 years' experience developing software products from prototype to production and beyond.</p>
 			<div class="socials">
 				<a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin"><img alt="LinkedIn" src="assets/LI-Logo-light.png" /></a>
 				<a href="https://github.com/kales0" class="github"><img alt="GitHub" src="assets/GitHub_Logo-light.png" /></a>
