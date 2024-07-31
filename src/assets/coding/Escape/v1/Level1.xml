@@ -1,0 +1,1428 @@
+﻿<Game>
+	<Start_X>1</Start_X>
+	<Start_Y>0</Start_Y>
+	
+	<Finish_X>1</Finish_X>
+	<Finish_Y>9</Finish_Y>
+	
+	<Rooms>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>0</X>
+			<Y>2</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>-200</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>104</Scale>
+					<Rotation>0</Rotation>
+				</Sprite>
+				<Sprite>
+					<Type>2</Type>
+					<Position_X>-70</Position_X>
+					<Position_Y>0</Position_Y>
+					<Scale>75</Scale>
+					<Rotation>0</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>0</X>
+			<Y>6</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>0</X>
+			<Y>7</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>1</X>
+			<Y>0</Y>
+			<Type>2</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>2</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>1</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>1</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>0</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>1</X>
+			<Y>2</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>0</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>1</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>-175</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>-22</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>93</Scale>
+					<Rotation>9</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>3</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>-125</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>4</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>Portal</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>5</Linkto_Y>
+					<MapShowBeyond>0</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>4</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>6</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>0</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>190</Position_X>
+					<Position_Y>-30</Position_Y>
+					<Scale>102</Scale>
+					<Rotation>14</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>7</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>0</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>-175</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>8</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>50</Position_X>
+					<Position_Y>-60</Position_Y>
+					<Scale>93</Scale>
+					<Rotation>7</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>1</X>
+			<Y>9</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>2</X>
+			<Y>3</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>4</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>2</X>
+			<Y>4</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>4</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>5</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>2</X>
+			<Y>5</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>4</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>2</X>
+			<Y>6</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>190</Position_X>
+					<Position_Y>-30</Position_Y>
+					<Scale>102</Scale>
+					<Rotation>14</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>2</X>
+			<Y>7</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>-175</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>2</X>
+			<Y>8</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>2</X>
+			<Y>9</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>3</X>
+			<Y>1</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>	
+		</Room>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>3</X>
+			<Y>2</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>1</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>3</X>
+			<Y>3</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>3</X>
+			<Y>7</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>50</Position_X>
+					<Position_Y>-60</Position_Y>
+					<Scale>93</Scale>
+					<Rotation>7</Rotation>
+				</Sprite>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>190</Position_X>
+					<Position_Y>-30</Position_Y>
+					<Scale>102</Scale>
+					<Rotation>14</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>3</X>
+			<Y>8</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>190</Position_X>
+					<Position_Y>-30</Position_Y>
+					<Scale>102</Scale>
+					<Rotation>14</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>		
+
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>3</X>
+			<Y>9</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>4</X>
+			<Y>2</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>		
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>4</X>
+			<Y>3</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>		
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>4</X>
+			<Y>6</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>-125</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+			
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>4</X>
+			<Y>8</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>3</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>-175</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>5</X>
+			<Y>2</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>5</X>
+			<Y>3</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>5</X>
+			<Y>5</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+	
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>5</X>
+			<Y>6</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>5</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>5</X>
+			<Y>7</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>3</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>6</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>		
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+	
+		<Room>
+			<X>5</X>
+			<Y>8</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>4</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>-175</Position_X>
+					<Position_Y>-35</Position_Y>
+					<Scale>100</Scale>
+					<Rotation>3</Rotation>
+				</Sprite>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>50</Position_X>
+					<Position_Y>-60</Position_Y>
+					<Scale>93</Scale>
+					<Rotation>7</Rotation>
+				</Sprite>
+				<Sprite>
+					<Type>3</Type>
+					<Position_X>190</Position_X>
+					<Position_Y>-30</Position_Y>
+					<Scale>102</Scale>
+					<Rotation>14</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>5</X>
+			<Y>9</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>E</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>6</X>
+			<Y>2</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>3</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>6</X>
+			<Y>3</Y>
+			<Type>1</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>S</Direction>
+					<Type>1</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>2</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>N</Direction>
+					<Type>Portal</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>1</LinkTo_X>
+					<Linkto_Y>0</Linkto_Y>
+					<MapShowBeyond>0</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+				<Sprite>
+					<Type>1</Type>
+					<Position_X>110</Position_X>
+					<Position_Y>-65</Position_Y>
+					<Scale>97</Scale>
+					<Rotation>8</Rotation>
+				</Sprite>
+			</Sprites>
+		</Room>	
+
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>6</X>
+			<Y>7</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>E</Direction>
+					<Type>Portal</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>2</LinkTo_X>
+					<Linkto_Y>5</Linkto_Y>
+					<MapShowBeyond>0</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>6</X>
+			<Y>8</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>N</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>7</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	<!-- =======================================================================-->
+	<!-- =======================================================================-->
+		
+		<Room>
+			<X>6</X>
+			<Y>9</Y>
+			<Type>4</Type>
+			<Event></Event>
+			<Doors>
+				<Door>
+					<Direction>W</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>5</LinkTo_X>
+					<Linkto_Y>9</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+				<Door>
+					<Direction>S</Direction>
+					<Type>4</Type>
+					<UseItem>0</UseItem>
+					<LinkTo_X>6</LinkTo_X>
+					<Linkto_Y>8</Linkto_Y>
+					<MapShowBeyond>1</MapShowBeyond>
+				</Door>
+			</Doors>
+			<Sprites>
+			</Sprites>
+		</Room>
+		
+	</Rooms>
+</Game>

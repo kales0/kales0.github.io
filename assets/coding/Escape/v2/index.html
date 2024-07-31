@@ -1,0 +1,65 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+	<title>Escape! Version 2</title>
+	<script>
+		window.RufflePlayer = window.RufflePlayer || {};
+		
+		window.RufflePlayer = window.RufflePlayer || {};
+			window.RufflePlayer.config = {
+			"autoplay": "on", 
+			"splashScreen": false, 
+			"unmuteOverlay":"hidden",
+		};
+
+		window.addEventListener("DOMContentLoaded", () => {
+			let ruffle = window.RufflePlayer.newest();
+			let player = ruffle.createPlayer();
+			let container = document.getElementById("container");
+			container.appendChild(player);
+			player.load("movie.swf");
+		});
+	</script>
+	<script src="../../../../scripts/ruffle/ruffle.js"></script>
+	
+	<style type="text/css">
+		body {
+			background-color:RGB(70,50,73);
+		}
+		h1, h3, h6{
+			font-family: Verdana;
+			font-size:2em;
+			font-weight:normal;
+			text-align:center;
+			color:#FFFFFF;
+			margin:0px;
+			padding:0px;
+		}
+		h3{
+			font-size:1.2em;
+			margin-bottom:30px;
+		}
+		h6{
+			font-size:0.8em;
+		}
+	</style>
+</head>
+<body>
+
+<h1>
+	Escape!
+</h1>
+<h3>
+	Version 2
+</h3>
+
+<div style="text-align:center;">
+	<object height="650" width="800" classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" codebase="http://fpdownload.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=8,0,0,0" id="Escape! Version 2" align="middle">
+	<param name="allowScriptAccess" value="sameDomain" />
+	<param name="movie" value="Escape!.swf" /><param name="quality" value="high" /><embed height="910"  width="1120" src="Escape!.swf" quality="high" bgcolor="#463249" name="Escape! Version 2" align="middle" allowScriptAccess="sameDomain" type="application/x-shockwave-flash" pluginspage="http://www.macromedia.com/go/getflashplayer" />
+	</object>
+</div>
+
+
+</body>
+</html>

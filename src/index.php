@@ -1,5 +1,5 @@
 <!doctype html><?php
-	include_once __DIR__ . '/assets/scssphp-1.12.1/scss.inc.php';
+	include_once __DIR__ . '/php/scssphp-1.12.1/scss.inc.php';
 	use ScssPhp\ScssPhp\Compiler;
 	$compiler = new Compiler();
 	$compiler->setImportPaths(__DIR__);
