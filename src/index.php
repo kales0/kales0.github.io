@@ -249,7 +249,6 @@
 
 	<script type="text/javascript">
 	    Array.prototype.forEach.call(document.getElementsByClassName('gallery'), function (elm) {
-	    	console.log(elm);
 	    	lightGallery(elm, {
 		        plugins: [lgZoom, lgThumbnail],
 		        //licenseKey: 'your_license_key',
