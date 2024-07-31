@@ -448,6 +448,7 @@ p {
 		background-color:#38526F;
 		padding: 24px;
 		padding-top: 20px;
+
 		div {
 			margin-bottom: 5px;
 			font-size: 1.12em;
@@ -495,6 +496,63 @@ p {
 				color: #081b26;
 				border-radius: 3px;
 				font-size: 0.8em;
+			}
+		}
+
+		.gallery {
+			margin: 0;
+			margin-top: 25px;
+			display: block;
+			//margin: 0 -5px;
+			justify-content: flex-start;
+			flex-wrap: wrap;
+			img {
+				width: 100%;
+				height: auto;
+				margin: 0;
+				border:10px solid #6495d542;
+				box-sizing: border-box;
+			}
+			a {
+				padding: 5px;
+				width: 33.333%;
+				overflow: visible;
+				display: inline-block;
+				box-sizing: border-box;
+				float: left;
+
+				&.pipette {
+					width: 47.8%;
+				}
+
+				@media only screen and (max-width: 1800px) {
+					width: 50%;
+
+					&.pipette {
+						width: 73%;
+					}
+				}
+
+				@media only screen and (max-width: 1400px) {
+					width: 25%;
+					&.pipette {
+						width: 36%;
+					}
+				}
+
+				@media only screen and (max-width: 1000px) {
+					width: 33.333%;
+					&.pipette {
+						width: 47.8%;
+					}
+				}
+
+				@media only screen and (max-width: 767px) {
+					width: 50%;
+					&.pipette {
+						width: 73%;
+					}
+				}
 			}
 		}
 	}
