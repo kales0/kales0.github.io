@@ -12,10 +12,10 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-	<link type="text/css" rel="stylesheet" href="./assets/lib//lightgallery/css/lightgallery-bundle.css" />
-	<script src="./assets/lib//lightgallery/lightgallery.min.js"></script>
-    <script src="./assets/lib//lightgallery/plugins/thumbnail/lg-thumbnail.min.js"></script>
-    <script src="./assets/lib//lightgallery/plugins/zoom/lg-zoom.min.js"></script>
+	<link type="text/css" rel="stylesheet" href="/scripts/lightgallery/css/lightgallery-bundle.css" />
+	<script src="/scripts/lightgallery/lightgallery.min.js"></script>
+    <script src="/scripts/lightgallery/plugins/thumbnail/lg-thumbnail.min.js"></script>
+    <script src="/scripts/lightgallery/plugins/zoom/lg-zoom.min.js"></script>
 	<style type="text/css">
 		<?php echo $compiler->compileString('@import "style.scss";')->getCss(); ?>
 	</style>
