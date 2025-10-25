@@ -21,9 +21,9 @@
   <script>
      document.addEventListener("DOMContentLoaded", (event) => {
       var tl = gsap.timeline();
-      var spliText = new SplitText( 'h1' , {type: "words,chars", charsClass: "char"} );
-      tl.set( spliText.chars , { y: (i,t)=>{ return setOffScreen(t); } } );
-      tl.to( spliText.chars , { stagger: 0, duration: 0.68, y: 0, autoAlpha: 1, ease: "back.out(3)" } );
+      var spliText = new SplitText( 'h1' , {type: "words"} );
+      tl.set( spliText.words , { y: (i,t)=>{ return setOffScreen(t); } } );
+      tl.to( spliText.words , { stagger: 0, duration: 0.68, y: 0, autoAlpha: 1, ease: "back.out(3)" } );
 
 
       function setOffScreen( el ){
@@ -135,6 +135,9 @@ p {
   left: 0;
   top: 0;
   transform: rotate(-90deg) translateX(-100%);
+}
+.title h1 * {
+  font-family: "Montserrat", sans-serif;
 }
 @media only screen and (max-width: 900px) {
   .title h1 {
