@@ -14,8 +14,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
   <link type="text/css" rel="stylesheet" href="/scripts/lightGallery/css/lightgallery-bundle.css" />
   <script src="/scripts/lightGallery/lightgallery.min.js"></script>
-    <script src="/scripts/lightGallery/plugins/thumbnail/lg-thumbnail.min.js"></script>
-    <script src="/scripts/lightGallery/plugins/zoom/lg-zoom.min.js"></script>
+  <script src="/scripts/lightGallery/plugins/thumbnail/lg-thumbnail.min.js"></script>
+  <script src="/scripts/lightGallery/plugins/zoom/lg-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/SplitText.min.js"></script>
+  <script>
+     document.addEventListener("DOMContentLoaded", (event) => {
+      var tl = gsap.timeline();
+      var spliText = new SplitText( 'h1' , {type: "words,chars", charsClass: "char"} );
+      tl.set( spliText.chars , { y: (i,t)=>{ return setOffScreen(t); } } );
+      tl.to( spliText.chars , { stagger: 0, duration: 0.68, y: 0, autoAlpha: 1, ease: "back.out(3)" } );
+
+
+      function setOffScreen( el ){
+        var rect = el.getBoundingClientRect();
+        return -el.offsetHeight-20;
+      }
+    });
+  </script>
   <style type="text/css">
     html, body {
   margin: 0;
@@ -267,13 +283,19 @@ p {
   display: flex;
   background-color: #FED55F;
   color: #042131;
-  padding: 12px 17px;
+  padding: 8px 13px;
   text-decoration: none;
   font-weight: 600;
   font-size: 1.15em;
   font-family: "Open Sans", sans-serif;
   justify-content: center;
   min-width: 130px;
+  border: 2px solid #FED55F;
+}
+.navigation a:hover, .navigation a:focus {
+  background-color: #223246;
+  border-color: #FED55F;
+  color: #FED55F;
 }
 .navigation .spacer {
   background-color: transparent;
@@ -330,7 +352,7 @@ p {
   padding-right: 0;
   margin-top: 30px;
   margin-bottom: 30px;
-  width: 418px;
+  width: 395px;
   height: 167px;
   margin-bottom: 45px;
   margin-left: -10px;
@@ -363,16 +385,16 @@ p {
 }
 .profile > div {
   margin: 0;
-  margin-left: 148px;
+  margin-left: 144px;
   position: relative;
   top: 0;
   height: 100%;
   z-index: 998;
   border-bottom: 2px solid #FED55F;
-  height: 169px;
+  height: 168px;
   box-sizing: border-box;
   padding: 15px 15px 14px 15px;
-  padding-left: 60px;
+  padding-left: 30px;
 }
 .profile > img {
   z-index: 999;
@@ -383,6 +405,9 @@ p {
   .profile {
     float: none;
     position: relative;
+  }
+  .profile > div {
+    height: 169px;
   }
 }
 @media only screen and (max-width: 900px) {
@@ -399,6 +424,7 @@ p {
 @media only screen and (max-width: 767px) {
   .profile > div {
     background: #FED55F;
+    height: 168px;
   }
   .profile > div span {
     font-size: 0.85em;
@@ -434,7 +460,7 @@ p {
 }
 @media only screen and (min-width: 1401px) {
   .timeline {
-    background-image: linear-gradient(#000, #000);
+    background-image: linear-gradient(180deg,rgba(44, 64, 88, 1) 0%, rgba(0, 0, 0, 1) 1%, rgba(0, 0, 0, 1) 99%, rgba(44, 64, 88, 1) 100%);
     background-size: 2px 100%;
     background-repeat: no-repeat;
     background-position: center center;
@@ -655,7 +681,7 @@ p {
     <div class="navigation">
       <a href="#work">My Work</a>
       <a href="#coding">Coding</a>
-      <a href="#resume">Resume</a>
+      <a href="#resume">Resume & Contact</a>
       <span class="spacer"></span>
     </div>
 
@@ -664,7 +690,7 @@ p {
     </p>
 
     <div class="profile">
-      <img src="assets/coders2.png" alt="Kaitlyn in action!" />
+      <img src="assets/kaitlyn.png" alt="Kaitlyn in action!" />
       <div>
         <span>Kaitlyn Callow</span>
         <span>Coder Extraordinaire</span>
@@ -681,7 +707,7 @@ p {
             <h4>EXACT Technology</h4>
             <div>Software Tech Lead</div>
             <div>2020 &mdash; Now</div>
-            <p>Concrete monitoring platform.  Real-time data services, hardware products, and suites of tools for managing concrete. Initially hired as the Track Product Lead focusing on digital tools that capture all aspects of planning, qc, and scheduling.  After 2 years I am now in a Tech Lead position overseeing all software teams.</p>
+            <p>Concrete monitoring platform.  Real-time data services, hardware products, and suites of tools for managing concrete. Track Product Lead for 2 years (focusing on digital tools that capture all aspects of planning, QC, and scheduling), then switched into a Tech Lead position ensuring system cohesion across all software teams and monitoring the overall vision of the product.</p>
             <ul><li>
               AWS
             </li><li>
@@ -849,9 +875,9 @@ p {
     </div>
 
     <div id="resume" style="margin-top: 60px;">
-      <h3>Resume</h3>
+      <h3>Resume & Contact</h3>
       <p>
-        I am still preparing an updated resume for 2024, until then please refer to my &nbsp;<a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin" style="display: inline-block"><img alt="LinkedIn" src="assets/LI-Logo-light.png" style="height:20px; margin-bottom: -4px;" /></a>
+        Please refer to my &nbsp;<a href="https://www.linkedin.com/in/kaitlyncallow" class="linkedin" style="display: inline-block"><img alt="LinkedIn" src="assets/LI-Logo-light.png" style="height:20px; margin-bottom: -4px;" /></a>
       </p>
     </div>
   </div>
