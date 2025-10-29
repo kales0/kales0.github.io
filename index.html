@@ -53,12 +53,13 @@
           }
         );
       });*/
+      var mm = gsap.matchMedia();
+
       gsap.utils.toArray(".company-bio").forEach(function (text, i) {
         gsap.fromTo(text,
-          { opacity: 0.2, y: 0 }, // Initial state
+          { opacity: 0.2 }, // Initial state
           {
               opacity: 1,
-              y: 5,
               duration: 1,
               delay: 0.25,
               ease: "power3.out",
@@ -70,6 +71,26 @@
               }
           }
         );
+      });
+
+      mm.add("(min-width: 1400px)", () => {
+        gsap.utils.toArray(".company-bio").forEach(function (text, i) {
+          gsap.fromTo(text,
+            { y: 0 }, // Initial state
+            {
+                y: 15,
+                duration: 1,
+                delay: 0.25,
+                ease: "power3.out",
+                scrollTrigger: {
+                    trigger: text,
+                    start: "top 90%", // Animation starts when the top of the line hits 80% down the viewport
+                    toggleActions: "play none none reverse", // Play on scroll down, reverse on scroll up
+                    once: true,
+                }
+            }
+          );
+        });
       });
       /*gsap.utils.toArray(".company-image img").forEach(function (text, i) {
         gsap.fromTo(text,
@@ -88,7 +109,7 @@
         );
       });*/
 
-      var mm = gsap.matchMedia();
+      
       mm.add("(min-width: 1400px)", () => {
         gsap.utils.toArray(".company-image img").forEach(function (text, i) {
           var r1 = ((Math.floor(Math.random() * (80 - (-80) + 1)) + -80) / 10) * (i > 1 ? 0.4 : 1);
