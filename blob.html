@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SPHERE — A WebGL Platformer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1f0f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    cursor: none;
+    border-radius: 4px;
+    box-shadow: 0 8px 32px rgba(0,60,10,0.6);
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script>
+console.log('Initializing');
+const canvas = document.getElementById('c');
+canvas.width  = 900;
+canvas.height = 480;
+
+const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
+if (!gl) { document.body.innerHTML = '<p style="color:red;padding:40px">WebGL not supported</p>'; }
+
+// ─── Shader sources ─────────────────────────────────────────────────────────
+
+const VERT_SOLID = `
+attribute vec2 a_pos;
+uniform mat3 u_mvp;
+void main() {
+  vec3 p = u_mvp * vec3(a_pos, 1.0);
+  gl_Position = vec4(p.xy, 0.0, 1.0);
+}`;
+
+const FRAG_SOLID = `
+precision mediump float;
+uniform vec4 u_color;
+void main() { gl_FragColor = u_color; }`;
+
+// Circle rendered as a triangle-fan, but we use a billboard quad + SDF in fragment
+const VERT_CIRCLE = `
+attribute vec2 a_pos;
+attribute vec2 a_uv;
+uniform mat3 u_mvp;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_uv;
+  vec3 p = u_mvp * vec3(a_pos, 1.0);
+  gl_Position = vec4(p.xy, 0.0, 1.0);
+}`;
+
+const FRAG_CIRCLE = `
+precision mediump float;
+varying vec2 v_uv;
+uniform vec4 u_color;
+uniform vec4 u_glow;
+void main() {
+  float d = length(v_uv);
+  if (d > 1.0) discard;
+  float edge = 1.0 - smoothstep(0.85, 1.0, d);
+  float inner = 1.0 - smoothstep(0.0, 0.6, d);
+  vec3 col = mix(u_color.rgb * 1.4, u_color.rgb * 0.6, d);
+  col += u_glow.rgb * (1.0 - d) * u_glow.a;
+  gl_FragColor = vec4(col * edge, edge * u_color.a);
+}`;
+
+// Parallax background layers
+const VERT_BG = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
+
+const FRAG_BG = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_time;
+uniform float u_camX;
+uniform float u_aspect;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p) {
+  vec2 i=floor(p), f=fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
+}
+
+void main() {
+  vec2 uv = v_uv;
+  vec3 skyHigh = vec3(0.42, 0.72, 0.55);
+  vec3 skyLow  = vec3(0.18, 0.45, 0.28);
+  vec3 col = mix(skyLow, skyHigh, pow(uv.y, 0.6));
+
+  // Soft sun glow upper-right
+  vec2 sunPos = vec2(0.78, 0.88);
+  float sunDist = length(uv - sunPos);
+  col += vec3(1.0, 0.95, 0.6) * smoothstep(0.5, 0.0, sunDist) * 0.35;
+
+  // Distant jungle canopy silhouette far layer
+  float cx1 = uv.x * 3.5 + u_camX * 0.00008;
+  float ch1 = 0.62 + 0.10*sin(cx1*1.7+0.4) + 0.06*sin(cx1*3.1+1.2)
+            + 0.03*sin(cx1*6.3+0.8) + 0.015*sin(cx1*12.0);
+  if (uv.y < ch1) {
+    col = mix(vec3(0.08,0.22,0.12), col, smoothstep(ch1-0.02, ch1, uv.y));
+  }
+
+  // Mid canopy layer
+  float cx2 = uv.x * 4.5 + u_camX * 0.00018;
+  float ch2 = 0.50 + 0.12*sin(cx2*1.3+1.1) + 0.07*sin(cx2*2.9+0.5)
+            + 0.04*sin(cx2*5.7+2.0) + 0.02*sin(cx2*11.0);
+  if (uv.y < ch2) {
+    col = mix(vec3(0.06,0.18,0.09), col, smoothstep(ch2-0.015, ch2, uv.y));
+  }
+
+  // Foreground canopy silhouette fastest parallax
+  float cx3 = uv.x * 6.0 + u_camX * 0.00035;
+  float ch3 = 0.36 + 0.14*sin(cx3*1.1+0.3) + 0.08*sin(cx3*2.4+1.7)
+            + 0.05*sin(cx3*5.0+0.6) + 0.02*sin(cx3*9.5);
+  if (uv.y < ch3) {
+    col = mix(vec3(0.04,0.13,0.06), col, smoothstep(ch3-0.01, ch3, uv.y));
+  }
+
+  // Ground mist at bottom
+  float mistAmt = smoothstep(0.28, 0.0, uv.y);
+  col = mix(col, vec3(0.55, 0.80, 0.60), mistAmt * 0.55);
+
+  // Drifting pollen / light motes
+  vec2 pUV = uv * vec2(u_aspect*6.0, 6.0) + vec2(u_camX*0.0003, u_time*0.04);
+  float pn = noise(pUV);
+  col += vec3(0.9,1.0,0.7) * smoothstep(0.72, 0.78, pn) * 0.12 * uv.y;
+
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ─── Grass ground shader ────────────────────────────────────────────────────
+// Draws a ground slab with a procedural grass top and dark soil body.
+// Uniforms: u_rect = vec4(x, y, w, h) in world space, u_camX, u_time
+
+const VERT_WORLD = `
+attribute vec2 a_pos;
+attribute vec2 a_uv;
+uniform mat3 u_mvp;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_uv;
+  vec3 p = u_mvp * vec3(a_pos, 1.0);
+  gl_Position = vec4(p.xy, 0.0, 1.0);
+}`;
+
+const FRAG_GRASS = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_time;
+uniform float u_worldX;
+uniform float u_worldW;
+
+float hash(float x) { return fract(sin(x*127.1)*43758.5); }
+
+void main() {
+  float tx = v_uv.x;
+  float ty = v_uv.y;
+
+  // Rich layered soil
+  vec3 soilDark  = vec3(0.18, 0.10, 0.04);
+  vec3 soilMid   = vec3(0.28, 0.16, 0.07);
+  vec3 soilLight = vec3(0.38, 0.22, 0.10);
+  vec3 col = mix(soilDark, soilMid, ty);
+  // Subtle horizontal banding
+  float band = 0.5 + 0.5 * sin(ty * u_worldW * 0.18 + tx * 2.0);
+  col = mix(col, soilLight, band * 0.15);
+  // Root fibres — faint vertical streaks
+  float fibre = step(0.93, hash(floor(tx * u_worldW * 0.25)));
+  col += vec3(0.12, 0.08, 0.03) * fibre * (1.0 - ty) * 0.6;
+  // Darken bottom edge
+  col *= 0.5 + 0.5 * ty;
+
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ─── Leaf platform shader ────────────────────────────────────────────────────
+const FRAG_LEAF = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_time;
+uniform float u_seed;  // per-platform randomness
+uniform float u_blueMix; // 0-1, thicker leaves get more blue-green
+
+float hash(float x) { return fract(sin(x*311.7)*43758.5); }
+
+void main() {
+  float tx = v_uv.x * 2.0 - 1.0; // [-1,1]
+  float ty = v_uv.y;               // [0,1] bottom to top
+
+  // Leaf outline: ellipse with wavy edge for organic feel
+  float wave = 0.06 * sin(tx * 6.28 * 2.5 + u_seed * 3.0)
+             + 0.03 * sin(tx * 6.28 * 5.0 + u_seed * 7.0);
+  float leafMask = 1.0 - (tx*tx + pow((ty - 0.5)*1.4, 2.0));
+  leafMask += wave;
+  if (leafMask < 0.0) discard;
+
+  // Base leaf colour — blend between bright and dark palette based on thickness
+  vec3 leafA = mix(vec3(0.12, 0.52, 0.14), vec3(0.05, 0.28, 0.07), u_blueMix);
+  vec3 leafB = mix(vec3(0.30, 0.78, 0.18), vec3(0.14, 0.45, 0.10), u_blueMix);
+  vec3 leafC = mix(vec3(0.65, 0.95, 0.30), vec3(0.32, 0.58, 0.16), u_blueMix);
+
+  // Midrib vein down the centre
+  float vein = smoothstep(0.04, 0.0, abs(tx)) * smoothstep(0.0, 1.0, ty);
+  // Side veins
+  float sideVein = smoothstep(0.015, 0.0, abs(abs(tx) - 0.4 + ty * 0.15))
+                 * smoothstep(0.1, 0.7, ty) * 0.6;
+
+  // Gradient from dark base to bright tip
+  vec3 col = mix(leafA, leafB, ty * 0.9 + 0.5 * (1.0 - tx*tx));
+  col = mix(col, leafC, vein * 0.7);
+  col = mix(col, leafC * 1.2, sideVein);
+
+  // Bright specular highlight on upper surface
+  float sheen = pow(max(0.0, 1.0 - leafMask * 0.5), 2.0);
+  col += mix(vec3(0.4, 0.7, 0.15), vec3(0.18, 0.38, 0.08), u_blueMix) * sheen * 0.08;
+
+  // Rim highlight along top edge
+  float rimLight = smoothstep(0.3, 0.0, abs(ty - 0.85)) * (1.0 - tx*tx);
+  col += vec3(0.3, 0.5, 0.1) * rimLight * 0.1;
+
+  // Central bright spot
+  float centerGlow = exp(-((tx*tx)*4.0 + (ty-0.55)*(ty-0.55)*6.0));
+  col += mix(vec3(0.2, 0.4, 0.08), vec3(0.1, 0.2, 0.04), u_blueMix) * centerGlow * 0.1;
+
+  // Soft shadow at underside edges
+  col *= 0.75 + 0.25 * ty;
+
+  // Slight sway colour pulse
+  float sway = 0.5 + 0.5 * sin(u_time * 0.8 + u_seed * 5.0);
+  col = mix(col, col * vec3(0.85, 1.05, 0.80), sway * 0.06);
+
+  gl_FragColor = vec4(col, 0.95);
+}`;
+
+// ─── HUD text shader (screen-space, origin top-left Y-down) ─────────────────
+const VERT_HUD = `
+attribute vec2 a_pos;
+attribute vec2 a_uv;
+varying vec2 v_uv;
+uniform vec2 u_res;
+void main() {
+  vec2 clip = (a_pos / u_res) * 2.0 - 1.0;
+  clip.y = -clip.y;
+  gl_Position = vec4(clip, 0.0, 1.0);
+  v_uv = a_uv;
+}`;
+
+const FRAG_HUD = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_atlas;
+uniform vec4 u_color;
+void main() {
+  float a = texture2D(u_atlas, v_uv).a;
+  gl_FragColor = vec4(u_color.rgb, u_color.a * a);
+}`;
+
+// ─── Grass blade SDF shader ──────────────────────────────────────────────────
+// Renders individual transparent grass blades procedurally.
+// v_uv.x = world-X relative to slab left edge (in world units)
+// v_uv.y = 0 at slab top, 1 at top of strip
+// Transparent between blades, coloured inside blades.
+const FRAG_BLADES = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_slabW;
+uniform float u_slabX;
+uniform float u_slabTopY;  // world Y of grass base (top of ground slab)
+uniform float u_time;
+uniform float u_windX;
+uniform float u_windStr;
+uniform float u_sphereX;   // sphere world-x
+uniform float u_sphereY;   // sphere world-y (centre)
+uniform float u_sphereVX;  // sphere horizontal velocity (for shake direction)
+uniform float u_sphereR;   // sphere radius
+uniform float u_impactX;   // landing impact world-x
+uniform float u_impactY;   // landing impact ground-y
+uniform float u_impactT;   // time since impact (seconds)
+uniform float u_impactStr; // impact strength 0-1
+
+float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
+float hash2(float n) { return fract(sin(n * 311.7) * 12345.6789); }
+
+float bladeSDF(vec2 p, float halfW, float lean, float weight) {
+  float t = clamp(p.y, 0.0, 1.0);
+  float w = halfW * (1.0 - t * t);
+  // weight controls droop: 0 = normal cubic, high = parabolic droop (gravity)
+  // Normal blades: lean * t^2 * (1 - 0.35*t)  — tucks back at tip
+  // Heavy blades:  lean * t^2 * (1 + weight*t) — accelerates outward (droop)
+  float cx = lean * t * t * (1.0 + weight * t);
+  return abs(p.x - cx) - w;
+}
+
+void main() {
+  float wx = v_uv.x * u_slabW;          // x in [0, slabW] world units
+  float worldX = u_slabX + wx;          // absolute world x for ripple
+  float wy = v_uv.y;
+
+  float BLADE_SPACING = 5.5;
+
+  // ── Wind ripple with elastic spring-back (travels LEFT) ───────────────────
+  // Ripple width: ~5% of screen (900px) = 45 units leading + 200 units trailing
+  float rippleDist = u_windX - worldX;
+
+  float windLean;
+  if (rippleDist < 0.0) {
+    // Leading edge: wide ~45-unit ramp as front arrives from the right
+    windLean = smoothstep(-45.0, 0.0, rippleDist) * u_windStr * 0.9;
+  } else {
+    // Trailing: damped cosine with slower decay — visible for 200+ units
+    float phase = rippleDist * 0.10;          // slower oscillation frequency
+    float decay = exp(-rippleDist * 0.018);   // slower decay
+    windLean = decay * cos(phase) * u_windStr * 0.9;
+    if (rippleDist > 250.0) windLean = 0.0;
+  }
+
+  vec4 outCol = vec4(0.0);
+
+  float col0 = floor(wx / BLADE_SPACING);
+  for (float di = -2.0; di <= 2.0; di += 1.0) {
+    float col = col0 + di;
+    float h1 = hash1(col);
+    float h2 = hash2(col);
+    float h3 = hash1(col + 99.0);
+
+    float bx        = col * BLADE_SPACING + h1 * BLADE_SPACING;
+    float h4  = hash1(col + 47.3);
+    float tall = step(0.90, h4);
+    // Base height: quadratic distribution (h2^2) makes most blades shorter
+    float baseH = 0.55 + (h2 * h2) * 0.45;
+    float bh   = baseH * (1.0 + tall * 0.885) * 0.5;
+    float halfW = (0.8 + hash2(col + 73.1) * 2.0) / BLADE_SPACING;
+    float leanDir  = sign(h3 - 0.5);
+    float leanMag  = 2.2 + hash1(col + 13.7) * 0.8;
+    // Tall blades lean much more dramatically — gravity pulls them down
+    float baseLean = leanDir * leanMag * (1.0 + tall * 1.4);
+    float lean = baseLean + windLean * (0.6 + h2 * 0.8);
+
+    // ── Ambient sway — independent slow elastic oscillation ─────────────────
+    // Each blade has its own frequency and phase offset so they never sync up.
+    float freq  = 0.6 + h1 * 0.5;
+    float phase = h2 * 6.283;
+    float amp   = 0.06 + h3 * 0.05;
+    float ambientT = u_time * freq + phase;
+    float ambientLean = amp * (sin(ambientT) + 0.18 * sin(ambientT * 2.7 + 1.2));
+    lean += ambientLean;
+
+    // ── Sphere interaction ────────────────────────────────────────────────────
+    // Grass pushes away from sphere as it approaches, then snaps back elastically
+    float sphereBottom = u_sphereY - u_sphereR;
+    float vertDist = abs(sphereBottom - u_slabTopY);
+    float vertInfluence = smoothstep(80.0, 5.0, vertDist);
+
+    float bladeBaseX = u_slabX + bx;
+    float distToSphere = abs(bladeBaseX - u_sphereX);
+    float influence = smoothstep(u_sphereR * 6.0, 0.0, distToSphere) * vertInfluence;
+
+    // Push direction: away from sphere
+    float pushDir = sign(bladeBaseX - u_sphereX);
+    if (pushDir == 0.0) pushDir = 1.0; // avoid zero
+    
+    // Movement speed determines push strength
+    float moveSpeed = clamp(abs(u_sphereVX) / 2.0, 0.0, 1.5);
+    
+    // Strong directional push when sphere is moving
+    float push = pushDir * moveSpeed * 2.5 * influence;
+    
+    // Rapid tremor for "turbulence" effect
+    float tremor = sin(u_time * 22.0 + bladeBaseX * 1.2) * 0.3 * moveSpeed * influence;
+    
+    // Apply push - this REPLACES existing lean when sphere is very close
+    float pushStrength = influence * moveSpeed;
+    lean = mix(lean, push + tremor, pushStrength * 0.8);
+
+    // ── Landing impact shockwave ───────────────────────────────────────────────
+    // Only react if impact occurred at THIS grass strip's level
+    float impactVertDist = abs(u_impactY - u_slabTopY);
+    if (u_impactT < 0.8 && impactVertDist < 5.0) {
+      float distToImpact = abs(bladeBaseX - u_impactX);
+      float maxRadius = u_sphereR * 4.5;
+      
+      float waveFront = u_impactT * 180.0;
+      float waveWidth = 40.0;
+      
+      float waveInfluence = smoothstep(waveFront + waveWidth, waveFront, distToImpact)
+                          * smoothstep(maxRadius, 0.0, distToImpact);
+      
+      float decay = 1.0 - (u_impactT / 0.8);
+      decay = decay * decay;
+      waveInfluence *= decay * u_impactStr;
+      
+      float impactDir = sign(bladeBaseX - u_impactX);
+      if (impactDir == 0.0) impactDir = 1.0;
+      
+      lean += impactDir * waveInfluence * 6.5;
+    }
+
+    float px = (wx - bx) / BLADE_SPACING;
+    float py = wy / bh;
+
+    if (py < 0.0 || py > 1.0) continue;
+
+    // Weight scales with blade height: shorter = stiffer (less curve), taller = heavier (more droop)
+    // bh ranges ~0.275–0.945 (after the 0.5 scale), so normalize by dividing by base range
+    float heightFactor = bh / 0.5; // 0.55–1.89 range
+    float weight = (-0.35 + tall * 1.8) * heightFactor;
+    float d = bladeSDF(vec2(px, py), halfW, lean, weight);
+    if (d < 0.0) {
+      vec3 dark   = vec3(0.08, 0.38, 0.05);
+      vec3 mid    = vec3(0.20, 0.62, 0.10);
+      vec3 bright = vec3(0.55, 0.88, 0.18);
+      float t = py;
+      vec3 col3 = mix(dark, mid, t * 1.5);
+      col3 = mix(col3, bright, max(0.0, t - 0.55) * 2.2);
+      // Brighten tips slightly during strong wind
+      col3 = mix(col3, col3 * vec3(1.1, 1.15, 1.05), windLean * t);
+      float streak = smoothstep(0.12, 0.0, abs(px - lean * 0.3 * t * t));
+      col3 += vec3(0.15, 0.25, 0.05) * streak;
+      float alpha = smoothstep(0.04, -0.02, d);
+      if (alpha > outCol.a) outCol = vec4(col3, alpha);
+    }
+  }
+
+  if (outCol.a < 0.01) discard;
+  gl_FragColor = outCol;
+}`;
+
+// ─── Water shader ────────────────────────────────────────────────────────────
+const FRAG_WATER = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_time;
+uniform float u_camX;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p) {
+  vec2 i=floor(p), f=fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
+}
+
+void main() {
+  float tx = v_uv.x;
+  float ty = v_uv.y; // 0=bottom, 1=top
+
+  // World-space x for consistent wave pattern
+  float wx = tx * 6000.0 + u_camX * 0.1;
+
+  // Animated wave distortion on surface
+  float wave1 = sin(wx * 0.04 + u_time * 1.8) * 0.08;
+  float wave2 = sin(wx * 0.09 + u_time * 2.5 + 1.3) * 0.04;
+  float wave3 = sin(wx * 0.15 + u_time * 3.2 + 2.7) * 0.02;
+  float surfaceWave = wave1 + wave2 + wave3;
+
+  // Surface edge with wave
+  float surfaceY = 0.75 + surfaceWave;
+  if (ty > surfaceY + 0.05) discard;
+
+  // Depth gradient - darker at bottom
+  vec3 deepBlue = vec3(0.02, 0.08, 0.22);
+  vec3 midBlue  = vec3(0.06, 0.18, 0.42);
+  vec3 surfBlue = vec3(0.15, 0.35, 0.65);
+  vec3 foam     = vec3(0.45, 0.65, 0.85);
+
+  float depth = ty / surfaceY;
+  vec3 col = mix(deepBlue, midBlue, depth * 0.6);
+  col = mix(col, surfBlue, smoothstep(0.5, 1.0, depth));
+
+  // Foam/highlight at surface
+  float foamLine = smoothstep(surfaceY - 0.08, surfaceY, ty);
+  col = mix(col, foam, foamLine * 0.6);
+
+  // Caustic ripples underwater
+  float cx1 = noise(vec2(wx * 0.02 + u_time * 0.3, ty * 3.0 + u_time * 0.2));
+  float cx2 = noise(vec2(wx * 0.03 - u_time * 0.2, ty * 2.0 - u_time * 0.15));
+  float caustic = smoothstep(0.55, 0.7, cx1 * cx2 + 0.3) * (1.0 - depth) * 0.3;
+  col += vec3(0.1, 0.2, 0.35) * caustic;
+
+  // Shimmer on surface
+  float shimmer = noise(vec2(wx * 0.06 + u_time * 1.5, ty * 8.0));
+  col += vec3(0.2, 0.3, 0.4) * smoothstep(0.7, 0.85, shimmer) * foamLine * 0.4;
+
+  // Alpha: more transparent at surface, more opaque at depth
+  float alpha = mix(0.7, 0.4, depth);
+  // Soft fade at surface edge
+  alpha *= smoothstep(surfaceY + 0.05, surfaceY - 0.05, ty);
+
+  gl_FragColor = vec4(col, alpha);
+}`;
+
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+function makeProgram(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(gl.VERTEX_SHADER,   vs));
+  gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    console.error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+const progBg         = makeProgram(VERT_BG,    FRAG_BG);
+const progSolid      = makeProgram(VERT_SOLID, FRAG_SOLID);
+const progCircle     = makeProgram(VERT_CIRCLE,FRAG_CIRCLE);
+const progGrass      = makeProgram(VERT_WORLD, FRAG_GRASS);
+const progLeaf       = makeProgram(VERT_WORLD, FRAG_LEAF);
+const progHud        = makeProgram(VERT_HUD,   FRAG_HUD);
+const progBlades     = makeProgram(VERT_WORLD, FRAG_BLADES);
+const progWater      = makeProgram(VERT_WORLD, FRAG_WATER);
+
+// ─── Buffers ─────────────────────────────────────────────────────────────────
+
+function makeBuffer(data) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+  return buf;
+}
+
+const quadBuf = makeBuffer([-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1]);
+
+// circle billboard (pos + uv)
+const circleBuf = makeBuffer([
+  -1,-1, -1,-1,
+   1,-1,  1,-1,
+   1, 1,  1, 1,
+  -1,-1, -1,-1,
+   1, 1,  1, 1,
+  -1, 1, -1, 1,
+]);
+
+// ─── Font atlas ───────────────────────────────────────────────────────────────
+// Build a glyph texture from Canvas2D, one row per character in CHARSET.
+const CHARSET = ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+const GLYPH_W = 14, GLYPH_H = 20;
+const ATLAS_COLS = 32;
+const ATLAS_ROWS = Math.ceil(CHARSET.length / ATLAS_COLS);
+const ATLAS_W = GLYPH_W * ATLAS_COLS;
+const ATLAS_H = GLYPH_H * ATLAS_ROWS;
+
+const atlasCanvas = document.createElement('canvas');
+atlasCanvas.width  = ATLAS_W;
+atlasCanvas.height = ATLAS_H;
+const atx = atlasCanvas.getContext('2d');
+atx.clearRect(0, 0, ATLAS_W, ATLAS_H);
+atx.fillStyle = 'white';
+atx.font = `bold ${GLYPH_H - 4}px "Courier New", monospace`;
+atx.textBaseline = 'top';
+for (let i = 0; i < CHARSET.length; i++) {
+  const col = i % ATLAS_COLS;
+  const row = Math.floor(i / ATLAS_COLS);
+  atx.fillText(CHARSET[i], col * GLYPH_W + 1, row * GLYPH_H + 2);
+}
+
+const atlasTexture = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlasCanvas);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+function glyphUV(ch) {
+  const i = CHARSET.indexOf(ch);
+  if (i < 0) return null;
+  const col = i % ATLAS_COLS;
+  const row = Math.floor(i / ATLAS_COLS);
+  return {
+    u0: col * GLYPH_W / ATLAS_W,
+    v0: row * GLYPH_H / ATLAS_H,
+    u1: (col * GLYPH_W + GLYPH_W) / ATLAS_W,
+    v1: (row * GLYPH_H + GLYPH_H) / ATLAS_H,
+  };
+}
+
+// Draw text at screen pixel position (x, y = top-left, Y-down screen space)
+// scale: pixel size multiplier. color: [r,g,b,a] 0-1.
+function drawText(text, px, py, scale, r, g, b, a) {
+  gl.useProgram(progHud);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+  gl.uniform1i(gl.getUniformLocation(progHud, 'u_atlas'), 0);
+  gl.uniform2f(gl.getUniformLocation(progHud, 'u_res'), W, H);
+  gl.uniform4f(gl.getUniformLocation(progHud, 'u_color'), r, g, b, a);
+
+  const gw = GLYPH_W * scale, gh = GLYPH_H * scale;
+  const verts = [];
+  let cx = px;
+  for (const ch of text.toUpperCase()) {
+    const uv = glyphUV(ch) || glyphUV('?');
+    if (!uv) { cx += gw; continue; }
+    const x0=cx, y0=py, x1=cx+gw, y1=py+gh;
+    verts.push(
+      x0,y0, uv.u0,uv.v0,  x1,y0, uv.u1,uv.v0,  x1,y1, uv.u1,uv.v1,
+      x0,y0, uv.u0,uv.v0,  x1,y1, uv.u1,uv.v1,  x0,y1, uv.u0,uv.v1,
+    );
+    cx += gw * 0.72; // tighter tracking for monospace
+  }
+  if (!verts.length) return;
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(progHud, 'a_pos');
+  const aUV  = gl.getAttribLocation(progHud, 'a_uv');
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+  gl.vertexAttribPointer(aUV,  2, gl.FLOAT, false, 16, 8);
+  gl.drawArrays(gl.TRIANGLES, 0, verts.length / 4);
+  gl.deleteBuffer(buf);
+  gl.disableVertexAttribArray(aPos);
+  gl.disableVertexAttribArray(aUV);
+}
+
+function orthoMat(cx, cy, W, H) {
+  // Maps world coords → clip space
+  // clip_x = (world_x - cx) / (W/2)  → scale then translate
+  const sx = 2 / W, sy = 2 / H;
+  const tx = -cx * sx;
+  const ty = -cy * sy;
+  return [sx, 0, 0,   0, sy, 0,   tx, ty, 1]; // column-major mat3
+}
+
+function drawRect(prog, mvp, x, y, w, h, r, g, b, a) {
+  gl.useProgram(prog);
+  // build a per-draw buffer
+  const x0=x, y0=y, x1=x+w, y1=y+h;
+  const verts = [x0,y0, x1,y0, x1,y1, x0,y0, x1,y1, x0,y1];
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  gl.uniformMatrix3fv(gl.getUniformLocation(prog,'u_mvp'), false, mvp);
+  gl.uniform4f(gl.getUniformLocation(prog,'u_color'), r, g, b, a);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.deleteBuffer(buf);
+  gl.disableVertexAttribArray(aPos);
+}
+
+// Draw a rect with UV coords (0,0)=bottom-left (1,1)=top-right, uses VERT_WORLD shader
+function drawUVRect(prog, mvp, x, y, w, h, extraUniforms) {
+  gl.useProgram(prog);
+  const x0=x, y0=y, x1=x+w, y1=y+h;
+  // interleaved pos(2) + uv(2)
+  const verts = [
+    x0,y0, 0,0,  x1,y0, 1,0,  x1,y1, 1,1,
+    x0,y0, 0,0,  x1,y1, 1,1,  x0,y1, 0,1
+  ];
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'a_pos');
+  const aUV  = gl.getAttribLocation(prog, 'a_uv');
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+  gl.vertexAttribPointer(aUV,  2, gl.FLOAT, false, 16, 8);
+  gl.uniformMatrix3fv(gl.getUniformLocation(prog,'u_mvp'), false, mvp);
+  if (extraUniforms) extraUniforms(prog);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.deleteBuffer(buf);
+  gl.disableVertexAttribArray(aPos);
+  gl.disableVertexAttribArray(aUV);
+}
+
+// Draw a rotated rect with UV coords, rotated around its center
+function drawUVRectRotated(prog, mvp, x, y, w, h, angle, extraUniforms) {
+  gl.useProgram(prog);
+  const cx = x + w * 0.5, cy = y + h * 0.5;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  // Corners relative to center
+  const corners = [
+    [-w*0.5, -h*0.5], [w*0.5, -h*0.5], [w*0.5, h*0.5], [-w*0.5, h*0.5]
+  ];
+  const r = corners.map(([dx, dy]) => [cx + dx*cos - dy*sin, cy + dx*sin + dy*cos]);
+  const verts = [
+    r[0][0],r[0][1], 0,0,  r[1][0],r[1][1], 1,0,  r[2][0],r[2][1], 1,1,
+    r[0][0],r[0][1], 0,0,  r[2][0],r[2][1], 1,1,  r[3][0],r[3][1], 0,1
+  ];
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'a_pos');
+  const aUV  = gl.getAttribLocation(prog, 'a_uv');
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+  gl.vertexAttribPointer(aUV,  2, gl.FLOAT, false, 16, 8);
+  gl.uniformMatrix3fv(gl.getUniformLocation(prog,'u_mvp'), false, mvp);
+  if (extraUniforms) extraUniforms(prog);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.deleteBuffer(buf);
+  gl.disableVertexAttribArray(aPos);
+  gl.disableVertexAttribArray(aUV);
+}
+
+function drawCircle(cx, cy, radius, mvp, cr, cg, cb, ca, gr, gg, gb, ga) {
+  gl.useProgram(progCircle);
+  gl.bindBuffer(gl.ARRAY_BUFFER, circleBuf);
+  // Re-scale the billboard by radius
+  const x0=cx-radius, y0=cy-radius, x1=cx+radius, y1=cy+radius;
+  const verts = [
+    x0,y0,-1,-1, x1,y0,1,-1, x1,y1,1,1,
+    x0,y0,-1,-1, x1,y1,1,1,  x0,y1,-1,1
+  ];
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(progCircle,'a_pos');
+  const aUV  = gl.getAttribLocation(progCircle,'a_uv');
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+  gl.vertexAttribPointer(aUV,  2, gl.FLOAT, false, 16, 8);
+  gl.uniformMatrix3fv(gl.getUniformLocation(progCircle,'u_mvp'), false, mvp);
+  gl.uniform4f(gl.getUniformLocation(progCircle,'u_color'), cr, cg, cb, ca);
+  gl.uniform4f(gl.getUniformLocation(progCircle,'u_glow'),  gr, gg, gb, ga);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.deleteBuffer(buf);
+  gl.disableVertexAttribArray(aPos);
+  gl.disableVertexAttribArray(aUV);
+}
+
+// Draw ellipse with separate horizontal (rx) and vertical (ry) radii
+// angle in radians - positive = counterclockwise rotation
+function drawEllipse(cx, cy, rx, ry, mvp, cr, cg, cb, ca, gr, gg, gb, ga, angle = 0) {
+  gl.useProgram(progCircle);
+  
+  // Create billboard with ellipse dimensions, rotated if angle provided
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  
+  // Corner offsets (before rotation)
+  const corners = [
+    [-rx, -ry], [rx, -ry], [rx, ry], [-rx, ry]
+  ];
+  
+  // Rotate corners around center
+  const rotated = corners.map(([dx, dy]) => {
+    return [
+      cx + dx * cos - dy * sin,
+      cy + dx * sin + dy * cos
+    ];
+  });
+  
+  const verts = [
+    ...rotated[0],-1,-1, ...rotated[1],1,-1, ...rotated[2],1,1,
+    ...rotated[0],-1,-1, ...rotated[2],1,1,  ...rotated[3],-1,1
+  ];
+  
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(progCircle,'a_pos');
+  const aUV  = gl.getAttribLocation(progCircle,'a_uv');
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+  gl.vertexAttribPointer(aUV,  2, gl.FLOAT, false, 16, 8);
+  gl.uniformMatrix3fv(gl.getUniformLocation(progCircle,'u_mvp'), false, mvp);
+  gl.uniform4f(gl.getUniformLocation(progCircle,'u_color'), cr, cg, cb, ca);
+  gl.uniform4f(gl.getUniformLocation(progCircle,'u_glow'),  gr, gg, gb, ga);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.deleteBuffer(buf);
+  gl.disableVertexAttribArray(aPos);
+  gl.disableVertexAttribArray(aUV);
+}
+
+// ─── World ───────────────────────────────────────────────────────────────────
+// Coordinate system: Y increases UPWARD (standard math/WebGL convention).
+// Ground surface sits at Y = GROUND_TOP. Gravity pulls in the -Y direction.
+// The camera maps world coords to the screen so higher Y = higher on screen.
+
+const W = canvas.width, H = canvas.height;
+
+// Physics constants — all in world units per frame (assume 60 fps target)
+const PHYSICS = {
+  gravity:   0.42,   // added to vy each frame (positive = downward pull)
+  jumpForce: 10.5,     // upward impulse applied on jump (positive = up)
+  walkSpeed: 3.5,
+  friction:  0.82,
+};
+
+// Ground surface Y (top of the ground slab)
+const GROUND_TOP = 60;
+const PLAYER_RADIUS = 18;
+
+// Player starts resting on the ground: centre is at GROUND_TOP + radius
+const player = {
+  x: 120,
+  y: GROUND_TOP + PLAYER_RADIUS,
+  vx: 0,
+  vy: 0,
+  r: PLAYER_RADIUS,
+  onGround: false,
+  facingRight: true,
+  trail: [],
+  squash: 1.0, squashVel: 0,
+  bounceAnim: 0,
+  restTime: 0,
+  restStartSquash: 1.0,
+  wobbleTime: 0, // horizontal wobble animation when stopping from movement
+  wobbleDir: 1,  // direction of wobble (1 = right, -1 = left)
+  blinkTimer: 0, // time until next blink
+  blinkAnim: 0,  // blink animation progress (0 = open, 1 = closed)
+  nextBlinkDelay: 5 + Math.random() * 5, // random 5-10 seconds
+  irisX: 0,      // iris offset X (-1 to 1, within eye bounds)
+  irisY: 0,      // iris offset Y (-1 to 1, within eye bounds)
+  irisTargetX: 0,
+  irisTargetY: 0,
+  irisMoveTime: 0,
+  irisHoldTime: 0,
+  nextIrisMoveDelay: 1 + Math.random() * 2, // random 1-3 seconds
+  currentPlatform: null, // track which platform player is standing on
+  hasDoubleJump: true,  // reset on landing
+  doubleJumpFloat: false, // reduced gravity after double jump
+  dead: false,
+  deadTimer: 0,
+};
+
+// Landing impact shockwave state
+const landingImpact = {
+  active: false,
+  x: 0,
+  y: 0,
+  time: 0,
+  strength: 0,
+};
+
+// Landing particles (debris blobs)
+const particles = [];
+// Each particle: { x, y, vx, vy, life, maxLife, size }
+
+function spawnLandingParticles(x, y, strength) {
+  const count = 4 + Math.floor(strength * 4); // 4-8 particles
+  for (let i = 0; i < count; i++) {
+    const dir = (i % 2) * 2 - 1;
+    const speed = 2.5 + Math.random() * 4.0 * strength;
+    const spreadAngle = (Math.random() - 0.5) * 0.3;
+    particles.push({
+      x: x,
+      y: y + PLAYER_RADIUS * 0.3, // spawn 30% up from sphere bottom
+      vx: dir * speed * Math.cos(spreadAngle),
+      vy: 2.0 + Math.random() * 2.0, // POSITIVE = upward arc (Y-up coords)
+      life: 1.0,
+      maxLife: 0.6 + Math.random() * 0.5,
+      size: 3 + Math.random() * 4,
+    });
+  }
+}
+
+// Leaf particles (falling leaves from leaf platforms on landing)
+const leafParticles = [];
+
+function spawnLeafParticles(x, y, w) {
+  const count = 1 + Math.floor(Math.random() * 3); // 1-3 particles
+  for (let i = 0; i < count; i++) {
+    const spawnX = x + Math.random() * w; // random position along platform width
+    leafParticles.push({
+      x: spawnX,
+      y: y,
+      vx: (Math.random() - 0.5) * 0.8, // slight initial horizontal drift
+      vy: -0.3 - Math.random() * 0.3,   // start falling slowly
+      life: 1.0,
+      maxLife: 1.5 + Math.random() * 1.0, // 1.5-2.5 seconds
+      size: 4 + Math.random() * 4,        // 4-8 world units
+      phase: Math.random() * Math.PI * 2, // random sway phase offset
+      swayFreq: 2.0 + Math.random() * 1.5, // sway frequency
+      swayAmp: 0.6 + Math.random() * 0.6,  // sway amplitude
+      rotation: Math.random() * Math.PI * 2, // initial rotation
+      rotSpeed: (Math.random() - 0.5) * 3.0, // rotation speed
+      green: 0.4 + Math.random() * 0.3, // vary the green channel
+    });
+  }
+}
+
+function updateLeafParticles(dt) {
+  const dtSec = dt / 60;
+  for (let i = leafParticles.length - 1; i >= 0; i--) {
+    const p = leafParticles[i];
+    // Sway side to side like a falling leaf
+    const age = (1.0 - p.life) * p.maxLife; // seconds elapsed
+    p.vx = Math.sin(age * p.swayFreq + p.phase) * p.swayAmp;
+    // Gentle downward drift, slowing over time
+    p.vy = -0.5 - 0.3 * p.life;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rotation += p.rotSpeed * dtSec;
+    p.life -= dtSec / p.maxLife;
+    if (p.life <= 0) leafParticles.splice(i, 1);
+  }
+}
+
+function updateParticles(dt) {
+  const dtSec = dt / 60;
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy -= 0.35; // gravity pulls DOWN (subtract in Y-up system)
+    p.vx *= 0.95; // air friction
+    
+    // Check collision with platforms - bounce
+    for (const plat of platforms) {
+      const surfaceTop = plat.y + plat.h;
+      if (p.x >= plat.x && p.x <= plat.x + plat.w) {
+        if (p.y <= surfaceTop + 3 && p.y > surfaceTop - 5 && p.vy < 0) {
+          p.y = surfaceTop + 1; // slightly above surface
+          p.vy = -p.vy * 0.45; // bounce: reverse direction, lose 55% energy
+          p.vx *= 0.90; // slow down horizontally on bounce
+          
+          // Stop bouncing if velocity is too low (settle)
+          if (Math.abs(p.vy) < 0.5) {
+            p.vy = 0;
+            p.vx *= 0.80;
+          }
+        }
+      }
+    }
+    
+    p.life -= dtSec / p.maxLife;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// Camera
+let camX = 0;
+const CAM_LOOK_AHEAD = 250;
+
+// Platforms — x,y is the BOTTOM-LEFT corner of the platform slab.
+// The top surface is at y + h.  Sphere rests when its centre == top surface + radius.
+const platforms = [
+  // Ground segments (with intentional gaps to jump over)
+  { x:-200, y: GROUND_TOP - 20, w:600,  h:20, type:'ground' },
+  { x: 500, y: GROUND_TOP - 20, w:500,  h:20, type:'ground' },
+  { x:1100, y: GROUND_TOP - 20, w:800,  h:20, type:'ground' },
+  { x:2100, y: GROUND_TOP - 20, w:600,  h:20, type:'ground' },
+  { x:2900, y: GROUND_TOP - 20, w:1000, h:20, type:'ground' },
+  { x:4100, y: GROUND_TOP - 20, w:1000, h:20, type:'ground' },
+
+  // Floating platforms — tops at various heights above ground
+  { x: 300, y:140, w:140, h:16, type:'float' },
+  { x: 520, y:180, w:100, h:16, type:'float' },
+  { x: 700, y:200, w:120, h:16, type:'float' },
+  { x: 900, y:160, w:100, h:16, type:'float' },
+  { x:1050, y:220, w:140, h:16, type:'float' },
+  { x:1250, y:170, w:100, h:16, type:'float' },
+  { x:1430, y:200, w:130, h:16, type:'float' },
+  { x:1600, y:150, w:100, h:16, type:'float' },
+  { x:1780, y:190, w:120, h:16, type:'float' },
+  { x:1960, y:220, w:100, h:16, type:'float' },
+  { x:2080, y:170, w:100, h:16, type:'float' },
+  { x:2260, y:200, w:120, h:16, type:'float' },
+  { x:2460, y:160, w:100, h:16, type:'float' },
+  { x:2620, y:210, w:130, h:16, type:'float' },
+  { x:2830, y:180, w:100, h:16, type:'float' },
+  { x:3050, y:220, w:140, h:16, type:'float' },
+  { x:3250, y:165, w:100, h:16, type:'float' },
+  { x:3440, y:195, w:120, h:16, type:'float' },
+  { x:3650, y:170, w:100, h:16, type:'float' },
+  { x:3830, y:215, w:130, h:16, type:'float' },
+  { x:4050, y:175, w:100, h:16, type:'float' },
+  { x:4250, y:200, w:100, h:16, type:'float' },
+];
+
+// Initialize sway state for floating platforms
+for (const p of platforms) {
+  if (p.type === 'float') {
+    // Vary leaf thickness based on position
+    const seed = Math.sin(p.x * 0.037 + p.y * 0.051) * 43758.5;
+    const rand = seed - Math.floor(seed); // 0-1
+    p.h = 12 + Math.floor(rand * 12); // 12 to 23
+    p.swayX = 0;       // current horizontal offset
+    p.swayVel = 0;     // sway velocity (spring)
+    p.swayTarget = 0;  // wind-driven target
+    p.prevSwayX = 0;   // previous frame sway for delta
+    p.bobY = 0;        // current vertical offset (negative = pushed down)
+    p.bobVel = 0;      // vertical bob velocity
+    // Check if this platform has ground beneath it
+    const platCx = p.x + p.w * 0.5;
+    p.hasGround = platforms.some(g =>
+      g.type === 'ground' && platCx >= g.x && platCx <= g.x + g.w
+    );
+  }
+}
+
+// ─── Pits & Spikes ───────────────────────────────────────────────────────────
+// Find gaps between consecutive ground segments and place spike rows in them.
+const groundSegs = platforms
+  .filter(p => p.type === 'ground')
+  .sort((a, b) => a.x - b.x);
+
+const spikes = []; // each spike: { x, tipY, baseY, halfW }
+const SPIKE_H      = 26;
+const SPIKE_W      = 18;
+// camY = GROUND_TOP + H*0.25 = 60 + 120 = 180
+// Screen bottom in world Y = camY - H/2 = 180 - 240 = -60
+// Place spike tips just above screen bottom so they're visible at the end of the fall
+const SCREEN_BOTTOM_WORLD = (GROUND_TOP + 480 * 0.25) - 480 / 2; // = -60
+const SPIKE_BASE_Y = SCREEN_BOTTOM_WORLD; // base at screen bottom edge
+const SPIKE_TIP_Y  = SPIKE_BASE_Y + 30;   // tips 30 units above base (hitbox level)
+
+// Water level — 20% of average spike height (~35 units), covering bottom of screen
+const WATER_HEIGHT = 14; // 40% of ~35
+const WATER_Y = SCREEN_BOTTOM_WORLD;
+const LEVEL_START = -200;
+const LEVEL_END = 5350; // rightmost platform edge (4250 + 100 + 1000 buffer)
+
+for (let i = 0; i < groundSegs.length - 1; i++) {
+  const rightEdge = groundSegs[i].x + groundSegs[i].w;
+  const leftEdge  = groundSegs[i + 1].x;
+  const gapW = leftEdge - rightEdge;
+  if (gapW <= 0) continue;
+  
+  const margin = 8;
+  const usable = gapW - margin * 2;
+  
+  // Total spikes: 7-15 per pit, +4 if wide pit
+  let numSpikes = 7 + Math.floor(Math.random() * 9); // 7 to 15 spikes
+  const isWidePit = gapW > 80;
+  if (isWidePit) numSpikes += 4; // add 4 extra small spikes for wide pits
+  
+  // Big spikes: 3-4 per pit
+  const numBigSpikes = 3 + Math.floor(Math.random() * 2); // 3 or 4 big spikes
+  
+  // Extreme angled spikes: 1 if <= 10 spikes, up to 3 if > 10
+  const numExtremeSpikes = numSpikes > 10 ? (1 + Math.floor(Math.random() * 3)) : 1; // 1-3 if >10, else 1
+  const extremeSpikeIndices = new Set();
+  while (extremeSpikeIndices.size < numExtremeSpikes) {
+    extremeSpikeIndices.add(Math.floor(Math.random() * numSpikes));
+  }
+  
+  // Add two wide background spikes (will render before regular spikes)
+  const bgSpikeHeight = (30 + 20) * 0.2; // 20% of average spike height
+  
+  // First background spike (furthest back, darkest)
+  const bgSpike1TipX = rightEdge + margin + Math.random() * usable; // random position
+  spikes.push({
+    x: rightEdge + margin + usable / 2,
+    tipY: SPIKE_TIP_Y,
+    baseY: SPIKE_BASE_Y,
+    halfW: usable / 2,
+    height: bgSpikeHeight,
+    angle: 0,
+    twist: 0,
+    isBig: true,
+    hasHighlight: false,
+    isExtreme: false,
+    isBackground: true,
+    bgLayer: 1, // furthest back
+    bgTipX: bgSpike1TipX
+  });
+  
+  // Second background spike (middle layer, slightly lighter)
+  const bgSpike2TipX = rightEdge + margin + Math.random() * usable; // different random position
+  spikes.push({
+    x: rightEdge + margin + usable / 2,
+    tipY: SPIKE_TIP_Y,
+    baseY: SPIKE_BASE_Y,
+    halfW: usable / 2,
+    height: bgSpikeHeight,
+    angle: 0,
+    twist: 0,
+    isBig: true,
+    hasHighlight: false,
+    isExtreme: false,
+    isBackground: true,
+    bgLayer: 2, // middle layer
+    bgTipX: bgSpike2TipX
+  });
+  
+  // Generate regular spikes
+  for (let s = 0; s < numSpikes; s++) {
+    const sx = rightEdge + margin + Math.random() * usable;
+    
+    // Check if this is an extreme spike
+    const isExtreme = extremeSpikeIndices.has(s);
+    
+    // First numBigSpikes are big, rest are thin (extreme spikes are always big)
+    // Extra spikes from wide pits are always small
+    const isExtraSmall = isWidePit && s >= (numSpikes - 4);
+    const isBig = !isExtraSmall && (s < numBigSpikes || isExtreme);
+    const baseWidth = isBig ? (14 + Math.random() * 8) : (4 + Math.random() * 6);
+    
+    // Extreme spikes are 20% longer
+    let height = isBig ? (30 + Math.random() * 20) : (20 + Math.random() * 15);
+    if (isExtreme) height *= 1.2;
+    
+    // Extreme spikes have ~45° angle (±40-50°), others have smaller angles
+    const angle = isExtreme 
+      ? ((Math.random() - 0.5) > 0 ? 1 : -1) * (0.7 + Math.random() * 0.15) // ±40-50 degrees (0.7-0.85 rad)
+      : (Math.random() - 0.5) * 0.6; // ±17 degrees
+    
+    const twist = (Math.random() - 0.5) * 0.4; // asymmetry for twisted look
+    const hasHighlight = isBig || Math.random() < 0.4; // big spikes always have highlight, thin spikes 40% chance
+    
+    spikes.push({
+      x: sx,
+      tipY: SPIKE_TIP_Y,
+      baseY: SPIKE_BASE_Y,
+      halfW: baseWidth * 0.5,
+      height: height,
+      angle: angle,
+      twist: twist,
+      isBig: isBig,
+      hasHighlight: hasHighlight,
+      isExtreme: isExtreme,
+      isBackground: false
+    });
+  }
+}
+
+
+
+// ─── Death counter ────────────────────────────────────────────────────────────
+let deaths      = 0;
+let deathsShown = false;
+
+// ─── Wind state ───────────────────────────────────────────────────────────────
+// Ripples travel LEFT (from right screen edge to left).
+// Each "set" fires 2-4 ripples with a short gap between each, then a longer pause.
+const wind = {
+  ripples:      [],   // active ripples: each { x, strength }
+  burstCount:   0,    // ripples remaining in current burst
+  burstGap:     0,    // seconds until next ripple in current burst fires
+  pause:        2.0,  // seconds until next burst starts
+  speed:        320,  // world units per second (leftward, so x decreases)
+};
+
+function spawnRipple(isFirst) {
+  wind.ripples.push({
+    x:        camX + W * 0.5 + 80, // start just off right edge
+    strength: 0.5 + Math.random() * 0.5,
+    isFirst:  !!isFirst,
+  });
+}
+
+function updateWind(dt) {
+  const dtSec = dt / 60;
+
+  // Move all active ripples leftward
+  for (const r of wind.ripples) r.x -= wind.speed * dtSec;
+
+  // Remove ripples that have fully crossed the left screen edge
+  const screenLeft = camX - W * 0.5 - 200;
+  wind.ripples = wind.ripples.filter(r => r.x > screenLeft);
+
+  // Handle burst sequencing
+  if (wind.burstCount > 0) {
+    wind.burstGap -= dtSec;
+    if (wind.burstGap <= 0) {
+      spawnRipple(wind.burstIsFirst);
+      wind.burstIsFirst = false;
+      wind.burstCount--;
+      wind.burstGap = 0.28 + Math.random() * 0.18; // 0.28-0.46s between ripples in burst
+    }
+  } else {
+    // Waiting for next burst
+    wind.pause -= dtSec;
+    if (wind.pause <= 0) {
+      wind.burstCount = 2 + Math.floor(Math.random() * 3); // 2-4 ripples
+      wind.burstGap   = 0;
+      wind.burstIsFirst = true; // next ripple is first of burst
+      wind.pause      = 3.5 + Math.random() * 4.0; // 3.5-7.5s between bursts
+    }
+  }
+}
+
+const keys = {};
+document.addEventListener('keydown', e => {
+  if (!gameStarted) return;
+  keys[e.code] = true;
+  if ((e.code === 'Space' || e.code === 'KeyW') && player.onGround) {
+    // Bob leaf platform down on jump-off
+    if (player.currentPlatform && player.currentPlatform.type === 'float') {
+      player.currentPlatform.bobVel = -0.8;
+      // Sway tree opposite to player's horizontal movement
+      if (Math.abs(player.vx) > 0.3) {
+        const pushDir = player.vx > 0 ? -1 : 1;
+        player.currentPlatform.swayVel += pushDir * Math.abs(player.vx) * 0.12;
+      }
+    }
+    // Jump: apply upward impulse (positive Y = up in our coord system)
+    player.vy = PHYSICS.jumpForce;
+    player.onGround = false;
+    player.squashVel = 0.35;
+    player.currentPlatform = null;
+  } else if ((e.code === 'Space' || e.code === 'KeyW') && !player.onGround && player.hasDoubleJump) {
+    // Double jump
+    player.vy = PHYSICS.jumpForce * 0.85;
+    player.hasDoubleJump = false;
+    player.doubleJumpFloat = true;
+    player.squashVel = 0.3;
+  }
+  if (e.code === 'Space' || e.code === 'ArrowUp') e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Start button click handler
+canvas.addEventListener('click', e => {
+  if (gameStarted) return;
+  gameStarted = true;
+  zoomDelay = 0.5; // wait 0.5s before zooming
+  buttonFade = 0; // hide static bubbles immediately
+  
+  // Spawn flying bubbles for each letter
+  const letters = 'Blob!';
+  const flyAngles = [
+    -2.2,  // B: upper-left
+    -0.8,  // l: slight left-up
+     1.57, // o: straight up
+     0.5,  // b: slight right-up
+     2.5,  // !: upper-right
+  ];
+  for (let i = 0; i < letters.length; i++) {
+    const speed = 12 + Math.random() * 4;
+    const angle = flyAngles[i] + (Math.random() - 0.5) * 0.3;
+    bubbleFlyouts.push({
+      ch: letters[i],
+      screenX: W * 0.7 - (letters.length - 1) * 22 * 0.5 + i * 22, // approximate screen positions
+      screenY: H / 2,
+      vx: Math.cos(angle) * speed,
+      vy: -Math.sin(angle) * speed, // screen Y is inverted
+      rotation: 0,
+      rotSpeed: (Math.random() - 0.5) * 8,
+      alpha: 1.0,
+      scale: 1.0,
+      bobPhase: i * 0.8, // carry over from static bubbles
+    });
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  canvas.style.cursor = gameStarted ? 'none' : 'pointer';
+});
+
+// ─── Physics update ───────────────────────────────────────────────────────────
+
+let totalDist = 0;
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function update(dt) {
+  // Blink animation
+  player.blinkTimer += dt / 60;
+  if (player.blinkTimer >= player.nextBlinkDelay) {
+    player.blinkTimer = 0;
+    player.blinkAnim = 0;
+    player.nextBlinkDelay = 5 + Math.random() * 5;
+  }
+  if (player.blinkAnim < 1.0) {
+    player.blinkAnim += dt / 60 * 20;
+    if (player.blinkAnim > 1.0) player.blinkAnim = 1.0;
+  }
+
+  // Iris movement animation
+  player.irisMoveTime += dt / 60;
+  if (Math.abs(player.vx) > 0.5) {
+    player.irisTargetX = 0.7;
+    player.irisTargetY = 0;
+    player.irisMoveTime = 0;
+    player.irisHoldTime = 0;
+  } else {
+    if (player.irisHoldTime > 0) {
+      player.irisHoldTime -= dt / 60;
+    } else if (player.irisMoveTime >= player.nextIrisMoveDelay) {
+      player.irisMoveTime = 0;
+      player.nextIrisMoveDelay = 1 + Math.random() * 2;
+      player.irisTargetX = (Math.random() - 0.5) * 0.8;
+      player.irisTargetY = (Math.random() - 0.5) * 0.8;
+      player.irisHoldTime = 0.8 + Math.random() * 0.4;
+    }
+  }
+  const irisSpeed = Math.abs(player.vx) > 0.5 ? 0.25 : 0.15;
+  player.irisX += (player.irisTargetX - player.irisX) * irisSpeed;
+  player.irisY += (player.irisTargetY - player.irisY) * irisSpeed;
+
+  // Wind runs always (for grass/tree sway)
+  updateWind(dt);
+  for (const p of platforms) {
+    if (p.type !== 'float') continue;
+    const platCx = p.x + p.w * 0.5;
+    let windPush = 0;
+    for (const r of wind.ripples) {
+      if (!r.isFirst) continue;
+      const rippleDist = r.x - platCx;
+      if (rippleDist < 0) {
+        windPush += smoothstep(-45, 0, rippleDist) * r.strength * 6;
+      } else if (rippleDist < 250) {
+        const phase = rippleDist * 0.10;
+        const decay = Math.exp(-rippleDist * 0.018);
+        windPush += decay * Math.cos(phase) * r.strength * 6;
+      }
+    }
+    let weightPush = 0;
+    if (player.onGround && player.currentPlatform === p) {
+      const pc = p.x + p.w * 0.5;
+      const offset = (player.x - pc) / (p.w * 0.5);
+      weightPush = offset * 1.5;
+    }
+    p.swayTarget = windPush + weightPush;
+    const springK = 0.004;
+    const damping = 0.985;
+    p.prevSwayX = p.swayX;
+    p.swayVel += (p.swayTarget - p.swayX) * springK;
+    p.swayVel *= damping;
+    p.swayX += p.swayVel;
+    if (player.onGround && player.currentPlatform === p) {
+      player.x += p.swayX - p.prevSwayX;
+    }
+    const bobSpringK = 0.04;
+    const bobDamping = 0.82;
+    p.bobVel += (0 - p.bobY) * bobSpringK;
+    p.bobVel *= bobDamping;
+    p.bobY += p.bobVel;
+    if (Math.abs(p.bobY) < 0.05 && Math.abs(p.bobVel) < 0.05) { p.bobY = 0; p.bobVel = 0; }
+  }
+
+  // Horizontal input
+  const left  = keys['KeyA'] || keys['ArrowLeft'];
+  const right = keys['KeyD'] || keys['ArrowRight'];
+
+  const wasFacingRight = player.facingRight;
+  if (left)  { player.vx -= 1.2; player.facingRight = false; }
+  if (right) { player.vx += 1.2; player.facingRight = true;  }
+
+  // Snap iris immediately when facing direction flips
+  if (player.facingRight !== wasFacingRight) {
+    player.irisTargetX = 0.7; // always positive = forward in local eye space
+    player.irisTargetY = 0;
+    player.irisX = player.irisTargetX;
+    player.irisY = player.irisTargetY;
+    player.irisMoveTime = 0;
+    player.irisHoldTime = 0;
+  }
+
+  player.vx *= PHYSICS.friction;
+  player.vx = Math.max(-PHYSICS.walkSpeed, Math.min(PHYSICS.walkSpeed, player.vx));
+
+  // Gravity pulls downward: subtract from vy (Y-up convention)
+  const grav = player.doubleJumpFloat ? PHYSICS.gravity * 0.6 : PHYSICS.gravity;
+  player.vy -= grav;
+
+  // Integrate position
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Prevent going off left edge of screen
+  const screenLeft = camX - W * 0.5;
+  if (player.x - player.r < screenLeft) {
+    player.x = screenLeft + player.r;
+    player.vx = 0;
+  }
+
+  // ── Platform collision (top-surface landing only) ──────────────────────────
+  // For each platform we check if the sphere is just above / has passed through
+  // the top surface this frame, and resolve by sitting on top.
+  player.onGround = false;
+
+  for (const p of platforms) {
+    // Skip float platforms over open air (no tree generated)
+    if (p.type === 'float' && !p.hasGround) continue;
+    const bob = (p.type === 'float' && p.bobY) ? p.bobY : 0;
+    // Float platforms: raise collision surface to match visual leaf top
+    const leafPad = (p.type === 'float') ? p.h * 0.55 : 0;
+    const surfaceTop = p.y + p.h + bob + leafPad;
+    const sway = (p.type === 'float' && p.swayX) ? p.swayX : 0;
+
+    // Horizontal overlap check (with sway offset)
+    const halfW = p.w / 2;
+    const platCx = p.x + sway + halfW;
+    const horizOverlap = Math.abs(player.x - platCx) < halfW + player.r;
+
+    if (!horizOverlap) continue;
+
+    // Landing: sphere centre descending through or at the top surface
+    const centreOnSurface = surfaceTop + player.r;
+    if (player.vy <= 0 &&                      // moving downward
+        player.y <= centreOnSurface + 2 &&     // close enough
+        player.y >= surfaceTop - 2) {          // coming from above
+      const wasAirborne = !player.onGround;
+      const fallSpeed = Math.abs(player.vy);
+      const isGroundPlatform = p.type === 'ground';
+      
+      // Spawn particles on ANY landing
+      if (wasAirborne && fallSpeed > 2.0) {
+        const impactX = player.x;
+        const impactY = surfaceTop;
+        const strength = Math.min(1.0, fallSpeed / 12.0);
+        spawnLandingParticles(impactX, impactY, strength);
+        
+        // Trigger bounce animation on impact
+        player.bounceAnim = 1.0; // 1.0 second bounce animation
+        player.squash = 1.8; // instant squash FLAT on impact (high value = flat)
+        player.squashVel = 0;
+        
+        // Grass shockwave only on ground platforms
+        if (isGroundPlatform) {
+          landingImpact.active   = true;
+          landingImpact.x        = impactX;
+          landingImpact.y        = impactY;
+          landingImpact.time     = 0;
+          landingImpact.strength = strength;
+        }
+        
+        // Bob leaf platform down on landing
+        if (p.type === 'float') {
+          p.bobVel = -strength * 1.2;
+          // Spawn falling leaf particles
+          const sway = p.swayX || 0;
+          spawnLeafParticles(p.x + sway, p.y + p.h + (p.bobY || 0), p.w);
+        }
+      }
+      
+      player.y  = centreOnSurface;
+      player.vy = 0;
+      player.onGround = true;
+      player.hasDoubleJump = true;
+      player.doubleJumpFloat = false;
+      player.currentPlatform = p; // track which platform we're on
+      if (player.squashVel > -0.05) player.squashVel = -0.25;
+    }
+
+    // Head-bump: sphere centre ascending through bottom of platform
+    const platformBottom = p.y;
+    const centreAtBottom = platformBottom - player.r;
+    if (player.vy > 0 &&
+        player.y >= centreAtBottom - 2 &&
+        player.y <= platformBottom + 2) {
+      player.y  = centreAtBottom;
+      player.vy = 0;
+    }
+  }
+
+  // Kill plane — die when sphere falls below screen bottom
+  if (!player.dead && player.y + player.r < SCREEN_BOTTOM_WORLD) {
+    player.dead = true;
+    player.deadTimer = 0.25; // quarter second pause before respawn
+    // Spawn death particles upward from death location
+    const count = 12 + Math.floor(Math.random() * 8); // 12-20 particles
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2; // all directions
+      const speed = 3.0 + Math.random() * 5.0;
+      particles.push({
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.abs(Math.sin(angle)) * speed + 2.0, // bias upward
+        life: 1.0,
+        maxLife: 0.6 + Math.random() * 0.5,
+        size: 3 + Math.random() * 4,
+      });
+    }
+    // Schedule second burst after 0.2s
+    player.deathBurst2 = { timer: 0.2, x: player.x, y: player.y, count: Math.ceil(count / 2) };
+    deaths++;
+    if (!deathsShown) deathsShown = true;
+  }
+  // Delayed second death burst
+  if (player.deathBurst2) {
+    player.deathBurst2.timer -= dt / 60;
+    if (player.deathBurst2.timer <= 0) {
+      const b = player.deathBurst2;
+      for (let i = 0; i < b.count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 6.0 + Math.random() * 10.0; // twice as fast = twice as high
+        particles.push({
+          x: b.x,
+          y: b.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.abs(Math.sin(angle)) * speed + 4.0,
+          life: 1.0,
+          maxLife: 0.8 + Math.random() * 0.6,
+          size: 3 + Math.random() * 4,
+        });
+      }
+      player.deathBurst2 = null;
+    }
+  }
+  if (player.dead) {
+    player.deadTimer -= dt / 60;
+    if (player.deadTimer <= 0) {
+      player.dead = false;
+      player.x  = 120;
+      player.y  = GROUND_TOP + player.r;
+      player.vx = 0;
+      player.vy = 0;
+      player.trail = [];
+    }
+  }
+
+  // Trail
+  player.trail.push({ x: player.x, y: player.y, t: 1.0 });
+  if (player.trail.length > 20) player.trail.shift();
+  for (const t of player.trail) t.t -= 0.05;
+
+  // Squash spring - jelly-like deformation (purely visual, doesn't affect collision)
+  if (player.bounceAnim > 0) {
+    // Squish recovery animation: smoothly animate to round over 1.0s
+    const t = 1.0 - (player.bounceAnim / 1.0); // 0 at start, 1 at end (1.0s)
+    
+    // Use full 1.0s duration with guarantee of ending at squash=1.0
+    const freq = 1.5;
+    const decay = (1 - t) * (1 - t) * (1 - t); // cubic decay guarantees 0 at t=1
+    const wave = Math.cos(t * freq * Math.PI * 2) * decay;
+    player.squash = 1.0 + wave * 0.8;
+    
+    player.squashVel = 0;
+    player.bounceAnim -= dt / 60;
+    if (player.bounceAnim <= 0) {
+      player.bounceAnim = 0;
+      player.squash = 1.0;
+    }
+  } else {
+    // Normal squash physics when not in bounce animation
+    const isMoving = Math.abs(player.vx) > 0.1 || Math.abs(player.vy) > 0.1;
+    
+    if (isMoving) {
+      // Moving: apply velocity-based deformation
+      
+      // Cancel any ongoing animations when movement starts
+      player.bounceAnim = 0;
+      player.wobbleTime = 1.0; // end wobble immediately
+      
+      player.squash += player.squashVel;
+      player.squashVel -= (player.squash - 1.0) * 0.25;
+      player.squashVel *= 0.55;
+      
+      const speedStretch = Math.abs(player.vx) * 0.035;
+      player.squash += speedStretch;
+      
+      const vertStretch = Math.abs(player.vy) * 0.025;
+      player.squash -= vertStretch;
+      
+      // Limit horizontal elongation to 1.5x (squash min 0.67 = 1/1.5)
+      if (player.squash < 0.67) player.squash = 0.67;
+      
+      // Reset rest state when moving
+      if (player.restTime > 0) {
+        player.restStartSquash = player.squash;
+      }
+      player.restTime = 0;
+    } else {
+      // At rest: check if we just stopped from horizontal movement
+      if (player.restTime === 0) {
+        // Just became at rest - capture current squash
+        player.restStartSquash = player.squash;
+        
+        // Start horizontal wobble if we were moving horizontally on ground
+        if (player.onGround && Math.abs(player.vx) > 0.5) {
+          player.wobbleTime = 0;
+          player.wobbleDir = player.vx > 0 ? 1 : -1; // wobble in direction we were moving
+        }
+      }
+      
+      player.restTime += dt / 60;
+      
+      if (player.restTime < 1.0) {
+        // Elastic settle animation over 1.0 seconds
+        const t = player.restTime / 1.0; // 0 to 1
+        const freq = 2.5;
+        const decay = Math.exp(-t * 2.5);
+        const wave = Math.cos(t * freq * Math.PI * 2) * decay;
+        // Oscillate from restStartSquash toward 1.0
+        player.squash = 1.0 + (player.restStartSquash - 1.0) * wave;
+        player.squashVel = 0;
+      } else {
+        // Animation complete
+        player.squash = 1.0;
+        player.squashVel = 0;
+      }
+      
+      // Update horizontal wobble timer when at rest on ground
+      if (player.onGround && player.wobbleTime < 1.0) {
+        player.wobbleTime += dt / 60;
+      }
+    }
+    
+    player.squash = Math.max(0.35, Math.min(1.8, player.squash));
+  }
+
+  // Camera — camX is the world X shown at screen centre.
+  // To place the sphere ~25% from the left edge, the centre must be
+  // W*0.25 to the RIGHT of the player (leaving 75% of view ahead).
+  const targetCamX = player.x + W * 0.25;
+  camX += (targetCamX - camX) * 0.08;
+  if (camX < W * 0.5) camX = W * 0.5; // don't scroll left of world start
+
+  // Distance
+  totalDist = Math.max(totalDist, Math.floor((player.x - 120) / 60));
+
+  // Particles
+  updateParticles(dt);
+  updateLeafParticles(dt);
+
+  // Landing impact decay
+  if (landingImpact.active) {
+    landingImpact.time += dt / 60;
+    if (landingImpact.time > 0.8) landingImpact.active = false;
+  }
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+
+let time = 0;
+let frameCount = 0;
+let introZoom = 3.0; // start zoomed in 3x
+const INTRO_ZOOM_DURATION = 2.0; // seconds to zoom out
+let introTimer = 0;
+let gameStarted = false;
+let buttonFade = 1.0; // 1.0 = fully visible, fades to 0
+let zoomDelay = 0; // delay before zoom starts after clicking
+const bubbleFlyouts = []; // flying bubble letters after click
+
+function render() {
+  gl.viewport(0, 0, W, H);
+  
+  // Clear to black first
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  
+  // Disable all vertex attrib arrays to start clean
+  for (let i = 0; i < 8; i++) {
+    gl.disableVertexAttribArray(i);
+  }
+  
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  // Background pass - fullscreen quad
+  gl.useProgram(progBg);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  const aBgPos = gl.getAttribLocation(progBg, 'a_pos');
+  gl.enableVertexAttribArray(aBgPos);
+  gl.vertexAttribPointer(aBgPos, 2, gl.FLOAT, false, 0, 0);
+  gl.uniform1f(gl.getUniformLocation(progBg,'u_time'),   time);
+  gl.uniform1f(gl.getUniformLocation(progBg,'u_camX'),   camX);
+  gl.uniform1f(gl.getUniformLocation(progBg,'u_aspect'), W / H);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.disableVertexAttribArray(aBgPos);
+
+  // World MVP — place ground near the bottom quarter of the screen.
+  // Camera Y centre = GROUND_TOP + H*0.25 keeps ground ~25% up from bottom.
+  const camY = GROUND_TOP + H * 0.25;
+  
+  // Intro zoom: two-phase zoom out
+  // Phase 1: Slow zoom centered on blob until left screen edge hits world left
+  // Phase 2: Rapid zoom to 1.0 with camera snapping to normal position
+  if (gameStarted && introZoom > 1.0) {
+    // Wait for zoom delay before starting zoom
+    if (zoomDelay > 0) {
+      zoomDelay -= 1 / 60;
+    } else {
+    // Check if left edge of view would go past world start (x=0)
+    const viewW = W / introZoom;
+    const leftEdge = player.x - viewW / 2;
+    
+    if (leftEdge > 0) {
+      // Phase 1: slow zoom, player-centered
+      introTimer += 1 / 60;
+      const rate = 0.008; // slow ease
+      introZoom += (1.0 - introZoom) * rate;
+    } else {
+      // Phase 2: rapid zoom to finish
+      introZoom += (1.0 - introZoom) * 0.06;
+    }
+    
+    if (introZoom < 1.005) introZoom = 1.0;
+    } // end zoomDelay else
+  }
+  
+  // Camera position during zoom
+  let zoomCamX, zoomCamY;
+  if (introZoom > 1.0) {
+    const viewW = W / introZoom;
+    const offsetX = viewW * 0.28; // push camera right so blob is in left third
+    const camCX = player.x + offsetX;
+    const leftEdge = camCX - viewW / 2;
+    
+    if (leftEdge > 0) {
+      // Phase 1: blob in left third
+      zoomCamX = camCX;
+      zoomCamY = player.y;
+    } else {
+      // Phase 2: clamp left edge to world start, blend camY toward normal
+      zoomCamX = viewW / 2;
+      const normalCamY = camY;
+      const blendT = 1.0 - (introZoom - 1.0) / 0.5;
+      zoomCamY = player.y + (normalCamY - player.y) * Math.min(1, Math.max(0, blendT));
+    }
+  } else {
+    zoomCamX = camX;
+    zoomCamY = camY;
+  }
+  
+  const mvp = orthoMat(zoomCamX, zoomCamY, W / introZoom, H / introZoom);
+
+  // ── Ground slabs — soil body ──────────────────────────────────────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  for (const p of platforms) {
+    if (p.type !== 'ground') continue;
+    drawUVRect(progGrass, mvp, p.x, p.y, p.w, p.h, (prog) => {
+      gl.uniform1f(gl.getUniformLocation(prog,'u_time'),   time);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_worldX'), p.x);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_worldW'), p.w);
+    });
+  }
+
+
+  // Draw tree trunks behind leaf platforms (only where ground exists below)
+  for (const p of platforms) {
+    if (p.type !== 'float') continue;
+    if (!p.hasGround) continue;
+    const trunkH = p.y - (GROUND_TOP) + 10; // down to ground
+    // Taller trees are wider (older/thicker) - base width 8-14
+    const heightFactor = Math.min(1, trunkH / 180); // 0-1 based on height
+    const baseTrunkW = 8 + heightFactor * 6;
+    if (trunkH > 0) {
+      const sway = p.swayX || 0;
+      const bob = p.bobY || 0;
+      const centerX = p.x + p.w * 0.5;
+      
+      // Render trunk as segmented curve for bending effect
+      const SEGS = 8;
+      gl.useProgram(progSolid);
+      gl.uniformMatrix3fv(gl.getUniformLocation(progSolid,'u_mvp'), false, mvp);
+      const tPosAttr = gl.getAttribLocation(progSolid, 'a_pos');
+      gl.enableVertexAttribArray(tPosAttr);
+      
+      const trunkVerts = [];
+      const hlVerts = [];
+      
+      for (let s = 0; s < SEGS; s++) {
+        const t0 = s / SEGS;
+        const t1 = (s + 1) / SEGS;
+        const y0 = GROUND_TOP + trunkH * t0;
+        const y1 = GROUND_TOP + trunkH * t1;
+        // Width tapers from base to top, with extra flare in bottom 20%
+        const baseFlare0 = t0 < 0.4 ? 1.0 + (1.0 - t0 / 0.4) * 0.4 : 1.0;
+        const baseFlare1 = t1 < 0.4 ? 1.0 + (1.0 - t1 / 0.4) * 0.4 : 1.0;
+        const taper0 = (1.0 - t0 * 0.35) * baseFlare0; // narrows toward top
+        const taper1 = (1.0 - t1 * 0.35) * baseFlare1;
+        const w0 = baseTrunkW * taper0;
+        const w1 = baseTrunkW * taper1;
+        const hlW0 = w0 * 0.2;
+        const hlW1 = w1 * 0.2;
+        // Cubic bend: offset increases with t^3 for natural tree bending
+        const cx0 = centerX + sway * t0 * t0 * t0;
+        const cx1 = centerX + sway * t1 * t1 * t1;
+        // Bob scales with height too
+        const by0 = bob * t0 * t0;
+        const by1 = bob * t1 * t1;
+        
+        // Trunk body quad (two triangles)
+        trunkVerts.push(
+          cx0 - w0*0.5, y0 + by0,  cx1 - w1*0.5, y1 + by1,  cx1 + w1*0.5, y1 + by1,
+          cx0 - w0*0.5, y0 + by0,  cx1 + w1*0.5, y1 + by1,  cx0 + w0*0.5, y0 + by0
+        );
+        
+        // Highlight strip
+        const hx0 = cx0 + w0 * 0.1;
+        const hx1 = cx1 + w1 * 0.1;
+        hlVerts.push(
+          hx0, y0 + by0,  hx1, y1 + by1,  hx1 + hlW1, y1 + by1,
+          hx0, y0 + by0,  hx1 + hlW1, y1 + by1,  hx0 + hlW0, y0 + by0
+        );
+      }
+      
+      // ── Branches in upper 40% of trunk ──────────────────────────────
+      // Generate 1-3 branches per side, seeded by platform position
+      const branchSeed = Math.sin(p.x * 0.073 + p.y * 0.031) * 43758.5;
+      const branchRand = (n) => {
+        const v = Math.sin(branchSeed + n * 127.1) * 43758.5;
+        return v - Math.floor(v);
+      };
+      const numLeft = 1 + Math.floor(branchRand(0) * 3);  // 1-3
+      const numRight = 1 + Math.floor(branchRand(1) * 3); // 1-3
+      const BRANCH_SEGS = 5;
+      
+      for (let side = -1; side <= 1; side += 2) {
+        const count = side === -1 ? numLeft : numRight;
+        for (let b = 0; b < count; b++) {
+          const seedIdx = (side + 2) * 10 + b;
+          // Branch starts between t=0.6 and t=0.85 on the trunk
+          const startT = 0.6 + branchRand(seedIdx + 2) * 0.25;
+          // Branch angle: 30-60 degrees outward and upward
+          const angle = (0.5 + branchRand(seedIdx + 3) * 0.5) * side; // radians outward
+          
+          // Calculate branch length to reach leaf platform middle Y
+          const startCx = centerX + sway * startT * startT * startT;
+          const startY = GROUND_TOP + trunkH * startT + bob * startT * startT;
+          const leafMidY = p.y + p.h * 0.5 + (bob || 0);
+          const targetDY = leafMidY - startY;
+          
+          // Branch direction: outward and upward
+          const bDirX = Math.sin(angle) * 0.7;
+          const bDirY = Math.cos(angle) * 0.5 + 0.5; // bias upward
+          
+          // Scale length so the branch reaches leaf mid Y
+          const branchLen = bDirY > 0.01 ? Math.max(10, targetDY / bDirY) : 30;
+          const baseWidth = baseTrunkW * 0.55 * (0.8 + branchRand(seedIdx + 5) * 0.4);
+          
+          for (let bs = 0; bs < BRANCH_SEGS; bs++) {
+            const bt0 = bs / BRANCH_SEGS;
+            const bt1 = (bs + 1) / BRANCH_SEGS;
+            
+            // Taper width from base to tip
+            const bw0 = baseWidth * (1.0 - bt0 * 0.85);
+            const bw1 = baseWidth * (1.0 - bt1 * 0.85);
+            
+            // Branch position follows sway proportionally
+            const trunkT0 = startT + bt0 * 0.15; // slight upward on trunk
+            const trunkT1 = startT + bt1 * 0.15;
+            const swayCont0 = sway * trunkT0 * trunkT0 * trunkT0;
+            const swayCont1 = sway * trunkT1 * trunkT1 * trunkT1;
+            const swayDelta0 = swayCont0 - sway * startT * startT * startT;
+            const swayDelta1 = swayCont1 - sway * startT * startT * startT;
+            
+            const bx0 = startCx + bDirX * branchLen * bt0 + swayDelta0;
+            const by0 = startY + bDirY * branchLen * bt0;
+            const bx1 = startCx + bDirX * branchLen * bt1 + swayDelta1;
+            const by1 = startY + bDirY * branchLen * bt1;
+            
+            // Perpendicular to branch direction for width
+            const perpX = -bDirY;
+            const perpY = bDirX;
+            const pLen = Math.sqrt(perpX * perpX + perpY * perpY) || 1;
+            const pnx = perpX / pLen;
+            const pny = perpY / pLen;
+            
+            trunkVerts.push(
+              bx0 - pnx * bw0 * 0.5, by0 - pny * bw0 * 0.5,
+              bx1 - pnx * bw1 * 0.5, by1 - pny * bw1 * 0.5,
+              bx1 + pnx * bw1 * 0.5, by1 + pny * bw1 * 0.5,
+              bx0 - pnx * bw0 * 0.5, by0 - pny * bw0 * 0.5,
+              bx1 + pnx * bw1 * 0.5, by1 + pny * bw1 * 0.5,
+              bx0 + pnx * bw0 * 0.5, by0 + pny * bw0 * 0.5
+            );
+            
+            // Branch highlight
+            hlVerts.push(
+              bx0 + pnx * bw0 * 0.1, by0 + pny * bw0 * 0.1,
+              bx1 + pnx * bw1 * 0.1, by1 + pny * bw1 * 0.1,
+              bx1 + pnx * bw1 * 0.3, by1 + pny * bw1 * 0.3,
+              bx0 + pnx * bw0 * 0.1, by0 + pny * bw0 * 0.1,
+              bx1 + pnx * bw1 * 0.3, by1 + pny * bw1 * 0.3,
+              bx0 + pnx * bw0 * 0.3, by0 + pny * bw0 * 0.3
+            );
+          }
+        }
+      }
+      
+      const totalTris = SEGS * 6 + (numLeft + numRight) * BRANCH_SEGS * 6;
+      
+      const trunkBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, trunkBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(trunkVerts), gl.DYNAMIC_DRAW);
+      gl.vertexAttribPointer(tPosAttr, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), 0.28, 0.16, 0.06, 1.0);
+      gl.drawArrays(gl.TRIANGLES, 0, trunkVerts.length / 2);
+      
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(hlVerts), gl.DYNAMIC_DRAW);
+      gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), 0.42, 0.26, 0.10, 0.5);
+      gl.drawArrays(gl.TRIANGLES, 0, hlVerts.length / 2);
+      
+      gl.deleteBuffer(trunkBuf);
+      gl.disableVertexAttribArray(tPosAttr);
+    }
+  }
+
+  // ── Grass blades — SDF shader, rendered over trunks ────────────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  for (const p of platforms) {
+    if (p.type !== 'ground') continue;
+    const slabTopY = p.y + p.h;
+    const stripH   = 60;
+    const slabCx = p.x + p.w * 0.5;
+    let nearestRipple = { x: -99999, strength: 0 };
+    for (const r of wind.ripples) {
+      if (Math.abs(r.x - slabCx) < Math.abs(nearestRipple.x - slabCx)) {
+        nearestRipple = r;
+      }
+    }
+    drawUVRect(progBlades, mvp, p.x, slabTopY, p.w, stripH, (prog) => {
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_slabW'),    p.w);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_slabX'),    p.x);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_slabTopY'), slabTopY);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_time'),     time);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_windX'),    nearestRipple.x);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_windStr'),  nearestRipple.strength);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_sphereX'),  player.x);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_sphereY'),  player.y);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_sphereVX'), player.vx);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_sphereR'),  player.r);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_impactX'),  landingImpact.active ? landingImpact.x : -99999);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_impactY'),  landingImpact.y);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_impactT'),  landingImpact.time);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_impactStr'),landingImpact.strength);
+    });
+  }
+
+  // ── Falling leaf particles (behind leaf platforms, in front of branches) ────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  for (const lp of leafParticles) {
+    const life = Math.max(0, lp.life);
+    const alpha = life * 0.85; // fade out as life decreases
+    const size = lp.size * (0.6 + life * 0.4); // shrink slightly
+    // Draw as a small rotated ellipse (leaf-like shape)
+    drawEllipse(lp.x, lp.y, size * 0.7, size * 0.4, mvp,
+      0.18, lp.green, 0.12, alpha,
+      0.10, lp.green * 0.7, 0.08, 0.0, lp.rotation);
+  }
+
+  // ── Leaf platforms ────────────────────────────────────────────────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  for (let i = 0; i < platforms.length; i++) {
+    const p = platforms[i];
+    if (p.type !== 'float') continue;
+    if (!p.hasGround) continue;
+    const sway = p.swayX || 0;
+    const bob = p.bobY || 0;
+    // Compute tilt angle from trunk curve derivative at top (t=1)
+    // Curve: x_offset = sway * t^3, so dx/dt = 3*sway*t^2, at t=1: dx/dt = 3*sway
+    // dy/dt = trunkH (constant segment height)
+    const trunkH = p.y - GROUND_TOP + 10;
+    const tiltAngle = -Math.atan2(3 * sway, trunkH) * 0.5; // dampen for subtlety
+    // Arc position: cubic offset at top
+    const arcX = sway; // t=1: sway * 1^3
+    // Extra vertical padding so the leaf shape looks full
+    const pad = p.h * 0.5;
+    drawUVRectRotated(progLeaf, mvp, p.x + arcX, p.y + bob - pad, p.w, p.h + pad * 2, tiltAngle, (prog) => {
+      gl.uniform1f(gl.getUniformLocation(prog,'u_time'), time);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_seed'), (i * 7.3 + p.x * 0.01) % 10.0);
+      // Thicker leaves (h 12-23) get more blue-green tint
+      const blueMix = Math.max(0, (p.h - 12) / 11) * 0.7;
+      gl.uniform1f(gl.getUniformLocation(prog,'u_blueMix'), blueMix);
+    });
+  }
+
+  // ── Landing particles (debris blobs) ──────────────────────────────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  for (const p of particles) {
+    const life = Math.max(0, p.life);
+    const size = p.size * life; // shrink as they age
+    const alpha = life * 0.7;
+    // Sphere color palette: blue-white with cyan glow
+    drawCircle(p.x, p.y, size, mvp,
+      0.50, 0.70, 1.0, alpha,   // core: light blue
+      0.40, 0.80, 1.0, alpha * 0.5); // glow: cyan
+  }
+
+  // Trail (additive glow) - only show when moving, not during bounce animation
+  if (player.bounceAnim === 0 && (Math.abs(player.vx) > 0.1 || Math.abs(player.vy) > 0.1)) {
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    for (let i = 0; i < player.trail.length; i++) {
+      const t = player.trail[i];
+      const alpha = Math.max(0, t.t) * 0.35;
+      const scale = (i / player.trail.length) * player.r * 0.9;
+      drawCircle(t.x, t.y, scale, mvp,
+        0.4, 0.6, 1.0, alpha,
+        0.3, 0.5, 1.0, 0.0);
+    }
+  }
+
+  // Player shadow — find the nearest platform surface directly below
+  let shadowY = GROUND_TOP;   // fallback to ground level
+  for (const p of platforms) {
+    const surfaceTop = p.y + p.h;
+    if (player.x >= p.x && player.x <= p.x + p.w && player.y > surfaceTop) {
+      if (surfaceTop > shadowY) shadowY = surfaceTop;
+    }
+  }
+  const shadowDist = Math.max(0, player.y - player.r - shadowY);
+  const shadowAlpha = Math.max(0, 0.5 - shadowDist * 0.003);
+  const shadowScale = player.r * (1.0 + shadowDist * 0.008);
+  drawCircle(player.x, shadowY, shadowScale * 1.4, mvp,
+    0.02, 0.10, 0.02, shadowAlpha,
+    0, 0, 0, 0);
+
+  // Player circle (additive glow first)
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  const glowR = player.r * 2.2;
+  drawCircle(player.x, player.y, glowR, mvp,
+    0.2, 0.45, 1.0, 0.12,
+    0.3, 0.6,  1.0, 0.2);
+
+  // Player main - jelly blob as true ellipse
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  const sq = player.squash;
+  const rx = player.r * sq; // horizontal radius (WIDER when squashed - high sq)
+  const ry = player.r / sq; // vertical radius (FLATTER when squashed - high sq)
+  
+  // No spreading - keep normal dimensions
+  const renderRX = rx;
+  const renderRY = ry;
+  
+  // During bounce animation: offset Y so bottom edge stays on ground
+  let settleY = 0;
+  if (player.onGround && player.bounceAnim > 0) {
+    // Offset = difference between round ry and current ry, plus extra alignment + 4.5 units
+    settleY = (player.r - renderRY) * 1.3 + 4.5; // 4.5 units down
+  } else if (player.onGround && player.bounceAnim === 0) {
+    // Normal settle when at rest (not animating)
+    settleY = renderRY * 0.25;
+  }
+  
+  // Calculate rotation angle when moving on platform
+  let rotationAngle = 0;
+  let leanYOffset = 0;
+  let wobbleXOffset = 0;
+  
+  // Horizontal flip based on facing direction
+  const flipScale = player.facingRight ? 1 : -1;
+  
+  if (player.onGround && player.bounceAnim === 0 && Math.abs(player.vx) > 0.1) {
+    // Tilt 45 degrees (π/4 radians) in direction of movement - even slight movement
+    const tiltAmount = Math.PI / 4; // 45 degrees
+    rotationAngle = player.vx > 0 ? -tiltAmount : tiltAmount;
+    leanYOffset = 7; // raise 7 units when leaning
+  } else if (player.onGround && player.bounceAnim > 0 && Math.abs(player.vx) > 0.5) {
+    // Moving during bounce - cancel bounce and tilt immediately
+    player.bounceAnim = 0;
+    player.squash = 1.0;
+    const tiltAmount = Math.PI / 4;
+    rotationAngle = player.vx > 0 ? -tiltAmount : tiltAmount;
+    leanYOffset = 7;
+  } else if (player.onGround && player.wobbleTime < 1.0) {
+    // Horizontal wobble when stopping from movement - no rotation, just side-to-side
+    const t = player.wobbleTime;
+    const freq = 3.0;
+    const decay = Math.exp(-t * 4.0); // fast decay
+    const wave = Math.cos(t * freq * Math.PI * 2) * decay;
+    wobbleXOffset = player.wobbleDir * wave * 6.0; // oscillate ±6 units horizontally
+    // No rotation - blob stays upright
+    rotationAngle = 0;
+    leanYOffset = 0;
+  }
+  
+  // Main blob body - true ellipse (flipped when facing left)
+  drawEllipse(player.x + wobbleXOffset, player.y - settleY + leanYOffset, renderRX * flipScale, renderRY, mvp,
+    0.55, 0.75, 1.0, 0.95,
+    0.70, 0.90, 1.0, 0.65, rotationAngle);
+  
+  // Soft outer glow (flipped when facing left)
+  drawEllipse(player.x + wobbleXOffset, player.y - settleY + leanYOffset, renderRX * 1.15 * flipScale, renderRY * 1.15, mvp,
+    0.50, 0.70, 1.0, 0.3,
+    0.60, 0.80, 1.0, 0.0, rotationAngle);
+
+  // Player inner highlight - positioned on ellipse (flip position when facing left)
+  // This is the "eye" - white highlight with dark iris
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  const highlightRX = renderRX * 0.4;
+  const highlightRY = renderRY * 0.4;
+  const highlightOffsetX = renderRX * 0.15 * flipScale; // flip highlight position
+  
+  // Blink effect - close eye vertically during blink
+  const blinkProgress = player.blinkAnim;
+  const blinkScale = blinkProgress < 0.5 
+    ? 1.0 - blinkProgress * 2.0  // close: 0.5 -> 0.0
+    : (blinkProgress - 0.5) * 2.0; // open: 0.0 -> 0.5 -> 1.0
+  const eyeHeight = highlightRY * Math.max(0.1, blinkScale); // minimum 10% height when closed
+  
+  const eyeCenterX = player.x + wobbleXOffset + highlightOffsetX;
+  const eyeCenterY = player.y + renderRY * 0.2 - settleY + leanYOffset;
+  
+  // White of eye (sclera) - only visible when not fully closed
+  if (blinkScale > 0.15) {
+    drawEllipse(eyeCenterX, eyeCenterY, 
+      highlightRX * flipScale, eyeHeight, mvp,
+      1.0, 1.0, 1.0, 0.5,
+      1.0, 1.0, 1.0, 0.0, rotationAngle);
+    
+    // Dark iris/pupil in center of eye - only visible when not blinking
+    // Iris can move within the eye bounds
+    if (blinkScale > 0.3) {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      const irisRX = highlightRX * 0.5 * (Math.abs(player.vx) > 0.5 ? 0.8 : 1.0);
+      const irisRY = eyeHeight * 0.5 * (Math.abs(player.vx) > 0.5 ? 0.8 : 1.0);
+      
+      // Apply iris movement offset (scaled by eye size) + extra forward offset when moving
+      const irisOffsetX = player.irisX * highlightRX * 0.4 * flipScale
+        + (Math.abs(player.vx) > 0.5 ? 4 * flipScale : 0);
+      const irisOffsetY = player.irisY * eyeHeight * 0.4;
+      
+      drawEllipse(eyeCenterX + irisOffsetX, eyeCenterY + irisOffsetY, 
+        irisRX * flipScale, irisRY, mvp,
+        0.1, 0.15, 0.3, 0.9,
+        0.05, 0.1, 0.2, 0.0, rotationAngle);
+    }
+  }
+
+  // ── Spikes - rendered below HUD ────────────────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.useProgram(progSolid);
+  const spikePosAttr = gl.getAttribLocation(progSolid, 'a_pos');
+  gl.enableVertexAttribArray(spikePosAttr);
+  gl.uniformMatrix3fv(gl.getUniformLocation(progSolid,'u_mvp'), false, mvp);
+  
+  // First pass: render background spike layer 1 (furthest back, darkest)
+  for (const s of spikes) {
+    if (!s.isBackground || s.bgLayer !== 1) continue;
+    
+    const visualTipY = s.baseY + s.height;
+    
+    const mainVerts = [
+      s.bgTipX,      visualTipY,      // tip at random position
+      s.x - s.halfW, s.baseY,         // base left (full pit width)
+      s.x + s.halfW, s.baseY,         // base right (full pit width)
+    ];
+    const mainBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, mainBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mainVerts), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(spikePosAttr, 2, gl.FLOAT, false, 0, 0);
+    
+    // Darkest background spike
+    gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), 0.12, 0.12, 0.13, 1.0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.deleteBuffer(mainBuf);
+  }
+  
+  // Second pass: render background spike layer 2 (middle, slightly lighter)
+  for (const s of spikes) {
+    if (!s.isBackground || s.bgLayer !== 2) continue;
+    
+    const visualTipY = s.baseY + s.height;
+    
+    const mainVerts = [
+      s.bgTipX,      visualTipY,      // tip at random position
+      s.x - s.halfW, s.baseY,         // base left (full pit width)
+      s.x + s.halfW, s.baseY,         // base right (full pit width)
+    ];
+    const mainBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, mainBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mainVerts), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(spikePosAttr, 2, gl.FLOAT, false, 0, 0);
+    
+    // Middle layer - lighter than layer 1
+    gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), 0.16, 0.16, 0.17, 1.0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.deleteBuffer(mainBuf);
+  }
+  
+  // Third pass: render regular spikes on top
+  for (const s of spikes) {
+    if (s.isBackground) continue;
+    
+    // Visual spike extends above hitbox based on random height
+    const visualTipY = s.baseY + s.height;
+    
+    // Apply angle and twist to create asymmetric, angled spikes
+    const cos = Math.cos(s.angle);
+    const sin = Math.sin(s.angle);
+    
+    // Tip offset by angle
+    const tipX = s.x + sin * s.height;
+    
+    // Base corners with twist (left and right asymmetric)
+    const leftW = s.halfW * (1 + s.twist);
+    const rightW = s.halfW * (1 - s.twist);
+    
+    // Main spike triangle (dark grey)
+    const mainVerts = [
+      tipX,          visualTipY,      // tip (angled)
+      s.x - leftW,   s.baseY,         // base left (twisted)
+      s.x + rightW,  s.baseY,         // base right (twisted)
+    ];
+    const mainBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, mainBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mainVerts), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(spikePosAttr, 2, gl.FLOAT, false, 0, 0);
+    
+    // Darker color for thin spikes, lighter for big spikes
+    const baseGrey = s.isBig ? 0.28 : 0.22;
+    gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), baseGrey, baseGrey, baseGrey + 0.02, 1.0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.deleteBuffer(mainBuf);
+    
+    // Left edge highlight (light grey) - only on spikes with hasHighlight flag
+    if (s.hasHighlight) {
+      const edgeW = s.isBig ? 3 : 2;
+      const edgeVerts = [
+        tipX,          visualTipY,
+        s.x - leftW,   s.baseY,
+        s.x - leftW + edgeW, s.baseY,
+      ];
+      const edgeBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, edgeBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(edgeVerts), gl.STATIC_DRAW);
+      gl.vertexAttribPointer(spikePosAttr, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), 0.5, 0.55, 0.53, 0.7);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.deleteBuffer(edgeBuf);
+    }
+    
+    // Right edge shadow (darker) - adds depth
+    const shadowW = s.isBig ? 2 : 1;
+    const shadowVerts = [
+      tipX,              visualTipY,
+      s.x + rightW - shadowW, s.baseY,
+      s.x + rightW,      s.baseY,
+    ];
+    const shadowBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(shadowVerts), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(spikePosAttr, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform4f(gl.getUniformLocation(progSolid,'u_color'), 0.08, 0.08, 0.1, 0.9);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.deleteBuffer(shadowBuf);
+  }
+  
+  // ── Water layer — transparent blue water at bottom of screen ──────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  drawUVRect(progWater, mvp, LEVEL_START, WATER_Y, LEVEL_END - LEVEL_START, WATER_HEIGHT, (prog) => {
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_time'), time);
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_camX'), camX);
+  });
+
+  // ── HUD — screen space rendering ──────────────────────────────────────────
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  
+  // ── Start button "Blob!" ──────────────────────────────────────────────────
+  if (buttonFade > 0.01) {
+    if (gameStarted) {
+      buttonFade -= 0.03; // fade out over ~0.5s
+      if (buttonFade < 0) buttonFade = 0;
+    }
+    
+    const alpha = buttonFade;
+    const pulse = 0.5 + 0.5 * Math.sin(time * 3.0);
+    
+    // Position in right third of screen
+    const viewW = W / introZoom;
+    const viewH = H / introZoom;
+    const btnCenterX = zoomCamX + viewW * 0.2; // right third
+    const btnCenterY = zoomCamY;
+    
+    // Each letter is its own bubble
+    const letters = 'Blob!';
+    const letterSpacing = viewW * 0.055;
+    const startX = btnCenterX - (letters.length - 1) * letterSpacing * 0.5;
+    
+    for (let i = 0; i < letters.length; i++) {
+      const ch = letters[i];
+      const lx = startX + i * letterSpacing;
+      // Each letter bobs independently
+      const bobPhase = i * 0.8 + time * 2.5;
+      const ly = btnCenterY + Math.sin(bobPhase) * viewH * 0.015;
+      const letterScale = 1.0 + Math.sin(bobPhase + 0.5) * 0.06;
+      
+      const bubbleRX = letterSpacing * 0.45 * letterScale;
+      const bubbleRY = viewH * 0.045 * letterScale;
+      
+      // Bubble glow (additive)
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      drawEllipse(lx, ly,
+        bubbleRX * 1.4, bubbleRY * 1.4, mvp,
+        0.2, 0.45, 1.0, alpha * 0.2 * (0.8 + pulse * 0.2),
+        0.3, 0.6, 1.0, alpha * 0.1);
+      
+      // Bubble body
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      drawEllipse(lx, ly,
+        bubbleRX, bubbleRY, mvp,
+        0.40, 0.60, 1.0, alpha * 0.9,
+        0.55, 0.75, 1.0, alpha * 0.5);
+      
+      // Specular highlight on each bubble (upper portion)
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      drawEllipse(lx - bubbleRX * 0.15, ly + bubbleRY * 0.25,
+        bubbleRX * 0.5, bubbleRY * 0.35, mvp,
+        0.8, 0.9, 1.0, alpha * 0.35,
+        1.0, 1.0, 1.0, 0.0);
+    }
+    
+    // Text per letter in screen space aligned with bubbles
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    const textScale = 2.2;
+    const screenCenterX = W * 0.7; // right third in screen space
+    const screenLetterSpacing = letterSpacing * introZoom; // world spacing to screen
+    const screenStartX = screenCenterX - (letters.length - 1) * screenLetterSpacing * 0.5;
+    
+    for (let i = 0; i < letters.length; i++) {
+      const ch = letters[i];
+      const bobPhase = i * 0.8 + time * 2.5;
+      const screenBobY = Math.sin(bobPhase) * 8; // bob in screen pixels
+      
+      const charW = GLYPH_W * textScale * 0.72;
+      const sx = screenStartX + i * screenLetterSpacing - charW / 2;
+      const sy = H / 2 - GLYPH_H * textScale / 2 - screenBobY;
+      
+      // Shadow
+      drawText(ch, sx + 2, sy + 2, textScale, 0.0, 0.0, 0.1, alpha * 0.3);
+      // Main text
+      drawText(ch, sx, sy, textScale, 0.02, 0.02, 0.08, alpha);
+    }
+  }
+  
+  // ── Flying bubble letters (after clicking start) ──────────────────────────
+  for (let i = bubbleFlyouts.length - 1; i >= 0; i--) {
+    const b = bubbleFlyouts[i];
+    b.screenX += b.vx;
+    b.screenY += b.vy;
+    b.vx *= 0.98;
+    b.vy *= 0.98;
+    b.rotation += b.rotSpeed * (1/60);
+    b.alpha -= 0.02;
+    b.scale += 0.01;
+    if (b.alpha <= 0) { bubbleFlyouts.splice(i, 1); continue; }
+    
+    // Convert screen position to world coords for bubble drawing
+    const viewW = W / introZoom;
+    const viewH = H / introZoom;
+    const worldX = zoomCamX + (b.screenX / W - 0.5) * viewW;
+    const worldY = zoomCamY - (b.screenY / H - 0.5) * viewH;
+    
+    const bubbleRX = viewW * 0.025 * b.scale;
+    const bubbleRY = viewH * 0.04 * b.scale;
+    
+    // Bubble glow
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    drawEllipse(worldX, worldY,
+      bubbleRX * 1.4, bubbleRY * 1.4, mvp,
+      0.2, 0.45, 1.0, b.alpha * 0.2,
+      0.3, 0.6, 1.0, b.alpha * 0.1);
+    
+    // Bubble body
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    drawEllipse(worldX, worldY,
+      bubbleRX, bubbleRY, mvp,
+      0.40, 0.60, 1.0, b.alpha * 0.9,
+      0.55, 0.75, 1.0, b.alpha * 0.5);
+    
+    // Specular
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    drawEllipse(worldX - bubbleRX * 0.15, worldY + bubbleRY * 0.25,
+      bubbleRX * 0.5, bubbleRY * 0.35, mvp,
+      0.8, 0.9, 1.0, b.alpha * 0.35,
+      1.0, 1.0, 1.0, 0.0);
+    
+    // Letter text in screen space
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    const textScale = 2.2 * b.scale;
+    const charW = GLYPH_W * textScale * 0.72;
+    const sx = b.screenX - charW / 2;
+    const sy = b.screenY - GLYPH_H * textScale / 2;
+    drawText(b.ch, sx, sy, textScale, 0.02, 0.02, 0.08, b.alpha);
+  }
+}
+
+// ─── Loop ─────────────────────────────────────────────────────────────────────
+
+let last = 0;
+function loop(ts) {
+  const dt = Math.min((ts - last) / 16.667, 3);
+  last = ts;
+  time = ts / 1000;
+
+  frameCount++;
+  update(dt);
+  render();
+
+  requestAnimationFrame(loop);
+}
+console.log('Begin Render');
+requestAnimationFrame(ts => { last = ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>
