@@ -29,7 +29,7 @@ canvas { display: block; }
 #colBtn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.7); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #colBtn.active { background: rgba(255,80,80,0.25); }
 #biomeHud {
-  position: fixed; top: 16px; right: 110px; z-index: 10;
+  position: fixed; top: 14px; right: 110px; z-index: 10;
   display: flex; align-items: center; gap: 8px;
   font: 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
@@ -37,26 +37,37 @@ canvas { display: block; }
   color: rgba(255,255,255,0.45); letter-spacing: 0.03em;
   text-transform: uppercase; font-size: 11px; font-weight: 500;
 }
-#configSelect {
-  appearance: none; -webkit-appearance: none;
+#configDropdown {
+  position: relative; display: inline-block; cursor: pointer;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.5); font: 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  padding: 5px 22px 5px 8px; border-radius: 5px; cursor: pointer;
-  outline: none; transition: background 0.2s, border-color 0.2s;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.35)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 7px center;
+  border-radius: 5px; padding: 0 22px 0 8px;
+  font: 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: rgba(255,255,255,0.5); transition: background 0.2s, border-color 0.2s;
+  user-select: none; min-width: 28px; text-align: center;
+  height: 38px; line-height: 38px;
 }
-#configSelect:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
-#configSelect:focus { border-color: rgba(255,255,255,0.25); }
-#configSelect option { background: #1a1a24; color: rgba(255,255,255,0.7); }
+#configDropdown:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+#configOptions {
+  display: none; position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
+  background: rgba(20,20,30,0.95); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px; overflow: hidden; z-index: 100;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+#configOptions.open { display: block; }
+.cfg-opt {
+  padding: 4px 10px; color: rgba(255,255,255,0.55); font-size: 11px;
+  text-align: center; transition: background 0.15s; line-height: 1;
+}
+.cfg-opt:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+.cfg-opt.active { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.08); }
 </style>
 </head>
 <body>
-<div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:6px;transition:transform 0.3s ease;">
+<div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
   <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 0.0ms (0.0-2.0)
 168 draws | 13,720 tris</div>
   <button id="statsToggle" title="Hide stats" style="
-    width:38px;height:38px;border:none;border-radius:6px;
+    width:27px;height:38px;border:none;border-radius:6px;
     background:rgba(255,255,255,0.08);backdrop-filter:blur(6px);
     cursor:pointer;display:flex;align-items:center;justify-content:center;
     transition:background 0.2s;flex-shrink:0;padding:0;
@@ -69,7 +80,11 @@ canvas { display: block; }
 <div id="biomeHud">
   <span style="color:rgba(255,255,255,0.3);font-size:11px;">Biome:</span>
   <span id="biomeName">Rock</span>
-  <select id="configSelect"></select>
+  <div id="configDropdown">
+    <div id="configSelected"></div>
+    <svg width="10" height="6" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);pointer-events:none;" fill="none"><path d="M1 1l4 4 4-4" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div id="configOptions"></div>
+  </div>
 </div>
 <button id="colBtn" title="Toggle colliders">
   <svg viewBox="0 0 24 24">
@@ -245,13 +260,13 @@ const BIOMES = {
     // Terrain shape shared across all configs of this biome
     hills: [
       // Back region (z 0.05–0.40) - dense cluster
-      { x: 0.30, z: 0.10, radius: 0.30, height: 0.45 },
-      { x: 0.70, z: 0.12, radius: 0.28, height: 0.50 },
-      { x: 0.50, z: 0.22, radius: 0.32, height: 0.55 },
-      { x: 0.15, z: 0.30, radius: 0.26, height: 0.40 },
-      { x: 0.82, z: 0.28, radius: 0.27, height: 0.45 },
-      { x: 0.45, z: 0.38, radius: 0.30, height: 0.50 },
-      { x: 0.65, z: 0.42, radius: 0.25, height: 0.35 },
+      { x: 0.30, z: 0.10, radius: 0.30, height: 0.55 },
+      { x: 0.70, z: 0.12, radius: 0.28, height: 0.60 },
+      { x: 0.50, z: 0.22, radius: 0.32, height: 0.65 },
+      { x: 0.15, z: 0.30, radius: 0.26, height: 0.50 },
+      { x: 0.82, z: 0.28, radius: 0.27, height: 0.55 },
+      { x: 0.45, z: 0.38, radius: 0.30, height: 0.55 },
+      { x: 0.65, z: 0.42, radius: 0.25, height: 0.42 },
       // Mid region (z 0.40–0.60) - a few scattered
       { x: 0.25, z: 0.52, radius: 0.28, height: 0.30 },
       { x: 0.78, z: 0.55, radius: 0.26, height: 0.25 },
@@ -1050,7 +1065,7 @@ function loadBiomeConfig(biomeName, configIndex) {
 }
 
 // Load default biome
-loadBiomeConfig('rock', 1);
+loadBiomeConfig('rock', 0);
 
 function getHillHeight(u, v) {
   let h = 0;
@@ -1065,43 +1080,78 @@ function getHillHeight(u, v) {
   return h;
 }
 
-// --- Subdivided Ground Mesh ---
+// --- Adaptive Ground Mesh ---
+// Coarse grid everywhere, subdivided near hills for detail
 const S = 5.0;
-const RES = 80; // grid resolution
-const vertCount = (RES + 1) * (RES + 1);
-const vertData = new Float32Array(vertCount * 5); // x,y,z,u,v
-const idxCount = RES * RES * 6;
-const indices = new Uint16Array(idxCount);
+const BASE_RES = 8;    // coarse grid
+const FINE_RES = 8;    // subdivisions per coarse cell near hills
+const HILL_PAD = 0.08; // extra UV radius to catch hill edges
 
-// Generate vertices
-for (let j = 0; j <= RES; j++) {
-  for (let i = 0; i <= RES; i++) {
-    const idx = (j * (RES + 1) + i) * 5;
-    const u = i / RES;
-    const v = j / RES;
-    const x = -S + u * 2 * S;
-    const z = -S + v * 2 * S;
-    const y = getHillHeight(u, v);
-    vertData[idx]     = x;
-    vertData[idx + 1] = y;
-    vertData[idx + 2] = z;
-    vertData[idx + 3] = u;
-    vertData[idx + 4] = v;
+// Determine which coarse cells need subdivision
+function cellNeedsDetail(ci, cj) {
+  const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
+  const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
+  const cu = (u0 + u1) * 0.5, cv = (v0 + v1) * 0.5;
+  const cellR = Math.sqrt((u1-u0)*(u1-u0) + (v1-v0)*(v1-v0)) * 0.5;
+  for (const hill of HILLS) {
+    const du = cu - hill.cx, dv = cv - hill.cz;
+    const dist = Math.sqrt(du*du + dv*dv);
+    if (dist < hill.radius + cellR + HILL_PAD) return true;
+  }
+  return false;
+}
+
+// Build mesh: collect verts and indices
+const terrVerts = [];
+const terrIdx = [];
+const vertMap = new Map(); // "u,v" -> index
+let terrVI = 0;
+
+function addVert(u, v) {
+  const key = u.toFixed(6) + ',' + v.toFixed(6);
+  if (vertMap.has(key)) return vertMap.get(key);
+  const x = -S + u * 2 * S;
+  const z = -S + v * 2 * S;
+  const y = getHillHeight(u, v);
+  terrVerts.push(x, y, z, u, v);
+  const idx = terrVI++;
+  vertMap.set(key, idx);
+  return idx;
+}
+
+function addQuad(u0, v0, u1, v1) {
+  const tl = addVert(u0, v0);
+  const tr = addVert(u1, v0);
+  const bl = addVert(u0, v1);
+  const br = addVert(u1, v1);
+  terrIdx.push(tl, bl, tr, tr, bl, br);
+}
+
+for (let cj = 0; cj < BASE_RES; cj++) {
+  for (let ci = 0; ci < BASE_RES; ci++) {
+    const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
+    const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
+    if (cellNeedsDetail(ci, cj)) {
+      // Subdivide this cell
+      for (let sj = 0; sj < FINE_RES; sj++) {
+        for (let si = 0; si < FINE_RES; si++) {
+          const su0 = u0 + (si / FINE_RES) * (u1 - u0);
+          const su1 = u0 + ((si + 1) / FINE_RES) * (u1 - u0);
+          const sv0 = v0 + (sj / FINE_RES) * (v1 - v0);
+          const sv1 = v0 + ((sj + 1) / FINE_RES) * (v1 - v0);
+          addQuad(su0, sv0, su1, sv1);
+        }
+      }
+    } else {
+      // Single coarse quad
+      addQuad(u0, v0, u1, v1);
+    }
   }
 }
 
-// Generate indices
-let ii = 0;
-for (let j = 0; j < RES; j++) {
-  for (let i = 0; i < RES; i++) {
-    const tl = j * (RES + 1) + i;
-    const tr = tl + 1;
-    const bl = (j + 1) * (RES + 1) + i;
-    const br = bl + 1;
-    indices[ii++] = tl; indices[ii++] = bl; indices[ii++] = tr;
-    indices[ii++] = tr; indices[ii++] = bl; indices[ii++] = br;
-  }
-}
+const vertData = new Float32Array(terrVerts);
+const idxCount = terrIdx.length;
+const indices = new Uint16Array(terrIdx);
 
 const vbo = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -1229,7 +1279,7 @@ let treeVariantIndex = [];
 // Precompute tree world positions (on terrain surface)
 let treeWorldPositions = [];
 
-const TREE_COLLISION_RADIUS = 0.025;
+const TREE_COLLISION_RADIUS = 0.055;
 const ROCK_COLLISION_RADIUS_BASE = 0.15;
 
 // Compute sub-colliders for minable clusters using k-means grouping
@@ -1335,9 +1385,12 @@ const cubeFS = `
   uniform float uIsRock;
   void main() {
     vec3 n = normalize(vNormal);
-    // Simple directional light from above-right
+    // Simple directional light from above-right (two-sided)
     vec3 lightDir = normalize(vec3(0.4, 0.8, 0.3));
     float diff = max(dot(n, lightDir), 0.0);
+    // Add fill light from opposite side to prevent fully dark faces
+    vec3 fillDir = normalize(vec3(-0.3, 0.4, -0.5));
+    float fill = max(dot(n, fillDir), 0.0);
     float ambient = 0.3;
     vec3 col = uColor;
     // Rock flat highlights: vary color by face orientation
@@ -1352,7 +1405,7 @@ const cubeFS = `
       col += vec3(faceVar, faceVar * 0.8, faceVar * 0.6);
       ambient = 0.35;
     }
-    vec3 lit = col * (ambient + diff * 0.7);
+    vec3 lit = col * (ambient + diff * 0.7 + fill * 0.25);
     lit += uColor * uEmissive;
     gl_FragColor = vec4(lit, 1.0);
   }
@@ -1466,20 +1519,31 @@ function buildRockMesh(deformSeed) {
   ];
 
   // Build vertex + normal arrays (flat shading: unique verts per triangle)
+  // Ensure consistent CCW winding (outward normals) for back-face culling
   const vertData = [];
   const idxData = [];
   let vi = 0;
   for (const tri of tris) {
     const a = verts[tri[0]], b = verts[tri[1]], c = verts[tri[2]];
-    // Face normal
+    // Face normal via cross product
     const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
     const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
     let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
     const nl = Math.sqrt(nx*nx+ny*ny+nz*nz) || 1;
     nx /= nl; ny /= nl; nz /= nl;
-    vertData.push(a[0],a[1],a[2], nx,ny,nz);
-    vertData.push(b[0],b[1],b[2], nx,ny,nz);
-    vertData.push(c[0],c[1],c[2], nx,ny,nz);
+    // Ensure normal points outward (away from mesh center)
+    const cx = (a[0]+b[0]+c[0])/3, cy = (a[1]+b[1]+c[1])/3, cz = (a[2]+b[2]+c[2])/3;
+    if (nx*cx + ny*cy + nz*cz < 0) {
+      // Flip winding
+      nx = -nx; ny = -ny; nz = -nz;
+      vertData.push(a[0],a[1],a[2], nx,ny,nz);
+      vertData.push(c[0],c[1],c[2], nx,ny,nz);
+      vertData.push(b[0],b[1],b[2], nx,ny,nz);
+    } else {
+      vertData.push(a[0],a[1],a[2], nx,ny,nz);
+      vertData.push(b[0],b[1],b[2], nx,ny,nz);
+      vertData.push(c[0],c[1],c[2], nx,ny,nz);
+    }
     idxData.push(vi, vi+1, vi+2);
     vi += 3;
   }
@@ -1932,34 +1996,46 @@ colBtn.addEventListener('click', () => {
   colBtn.classList.toggle('active', showColliders);
 });
 
-// --- Biome HUD: populate config dropdown and handle switching ---
+// --- Biome HUD: custom config dropdown ---
 const biomeNameEl = document.getElementById('biomeName');
-const configSelect = document.getElementById('configSelect');
+const configDropdown = document.getElementById('configDropdown');
+const configSelected = document.getElementById('configSelected');
+const configOptions = document.getElementById('configOptions');
 
 function populateConfigDropdown() {
-  configSelect.innerHTML = '';
+  configOptions.innerHTML = '';
   const configs = activeBiome.configs;
+  const activeIdx = configs.indexOf(activeConfig);
+  configSelected.textContent = activeIdx + 1;
   for (let i = 0; i < configs.length; i++) {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = configs[i].id;
-    if (configs[i] === activeConfig) opt.selected = true;
-    configSelect.appendChild(opt);
+    const opt = document.createElement('div');
+    opt.className = 'cfg-opt' + (i === activeIdx ? ' active' : '');
+    opt.textContent = i + 1;
+    opt.dataset.idx = i;
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(opt.dataset.idx);
+      let biomeName = 'rock';
+      for (const [k, v] of Object.entries(BIOMES)) {
+        if (v === activeBiome) { biomeName = k; break; }
+      }
+      loadBiomeConfig(biomeName, idx);
+      recomputeWorldData();
+      populateConfigDropdown();
+      configOptions.classList.remove('open');
+    });
+    configOptions.appendChild(opt);
   }
   biomeNameEl.textContent = activeBiome.name.replace(' Biome', '');
 }
 populateConfigDropdown();
 
-configSelect.addEventListener('change', () => {
-  const idx = parseInt(configSelect.value);
-  // Find current biome name from BIOMES
-  let biomeName = 'rock';
-  for (const [k, v] of Object.entries(BIOMES)) {
-    if (v === activeBiome) { biomeName = k; break; }
-  }
-  loadBiomeConfig(biomeName, idx);
-  recomputeWorldData();
-  populateConfigDropdown();
+configDropdown.addEventListener('click', (e) => {
+  e.stopPropagation();
+  configOptions.classList.toggle('open');
+});
+document.addEventListener('click', () => {
+  configOptions.classList.remove('open');
 });
 
 gl.enable(gl.DEPTH_TEST);
@@ -2059,44 +2135,52 @@ function render() {
   gl.uniformMatrix4fv(uView, false, view);
   draw(gl.TRIANGLES, idxCount, gl.UNSIGNED_SHORT, 0);
 
-  // --- Draw trees + character sorted back-to-front ---
-  // viewDir points from scene toward camera eye; larger dot = closer to viewer
-  const viewDirX = Math.cos(camRotX) * Math.sin(camRotY);
-  const viewDirZ = Math.cos(camRotX) * Math.cos(camRotY);
+  // --- Sort all objects by screen Y (lower on screen = closer to viewer = drawn last) ---
+  // Compute screen Y via view matrix dot product (row 1 of view matrix gives Y contribution)
+  // view is column-major: row1 = view[1], view[5], view[9], view[13]
+  const vyX = view[1], vyY = view[5], vyZ = view[9], vyW = view[13];
 
   const sortables = [];
   if (treesLoaded === treeVariants.length) {
     for (let i = 0; i < treeWorldPositions.length; i++) {
       const t = treeWorldPositions[i];
-      sortables.push({ type: 'tree', sortKey: t.x * viewDirX + t.z * viewDirZ + TREE_COLLISION_RADIUS, index: i, x: t.x, y: t.y, z: t.z });
+      const screenY = vyX * t.x + vyY * t.y + vyZ * t.z + vyW;
+      sortables.push({ type: 'tree', sortKey: screenY, index: i, x: t.x, y: t.y, z: t.z });
     }
   }
-  // Rocks: sort by collider center
+  // Rocks: sort by center screen Y
   for (let i = 0; i < rockWorldData.length; i++) {
     const r = rockWorldData[i];
-    const rr = ROCK_COLLISION_RADIUS_BASE * r.scale;
-    sortables.push({ type: 'rock', sortKey: r.x * viewDirX + r.z * viewDirZ + rr, rock: r });
+    const screenY = vyX * r.x + vyY * r.y + vyZ * r.z + vyW;
+    sortables.push({ type: 'rock', sortKey: screenY, rock: r });
   }
-  // Minable cubes: sort individually by leading edge (center + half-extent toward camera)
+  // Minable cubes: sort individually by center screen Y
   const time = now * 0.001;
   for (const cluster of minableWorldData) {
     for (const c of cluster.cubes) {
       if (c.mined) continue;
-      const cubeRadius = Math.max(c.sx, c.sz) * 0.5;
-      sortables.push({ type: 'crystal', sortKey: c.x * viewDirX + c.z * viewDirZ + cubeRadius, cube: c, time });
+      const screenY = vyX * c.x + vyY * c.y + vyZ * c.z + vyW;
+      sortables.push({ type: 'crystal', sortKey: screenY, cube: c, time });
     }
   }
-  // Player sort key = front bottom edge (center + radius toward camera)
-  sortables.push({ type: 'player', sortKey: player.x * viewDirX + player.z * viewDirZ + CHAR_RADIUS });
-  // Sort ascending: smallest (furthest from viewer) drawn first
-  sortables.sort((a, b) => a.sortKey - b.sortKey);
+  // Player
+  const pScreenY = vyX * player.x + vyY * player.y + vyZ * player.z + vyW;
+  sortables.push({ type: 'player', sortKey: pScreenY });
+  // Sort descending: highest screen Y (top of screen / furthest) drawn first,
+  // lowest screen Y (bottom of screen / closest) drawn last
+  sortables.sort((a, b) => b.sortKey - a.sortKey);
+
+  // Sorted pass: pure painter's algorithm, no depth testing
+  // Back-face culling on 3D objects prevents seeing through them
+  gl.disable(gl.DEPTH_TEST);
+  gl.depthMask(false);
 
   let lastType = '';
   for (const obj of sortables) {
     if (obj.type === 'tree') {
+      gl.disable(gl.CULL_FACE);
       if (lastType !== 'tree') {
-        if (lastType === 'tree') gl.disable(gl.BLEND);
-        gl.depthMask(false);
+        gl.depthMask(true);
         gl.useProgram(treeProg);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -2119,7 +2203,10 @@ function render() {
 
     } else if (obj.type === 'rock') {
       if (lastType === 'tree') gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.useProgram(cubeProg);
       const r = obj.rock;
       const rm = rockMeshes[r.meshIdx];
@@ -2137,11 +2224,16 @@ function render() {
       const model = buildModelMatrix(r.x, r.y, r.z, r.rotY, 0.0, r.h);
       gl.uniformMatrix4fv(cUModel, false, model);
       draw(gl.TRIANGLES, rm.triCount, gl.UNSIGNED_SHORT, 0);
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
       lastType = 'rock';
 
     } else if (obj.type === 'crystal') {
       if (lastType === 'tree') gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
       if (lastType !== 'crystal') {
         gl.useProgram(cubeProg);
         gl.bindBuffer(gl.ARRAY_BUFFER, cubeVBO);
@@ -2161,12 +2253,17 @@ function render() {
       const model = buildModelMatrix(c.x, c.y, c.z, c.rotY, c.rotZ, c.sx, c.sy, c.sz);
       gl.uniformMatrix4fv(cUModel, false, model);
       draw(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
       lastType = 'crystal';
 
     } else {
-      // Player
+      // Player - needs depth test for proper cylinder self-occlusion
       if (lastType === 'tree') gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.useProgram(cubeProg);
       gl.bindBuffer(gl.ARRAY_BUFFER, cylVBO);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cylIBO);
@@ -2185,10 +2282,14 @@ function render() {
       );
       gl.uniformMatrix4fv(cUModel, false, charModel);
       draw(gl.TRIANGLES, cylIdxCount, gl.UNSIGNED_SHORT, 0);
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
       lastType = 'player';
     }
   }
   if (lastType === 'tree') gl.disable(gl.BLEND);
+  gl.disable(gl.CULL_FACE);
+  gl.enable(gl.DEPTH_TEST);
   gl.depthMask(true);
 
   // --- DEBUG: Draw collider outlines when toggled (on top of everything) ---
@@ -2207,7 +2308,7 @@ function render() {
       gl.uniform3f(dbgUCenter, t.x, t.y, t.z);
       gl.uniform1f(dbgURadius, TREE_COLLISION_RADIUS);
       gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-      drawCalls++; tris += DBG_RING_SEGS;
+      drawCalls++;
     }
 
     // Rock colliders - yellow
@@ -2216,7 +2317,7 @@ function render() {
       gl.uniform3f(dbgUCenter, r.x, r.y - r.h * 0.5, r.z);
       gl.uniform1f(dbgURadius, ROCK_COLLISION_RADIUS_BASE * r.scale);
       gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-      drawCalls++; tris += DBG_RING_SEGS;
+      drawCalls++;
     }
 
     // Crystal cluster colliders - purple
@@ -2227,7 +2328,7 @@ function render() {
         gl.uniform3f(dbgUCenter, col.x, baseY, col.z);
         gl.uniform1f(dbgURadius, col.radius);
         gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-        drawCalls++; tris += DBG_RING_SEGS;
+        drawCalls++;
       }
     }
 
@@ -2236,7 +2337,7 @@ function render() {
     gl.uniform3f(dbgUCenter, player.x, player.y, player.z);
     gl.uniform1f(dbgURadius, CHAR_RADIUS);
     gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-    drawCalls++; tris += DBG_RING_SEGS;
+    drawCalls++;
 
     gl.enable(gl.DEPTH_TEST);
   }
