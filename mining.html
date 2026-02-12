@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mining Game</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #08080c; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+canvas { display: block; }
+#fsBtn {
+  position: fixed; top: 14px; right: 14px; z-index: 10;
+  width: 38px; height: 38px; border: none; border-radius: 6px;
+  background: rgba(255,255,255,0.08); backdrop-filter: blur(6px);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+#fsBtn:hover { background: rgba(255,255,255,0.16); }
+#statsToggle:hover { background: rgba(255,255,255,0.16); }
+#fsBtn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.7); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#colBtn {
+  position: fixed; top: 14px; right: 58px; z-index: 10;
+  width: 38px; height: 38px; border: none; border-radius: 6px;
+  background: rgba(255,255,255,0.08); backdrop-filter: blur(6px);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+#colBtn:hover { background: rgba(255,255,255,0.16); }
+#colBtn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.7); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#colBtn.active { background: rgba(255,80,80,0.25); }
+#biomeHud {
+  position: fixed; top: 16px; right: 110px; z-index: 10;
+  display: flex; align-items: center; gap: 8px;
+  font: 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+#biomeName {
+  color: rgba(255,255,255,0.45); letter-spacing: 0.03em;
+  text-transform: uppercase; font-size: 11px; font-weight: 500;
+}
+#configSelect {
+  appearance: none; -webkit-appearance: none;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.5); font: 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 5px 22px 5px 8px; border-radius: 5px; cursor: pointer;
+  outline: none; transition: background 0.2s, border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.35)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 7px center;
+}
+#configSelect:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+#configSelect:focus { border-color: rgba(255,255,255,0.25); }
+#configSelect option { background: #1a1a24; color: rgba(255,255,255,0.7); }
+</style>
+</head>
+<body>
+<div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:6px;transition:transform 0.3s ease;">
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 0.0ms (0.0-2.0)
+168 draws | 13,720 tris</div>
+  <button id="statsToggle" title="Hide stats" style="
+    width:38px;height:38px;border:none;border-radius:6px;
+    background:rgba(255,255,255,0.08);backdrop-filter:blur(6px);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background 0.2s;flex-shrink:0;padding:0;
+  ">
+    <svg id="statsArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+    </svg>
+  </button>
+</div>
+<div id="biomeHud">
+  <span style="color:rgba(255,255,255,0.3);font-size:11px;">Biome:</span>
+  <span id="biomeName">Rock</span>
+  <select id="configSelect"></select>
+</div>
+<button id="colBtn" title="Toggle colliders">
+  <svg viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"></circle>
+    <line x1="12" y1="3" x2="12" y2="21"></line>
+    <line x1="3" y1="12" x2="21" y2="12"></line>
+  </svg>
+</button>
+<button id="fsBtn" title="Toggle fullscreen">
+  <svg id="fsIcon" viewBox="0 0 24 24">
+    <polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline>
+    <line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>
+  </svg>
+</button>
+<canvas id="gl" width="951" height="1017"></canvas>
+<script>
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl');
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Shaders ---
+const vsSource = `
+  attribute vec3 aPos;
+  attribute vec2 aUV;
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  varying vec2 vUV;
+  varying vec3 vWorldPos;
+  void main() {
+    vUV = aUV;
+    vWorldPos = aPos;
+    gl_Position = uProj * uView * vec4(aPos, 1.0);
+  }
+`;
+
+const fsSource = `
+  precision mediump float;
+  varying vec2 vUV;
+  varying vec3 vWorldPos;
+
+  // Hash functions for procedural noise
+  float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+
+  float hash2(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+
+  // Pixelated value noise
+  float pixelNoise(vec2 uv, float scale) {
+    vec2 id = floor(uv * scale);
+    return hash(id);
+  }
+
+  // Layered rock texture
+  float rockTexture(vec2 uv) {
+    float n = 0.0;
+    n += pixelNoise(uv, 8.0) * 0.4;
+    n += pixelNoise(uv + 7.7, 16.0) * 0.25;
+    n += pixelNoise(uv + 3.3, 32.0) * 0.2;
+    n += pixelNoise(uv + 11.1, 64.0) * 0.15;
+    return n;
+  }
+
+  // Voronoi crack pattern
+  float cracks(vec2 uv, float scale) {
+    vec2 id = floor(uv * scale);
+    vec2 f = fract(uv * scale);
+    float minDist = 1.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 neighbor = vec2(float(x), float(y));
+        vec2 point = vec2(hash(id + neighbor), hash2(id + neighbor));
+        float d = length(neighbor + point - f);
+        minDist = min(minDist, d);
+      }
+    }
+    return minDist;
+  }
+
+  void main() {
+    vec2 uv = vUV;
+
+    // Base rock value
+    float rock = rockTexture(uv);
+    // Quantize for pixelated retro look
+    rock = floor(rock * 6.0) / 6.0;
+
+    // Dark stone palette
+    vec3 darkRock  = vec3(0.22, 0.20, 0.19);
+    vec3 midRock   = vec3(0.30, 0.27, 0.24);
+    vec3 lightRock = vec3(0.38, 0.34, 0.30);
+
+    vec3 color = mix(darkRock, midRock, rock);
+
+    // Lighter pixel highlights
+    float highlight = pixelNoise(uv + 5.5, 24.0);
+    highlight = step(0.82, highlight);
+    color = mix(color, lightRock, highlight * 0.5);
+
+    // Mineral flecks
+    float fleck = pixelNoise(uv + 99.9, 48.0);
+    if (fleck > 0.93) {
+      float fleckType = pixelNoise(uv + 44.4, 48.0);
+      if (fleckType > 0.6) {
+        color = mix(color, vec3(0.45, 0.38, 0.25), 0.4);
+      } else if (fleckType > 0.3) {
+        color = mix(color, vec3(0.30, 0.32, 0.38), 0.4);
+      } else {
+        color = mix(color, vec3(0.35, 0.25, 0.30), 0.3);
+      }
+    }
+
+    // Crack overlay
+    float crk = cracks(uv, 6.0);
+    crk = floor(crk * 5.0) / 5.0;
+    float crkLine = smoothstep(0.0, 0.08, crk);
+    color *= mix(0.78, 1.0, crkLine);
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+function createShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    gl.deleteShader(s);
+    return null;
+  }
+  return s;
+}
+
+const vs = createShader(gl.VERTEX_SHADER, vsSource);
+const fs = createShader(gl.FRAGMENT_SHADER, fsSource);
+const prog = gl.createProgram();
+gl.attachShader(prog, vs);
+gl.attachShader(prog, fs);
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+const aPos = gl.getAttribLocation(prog, 'aPos');
+const aUV = gl.getAttribLocation(prog, 'aUV');
+const uProj = gl.getUniformLocation(prog, 'uProj');
+const uView = gl.getUniformLocation(prog, 'uView');
+
+// ============================================================
+// BIOME REGISTRY
+// Each biome has: terrain (hills, ground shader palette), and
+// one or more configurations of trees, rocks, and minables.
+// ============================================================
+
+const BIOMES = {
+  rock: {
+    name: 'Rock Biome',
+    // Terrain shape shared across all configs of this biome
+    hills: [
+      // Back region (z 0.05–0.40) - dense cluster
+      { x: 0.30, z: 0.10, radius: 0.30, height: 0.45 },
+      { x: 0.70, z: 0.12, radius: 0.28, height: 0.50 },
+      { x: 0.50, z: 0.22, radius: 0.32, height: 0.55 },
+      { x: 0.15, z: 0.30, radius: 0.26, height: 0.40 },
+      { x: 0.82, z: 0.28, radius: 0.27, height: 0.45 },
+      { x: 0.45, z: 0.38, radius: 0.30, height: 0.50 },
+      { x: 0.65, z: 0.42, radius: 0.25, height: 0.35 },
+      // Mid region (z 0.40–0.60) - a few scattered
+      { x: 0.25, z: 0.52, radius: 0.28, height: 0.30 },
+      { x: 0.78, z: 0.55, radius: 0.26, height: 0.25 },
+      // Front region (z 0.60–1.0) - sparse, very gentle
+      { x: 0.55, z: 0.75, radius: 0.30, height: 0.20 },
+    ],
+    // Tree sprite variants for this biome
+    treeVariants: ['dry', 'sparse', 'bare', 'scraggly'],
+    // Configurations: different arrangements of trees/rocks/minables
+    configs: [
+      {
+        id: 'rock_1',
+        trees: [
+          {x:0.148,z:0.071},{x:0.183,z:0.102},{x:0.121,z:0.138},{x:0.196,z:0.155},
+          {x:0.158,z:0.189},{x:0.103,z:0.217},{x:0.223,z:0.195},{x:0.142,z:0.252},
+          {x:0.207,z:0.238},{x:0.086,z:0.178},{x:0.168,z:0.221},
+          {x:0.553,z:0.108},{x:0.601,z:0.141},{x:0.562,z:0.179},{x:0.627,z:0.158},
+          {x:0.518,z:0.195},{x:0.593,z:0.213},{x:0.648,z:0.188},
+          {x:0.768,z:0.308},{x:0.821,z:0.337},{x:0.873,z:0.312},{x:0.793,z:0.371},
+          {x:0.847,z:0.356},{x:0.902,z:0.382},{x:0.762,z:0.418},{x:0.831,z:0.403},
+          {x:0.876,z:0.431},{x:0.812,z:0.462},{x:0.858,z:0.448},
+          {x:0.358,z:0.427},{x:0.412,z:0.453},{x:0.371,z:0.491},{x:0.423,z:0.472},
+          {x:0.338,z:0.518},{x:0.402,z:0.537},{x:0.441,z:0.503},
+          {x:0.162,z:0.558},{x:0.208,z:0.537},{x:0.143,z:0.601},{x:0.197,z:0.583},
+          {x:0.248,z:0.562},{x:0.168,z:0.642},{x:0.221,z:0.618},
+          {x:0.647,z:0.613},{x:0.698,z:0.638},{x:0.731,z:0.611},{x:0.662,z:0.672},
+          {x:0.713,z:0.657},{x:0.688,z:0.718},{x:0.738,z:0.693},
+          {x:0.473,z:0.738},{x:0.518,z:0.762},{x:0.461,z:0.797},{x:0.512,z:0.781},
+          {x:0.558,z:0.773},{x:0.482,z:0.841},{x:0.531,z:0.818},{x:0.548,z:0.852},
+          {x:0.878,z:0.742},{x:0.922,z:0.768},{x:0.891,z:0.803},{x:0.918,z:0.841},
+          {x:0.862,z:0.828},
+          {x:0.261,z:0.838},{x:0.308,z:0.862},{x:0.272,z:0.901},{x:0.318,z:0.883},
+          {x:0.348,z:0.912},{x:0.291,z:0.938},{x:0.342,z:0.951},
+        ],
+        rocks: [
+          {x:0.42,z:0.13,rotY:0.8,scale:0.9},
+          {x:0.78,z:0.19,rotY:2.1,scale:0.7},
+          {x:0.057,z:0.554,rotY:1.4,scale:1.0},
+          {x:0.744,z:0.338,rotY:3.8,scale:0.8},
+          {x:0.91,z:0.58,rotY:0.3,scale:0.75},
+          {x:0.35,z:0.72,rotY:5.1,scale:0.85},
+          {x:0.08,z:0.88,rotY:2.7,scale:0.65},
+          {x:0.72,z:0.82,rotY:4.2,scale:0.9},
+          {x:0.55,z:0.55,rotY:1.9,scale:0.7},
+          {x:0.232,z:0.24,rotY:3.3,scale:1.0},
+          {x:0.85,z:0.42,rotY:0.6,scale:0.8},
+          {x:0.48,z:0.91,rotY:2.4,scale:0.75},
+        ],
+        minables: [
+          { x:0.575, z:0.400, cubes: [
+            {dx: 0.000, dz: 0.000, sx:0.30, sy:0.22, sz:0.14, rotY:0.4, rotZ:0.12},
+            {dx: 0.040, dz: 0.025, sx:0.18, sy:0.28, sz:0.12, rotY:1.2, rotZ:-0.18},
+            {dx:-0.035, dz: 0.030, sx:0.14, sy:0.16, sz:0.22, rotY:2.5, rotZ:0.25},
+            {dx: 0.055, dz:-0.015, sx:0.24, sy:0.18, sz:0.10, rotY:0.8, rotZ:-0.08},
+            {dx:-0.045, dz:-0.020, sx:0.12, sy:0.20, sz:0.16, rotY:3.1, rotZ:0.20},
+            {dx: 0.015, dz: 0.050, sx:0.20, sy:0.14, sz:0.18, rotY:1.7, rotZ:-0.14},
+            {dx:-0.060, dz: 0.010, sx:0.26, sy:0.24, sz:0.12, rotY:4.2, rotZ:0.06},
+            {dx: 0.065, dz: 0.035, sx:0.14, sy:0.12, sz:0.20, rotY:5.0, rotZ:-0.22},
+            {dx:-0.020, dz:-0.045, sx:0.22, sy:0.16, sz:0.14, rotY:2.1, rotZ:0.16},
+            {dx: 0.030, dz:-0.040, sx:0.16, sy:0.24, sz:0.10, rotY:3.6, rotZ:-0.28},
+            {dx:-0.050, dz: 0.045, sx:0.18, sy:0.14, sz:0.22, rotY:0.2, rotZ:0.10},
+            {dx: 0.010, dz: 0.060, sx:0.24, sy:0.20, sz:0.12, rotY:4.8, rotZ:-0.10},
+            {dx:-0.030, dz:-0.035, sx:0.12, sy:0.18, sz:0.16, rotY:5.5, rotZ:0.18},
+            {dx: 0.050, dz: 0.010, sx:0.28, sy:0.22, sz:0.14, rotY:1.0, rotZ:-0.06},
+            {dx:-0.015, dz: 0.020, sx:0.32, sy:0.26, sz:0.16, rotY:2.8, rotZ:0.04},
+          ]},
+          { x:0.375, z:0.255, cubes: [
+            {dx: 0.000, dz: 0.000, sx:0.26, sy:0.20, sz:0.16, rotY:1.8, rotZ:0.15},
+            {dx: 0.035, dz: 0.030, sx:0.18, sy:0.26, sz:0.12, rotY:0.5, rotZ:-0.12},
+            {dx:-0.040, dz: 0.015, sx:0.22, sy:0.16, sz:0.20, rotY:2.9, rotZ:0.08},
+            {dx: 0.025, dz:-0.035, sx:0.14, sy:0.22, sz:0.10, rotY:4.0, rotZ:-0.25},
+            {dx:-0.020, dz: 0.045, sx:0.28, sy:0.18, sz:0.14, rotY:1.1, rotZ:0.14},
+            {dx: 0.050, dz: 0.005, sx:0.16, sy:0.24, sz:0.12, rotY:3.3, rotZ:-0.18},
+            {dx:-0.050, dz:-0.025, sx:0.20, sy:0.14, sz:0.22, rotY:5.1, rotZ:0.10},
+            {dx: 0.015, dz: 0.055, sx:0.18, sy:0.20, sz:0.14, rotY:0.7, rotZ:-0.06},
+            {dx: 0.045, dz:-0.020, sx:0.24, sy:0.18, sz:0.16, rotY:2.4, rotZ:0.20},
+            {dx:-0.035, dz: 0.040, sx:0.14, sy:0.22, sz:0.18, rotY:4.6, rotZ:-0.14},
+            {dx:-0.055, dz: 0.030, sx:0.20, sy:0.16, sz:0.24, rotY:3.8, rotZ:0.12},
+            {dx: 0.030, dz: 0.045, sx:0.16, sy:0.24, sz:0.10, rotY:5.7, rotZ:-0.08},
+          ]},
+          { x:0.150, z:0.400, cubes: [
+            {dx: 0.000, dz: 0.000, sx:0.30, sy:0.24, sz:0.14, rotY:0.9, rotZ:-0.08},
+            {dx:-0.035, dz: 0.030, sx:0.20, sy:0.18, sz:0.22, rotY:2.2, rotZ:0.16},
+            {dx: 0.045, dz: 0.020, sx:0.16, sy:0.26, sz:0.12, rotY:3.5, rotZ:-0.20},
+            {dx: 0.030, dz:-0.030, sx:0.24, sy:0.16, sz:0.18, rotY:1.1, rotZ:0.12},
+            {dx:-0.050, dz:-0.010, sx:0.14, sy:0.22, sz:0.16, rotY:4.8, rotZ:0.24},
+            {dx: 0.010, dz: 0.050, sx:0.18, sy:0.14, sz:0.24, rotY:5.5, rotZ:-0.06},
+            {dx: 0.055, dz: 0.035, sx:0.22, sy:0.20, sz:0.14, rotY:0.3, rotZ:0.18},
+            {dx:-0.025, dz: 0.055, sx:0.28, sy:0.24, sz:0.12, rotY:2.7, rotZ:-0.12},
+            {dx:-0.060, dz: 0.020, sx:0.16, sy:0.18, sz:0.20, rotY:1.6, rotZ:0.06},
+            {dx: 0.040, dz:-0.040, sx:0.20, sy:0.26, sz:0.14, rotY:3.9, rotZ:-0.16},
+            {dx: 0.020, dz: 0.040, sx:0.14, sy:0.12, sz:0.22, rotY:5.1, rotZ:0.22},
+            {dx:-0.045, dz:-0.030, sx:0.24, sy:0.20, sz:0.16, rotY:4.3, rotZ:-0.10},
+            {dx: 0.060, dz: 0.005, sx:0.16, sy:0.22, sz:0.18, rotY:0.6, rotZ:0.14},
+            {dx:-0.015, dz:-0.050, sx:0.18, sy:0.16, sz:0.24, rotY:2.0, rotZ:-0.04},
+            {dx: 0.005, dz: 0.025, sx:0.32, sy:0.28, sz:0.16, rotY:3.2, rotZ:0.08},
+          ]},
+        ],
+      },
+      // Future configs (rock_2, rock_3, etc.) go here
+      {
+        id: 'rock_2',
+        trees: [
+          {x:0.266,z:0.15},{x:0.217,z:0.117},{x:0.199,z:0.171},{x:0.265,z:0.143},{x:0.188,z:0.144},
+          {x:0.268,z:0.188},{x:0.255,z:0.125},{x:0.221,z:0.182},{x:0.734,z:0.113},{x:0.768,z:0.117},
+          {x:0.659,z:0.067},{x:0.718,z:0.056},{x:0.694,z:0.074},{x:0.748,z:0.047},{x:0.838,z:0.257},
+          {x:0.882,z:0.271},{x:0.949,z:0.26},{x:0.931,z:0.22},{x:0.827,z:0.225},{x:0.853,z:0.224},
+          {x:0.856,z:0.273},{x:0.419,z:0.392},{x:0.435,z:0.367},{x:0.423,z:0.345},{x:0.415,z:0.36},
+          {x:0.458,z:0.372},{x:0.197,z:0.546},{x:0.209,z:0.587},{x:0.1,z:0.572},{x:0.168,z:0.594},
+          {x:0.179,z:0.549},{x:0.134,z:0.513},{x:0.097,z:0.571},{x:0.706,z:0.574},{x:0.689,z:0.497},
+          {x:0.706,z:0.525},{x:0.655,z:0.49},{x:0.68,z:0.565},{x:0.655,z:0.517},{x:0.387,z:0.776},
+          {x:0.354,z:0.747},{x:0.317,z:0.723},{x:0.309,z:0.789},{x:0.388,z:0.759},{x:0.386,z:0.775},
+          {x:0.367,z:0.719},{x:0.348,z:0.732},{x:0.842,z:0.679},{x:0.807,z:0.755},{x:0.804,z:0.759},
+          {x:0.772,z:0.699},{x:0.861,z:0.737},{x:0.53,z:0.926},{x:0.538,z:0.882},{x:0.487,z:0.942},
+          {x:0.579,z:0.949},{x:0.539,z:0.959},{x:0.552,z:0.958},
+        ],
+        rocks: [
+          {x:0.15,z:0.12,rotY:3.3,scale:0.83},
+          {x:0.58,z:0.22,rotY:3.1,scale:0.7},
+          {x:0.92,z:0.15,rotY:5.5,scale:0.97},
+          {x:0.32,z:0.48,rotY:4.7,scale:0.93},
+          {x:0.85,z:0.62,rotY:3.3,scale:0.75},
+          {x:0.12,z:0.82,rotY:1.4,scale:0.67},
+          {x:0.65,z:0.88,rotY:6.2,scale:0.72},
+          {x:0.48,z:0.58,rotY:5.8,scale:0.96},
+          {x:0.92,z:0.88,rotY:3.5,scale:0.94},
+          {x:0.38,z:0.92,rotY:0.9,scale:0.9},
+        ],
+        minables: [
+          { x:0.42, z:0.18, cubes: [
+            {dx:0.052, dz:-0.058, sx:0.21, sy:0.25, sz:0.17, rotY:0.8, rotZ:-0.05},
+            {dx:-0.045, dz:0.037, sx:0.19, sy:0.13, sz:0.18, rotY:2.1, rotZ:-0.12},
+            {dx:-0.014, dz:-0.022, sx:0.24, sy:0.15, sz:0.14, rotY:6.2, rotZ:-0.15},
+            {dx:0.019, dz:0.002, sx:0.27, sy:0.14, sz:0.15, rotY:1.4, rotZ:-0.1},
+            {dx:-0.04, dz:0.055, sx:0.26, sy:0.21, sz:0.17, rotY:3.1, rotZ:-0.07},
+            {dx:-0.025, dz:-0.013, sx:0.19, sy:0.19, sz:0.15, rotY:2.2, rotZ:-0.2},
+            {dx:0.027, dz:-0.011, sx:0.1, sy:0.18, sz:0.18, rotY:1.2, rotZ:0.19},
+            {dx:0.05, dz:0.056, sx:0.27, sy:0.16, sz:0.17, rotY:1.2, rotZ:0.19},
+            {dx:0.037, dz:0.058, sx:0.18, sy:0.22, sz:0.19, rotY:5.6, rotZ:-0.19},
+            {dx:0.022, dz:0.06, sx:0.31, sy:0.14, sz:0.15, rotY:0.3, rotZ:0.02},
+            {dx:-0.039, dz:0.001, sx:0.13, sy:0.25, sz:0.14, rotY:1.4, rotZ:-0.08},
+            {dx:0.029, dz:-0.01, sx:0.31, sy:0.21, sz:0.16, rotY:4.0, rotZ:0.22},
+          ]},
+          { x:0.78, z:0.45, cubes: [
+            {dx:-0.005, dz:-0.05, sx:0.27, sy:0.14, sz:0.18, rotY:3.8, rotZ:-0.08},
+            {dx:-0.013, dz:-0.033, sx:0.28, sy:0.2, sz:0.19, rotY:3.2, rotZ:-0.22},
+            {dx:0.016, dz:0.021, sx:0.13, sy:0.25, sz:0.13, rotY:0.3, rotZ:-0.02},
+            {dx:0.029, dz:0.056, sx:0.22, sy:0.13, sz:0.19, rotY:2.4, rotZ:0.0},
+            {dx:-0.016, dz:-0.014, sx:0.29, sy:0.26, sz:0.23, rotY:3.5, rotZ:-0.22},
+            {dx:0.028, dz:-0.029, sx:0.24, sy:0.12, sz:0.17, rotY:4.0, rotZ:0.19},
+            {dx:-0.02, dz:0.046, sx:0.31, sy:0.19, sz:0.17, rotY:5.6, rotZ:-0.24},
+            {dx:-0.056, dz:-0.002, sx:0.22, sy:0.18, sz:0.18, rotY:4.2, rotZ:0.04},
+            {dx:0.015, dz:-0.044, sx:0.27, sy:0.25, sz:0.24, rotY:2.7, rotZ:-0.21},
+            {dx:-0.007, dz:0.058, sx:0.31, sy:0.18, sz:0.15, rotY:6.2, rotZ:0.15},
+            {dx:-0.015, dz:-0.023, sx:0.12, sy:0.27, sz:0.19, rotY:5.8, rotZ:0.12},
+          ]},
+          { x:0.25, z:0.68, cubes: [
+            {dx:-0.042, dz:-0.003, sx:0.11, sy:0.17, sz:0.14, rotY:2.7, rotZ:0.12},
+            {dx:0.027, dz:-0.031, sx:0.19, sy:0.25, sz:0.19, rotY:3.1, rotZ:0.15},
+            {dx:0.037, dz:-0.028, sx:0.15, sy:0.23, sz:0.13, rotY:2.4, rotZ:-0.13},
+            {dx:0.015, dz:-0.046, sx:0.23, sy:0.18, sz:0.12, rotY:3.4, rotZ:-0.06},
+            {dx:-0.013, dz:0.052, sx:0.11, sy:0.14, sz:0.14, rotY:4.4, rotZ:0.17},
+            {dx:0.003, dz:-0.059, sx:0.27, sy:0.18, sz:0.12, rotY:1.0, rotZ:-0.06},
+            {dx:-0.055, dz:-0.027, sx:0.25, sy:0.15, sz:0.11, rotY:4.4, rotZ:0.13},
+            {dx:-0.049, dz:0.045, sx:0.22, sy:0.2, sz:0.21, rotY:6.2, rotZ:-0.11},
+            {dx:0.028, dz:-0.026, sx:0.22, sy:0.23, sz:0.13, rotY:2.5, rotZ:0.04},
+            {dx:0.012, dz:-0.027, sx:0.25, sy:0.18, sz:0.17, rotY:3.2, rotZ:-0.08},
+            {dx:0.026, dz:0.033, sx:0.29, sy:0.19, sz:0.16, rotY:2.0, rotZ:-0.18},
+            {dx:-0.007, dz:0.03, sx:0.31, sy:0.25, sz:0.19, rotY:3.2, rotZ:-0.25},
+            {dx:0.053, dz:0.006, sx:0.14, sy:0.24, sz:0.15, rotY:2.8, rotZ:-0.18},
+          ]},
+          { x:0.62, z:0.75, cubes: [
+            {dx:-0.022, dz:0.051, sx:0.27, sy:0.23, sz:0.2, rotY:2.1, rotZ:-0.02},
+            {dx:0.009, dz:0.017, sx:0.15, sy:0.24, sz:0.19, rotY:1.2, rotZ:-0.16},
+            {dx:0.038, dz:-0.017, sx:0.29, sy:0.27, sz:0.22, rotY:2.3, rotZ:-0.09},
+            {dx:-0.028, dz:0.007, sx:0.27, sy:0.25, sz:0.22, rotY:2.3, rotZ:-0.22},
+            {dx:-0.036, dz:-0.021, sx:0.25, sy:0.25, sz:0.19, rotY:4.8, rotZ:-0.12},
+            {dx:0.014, dz:0.038, sx:0.11, sy:0.18, sz:0.15, rotY:5.5, rotZ:0.04},
+            {dx:-0.028, dz:-0.021, sx:0.31, sy:0.24, sz:0.16, rotY:3.0, rotZ:-0.19},
+            {dx:-0.052, dz:-0.036, sx:0.28, sy:0.24, sz:0.14, rotY:0.1, rotZ:-0.24},
+            {dx:-0.034, dz:-0.028, sx:0.23, sy:0.27, sz:0.16, rotY:2.8, rotZ:0.14},
+            {dx:-0.052, dz:0.055, sx:0.15, sy:0.26, sz:0.18, rotY:1.3, rotZ:-0.23},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_3',
+        trees: [
+          {x:0.483,z:0.494},{x:0.513,z:0.508},{x:0.55,z:0.471},{x:0.475,z:0.452},{x:0.455,z:0.446},
+          {x:0.776,z:0.111},{x:0.793,z:0.038},{x:0.802,z:0.07},{x:0.783,z:0.077},{x:0.831,z:0.067},
+          {x:0.792,z:0.051},{x:0.819,z:0.035},{x:0.828,z:0.026},{x:0.804,z:0.038},{x:0.893,z:0.876},
+          {x:0.856,z:0.875},{x:0.939,z:0.882},{x:0.898,z:0.919},{x:0.584,z:0.551},{x:0.562,z:0.534},
+          {x:0.566,z:0.563},{x:0.553,z:0.579},{x:0.508,z:0.551},{x:0.546,z:0.503},{x:0.131,z:0.786},
+          {x:0.121,z:0.825},{x:0.129,z:0.83},{x:0.132,z:0.872},{x:0.205,z:0.801},{x:0.145,z:0.83},
+          {x:0.076,z:0.785},{x:0.194,z:0.803},{x:0.168,z:0.36},{x:0.119,z:0.365},{x:0.153,z:0.376},
+          {x:0.129,z:0.349},{x:0.062,z:0.406},{x:0.134,z:0.407},{x:0.102,z:0.347},{x:0.122,z:0.361},
+          {x:0.095,z:0.368},{x:0.044,z:0.945},{x:0.04,z:0.868},{x:0.103,z:0.914},{x:0.022,z:0.97},
+          {x:0.024,z:0.922},{x:0.103,z:0.954},{x:0.331,z:0.233},{x:0.363,z:0.229},{x:0.282,z:0.265},
+          {x:0.305,z:0.209},{x:0.343,z:0.222},{x:0.297,z:0.272}
+        ],
+        rocks: [
+          {x:0.252,z:0.177,rotY:2.3,scale:0.61},
+          {x:0.805,z:0.294,rotY:4.6,scale:0.99},
+          {x:0.151,z:0.905,rotY:5.7,scale:0.94},
+          {x:0.943,z:0.698,rotY:1.8,scale:0.65},
+          {x:0.65,z:0.598,rotY:4,scale:0.95},
+          {x:0.708,z:0.107,rotY:2.2,scale:0.77},
+          {x:0.798,z:0.904,rotY:2,scale:0.61},
+          {x:0.072,z:0.87,rotY:4.5,scale:0.64},
+          {x:0.046,z:0.227,rotY:1.4,scale:0.87},
+          {x:0.853,z:0.493,rotY:4.1,scale:0.8},
+          {x:0.717,z:0.168,rotY:3,scale:0.63},
+          {x:0.892,z:0.141,rotY:5,scale:0.87},
+          {x:0.526,z:0.169,rotY:5.9,scale:0.74},
+        ],
+        minables: [
+          { x:0.137, z:0.478, cubes: [
+            {dx:-0.03, dz:-0.002, sx:0.24, sy:0.17, sz:0.21, rotY:3.3, rotZ:0.17},
+            {dx:-0.034, dz:0.047, sx:0.22, sy:0.22, sz:0.23, rotY:5, rotZ:0.2},
+            {dx:0.021, dz:0.058, sx:0.3, sy:0.18, sz:0.14, rotY:2.9, rotZ:-0.21},
+            {dx:0.04, dz:-0.041, sx:0.13, sy:0.22, sz:0.13, rotY:5.6, rotZ:0.17},
+            {dx:0.024, dz:0.037, sx:0.23, sy:0.23, sz:0.15, rotY:0, rotZ:-0.23},
+            {dx:-0.016, dz:-0.055, sx:0.3, sy:0.22, sz:0.22, rotY:5.3, rotZ:-0.02},
+            {dx:0.026, dz:-0.024, sx:0.17, sy:0.22, sz:0.16, rotY:5.5, rotZ:0},
+            {dx:0.039, dz:0.007, sx:0.27, sy:0.12, sz:0.14, rotY:0.1, rotZ:-0.03},
+            {dx:0.015, dz:0.016, sx:0.15, sy:0.17, sz:0.18, rotY:3.2, rotZ:-0.2},
+            {dx:-0.059, dz:0.003, sx:0.24, sy:0.26, sz:0.21, rotY:4.3, rotZ:0.18},
+          ]},
+          { x:0.779, z:0.748, cubes: [
+            {dx:0.035, dz:-0.053, sx:0.28, sy:0.17, sz:0.18, rotY:2.2, rotZ:-0.02},
+            {dx:0.016, dz:-0.058, sx:0.29, sy:0.21, sz:0.1, rotY:3.9, rotZ:-0.02},
+            {dx:0.015, dz:0.021, sx:0.27, sy:0.23, sz:0.21, rotY:2.2, rotZ:0.23},
+            {dx:-0.012, dz:0.049, sx:0.24, sy:0.22, sz:0.14, rotY:0.2, rotZ:0.09},
+            {dx:0.018, dz:0.013, sx:0.21, sy:0.18, sz:0.12, rotY:4.2, rotZ:-0.15},
+            {dx:-0.01, dz:-0.006, sx:0.26, sy:0.27, sz:0.1, rotY:5.6, rotZ:-0.04},
+            {dx:0.044, dz:0.034, sx:0.14, sy:0.14, sz:0.11, rotY:6.1, rotZ:-0.07},
+            {dx:-0.008, dz:-0.022, sx:0.24, sy:0.24, sz:0.2, rotY:5.8, rotZ:-0.04},
+            {dx:0.005, dz:-0.016, sx:0.18, sy:0.2, sz:0.12, rotY:2.6, rotZ:-0.03},
+          ]},
+          { x:0.515, z:0.765, cubes: [
+            {dx:-0.003, dz:0.042, sx:0.2, sy:0.2, sz:0.22, rotY:0.8, rotZ:-0.02},
+            {dx:-0.044, dz:-0.025, sx:0.25, sy:0.17, sz:0.18, rotY:6, rotZ:-0.09},
+            {dx:-0.056, dz:0.032, sx:0.2, sy:0.19, sz:0.11, rotY:5.1, rotZ:0.05},
+            {dx:-0.052, dz:-0.037, sx:0.23, sy:0.16, sz:0.15, rotY:0.7, rotZ:-0.07},
+            {dx:-0.014, dz:0.06, sx:0.31, sy:0.15, sz:0.13, rotY:4.3, rotZ:0.16},
+            {dx:-0.041, dz:-0.017, sx:0.23, sy:0.19, sz:0.11, rotY:2.3, rotZ:0.09},
+            {dx:0.052, dz:0.053, sx:0.21, sy:0.16, sz:0.14, rotY:5.8, rotZ:0.02},
+            {dx:-0.054, dz:0.008, sx:0.21, sy:0.2, sz:0.18, rotY:4.9, rotZ:0.01},
+            {dx:0.004, dz:-0.06, sx:0.22, sy:0.22, sz:0.16, rotY:1.8, rotZ:0.23},
+            {dx:0.047, dz:-0.043, sx:0.31, sy:0.26, sz:0.11, rotY:2.5, rotZ:0},
+            {dx:0.026, dz:0.005, sx:0.28, sy:0.25, sz:0.14, rotY:4.4, rotZ:-0.01},
+            {dx:-0.047, dz:-0.021, sx:0.15, sy:0.2, sz:0.21, rotY:4, rotZ:0},
+            {dx:0.012, dz:-0.017, sx:0.24, sy:0.18, sz:0.2, rotY:5.2, rotZ:-0.09},
+            {dx:0.051, dz:0.037, sx:0.22, sy:0.21, sz:0.11, rotY:5, rotZ:0.12},
+            {dx:-0.004, dz:-0.049, sx:0.19, sy:0.22, sz:0.13, rotY:2.5, rotZ:0.01},
+          ]},
+          { x:0.366, z:0.104, cubes: [
+            {dx:0.054, dz:0.043, sx:0.21, sy:0.28, sz:0.18, rotY:3.9, rotZ:0.05},
+            {dx:-0.037, dz:-0.035, sx:0.23, sy:0.18, sz:0.15, rotY:1.5, rotZ:-0.18},
+            {dx:0.032, dz:0.044, sx:0.25, sy:0.27, sz:0.17, rotY:2, rotZ:-0.25},
+            {dx:-0.016, dz:0.019, sx:0.13, sy:0.2, sz:0.16, rotY:6, rotZ:0.12},
+            {dx:0.057, dz:0.043, sx:0.3, sy:0.19, sz:0.1, rotY:1.2, rotZ:-0.03},
+            {dx:-0.024, dz:0.049, sx:0.3, sy:0.19, sz:0.21, rotY:4.3, rotZ:0.13},
+            {dx:-0.026, dz:-0.042, sx:0.12, sy:0.22, sz:0.11, rotY:5, rotZ:-0.01},
+            {dx:0.031, dz:-0.04, sx:0.28, sy:0.24, sz:0.14, rotY:4.1, rotZ:0.24},
+            {dx:-0.005, dz:-0.043, sx:0.1, sy:0.13, sz:0.19, rotY:0.4, rotZ:-0.16},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_4',
+        trees: [
+          {x:0.313,z:0.177},{x:0.34,z:0.141},{x:0.374,z:0.155},{x:0.399,z:0.172},{x:0.393,z:0.149},
+          {x:0.225,z:0.654},{x:0.156,z:0.721},{x:0.211,z:0.739},{x:0.137,z:0.694},{x:0.344,z:0.575},
+          {x:0.245,z:0.535},{x:0.331,z:0.538},{x:0.314,z:0.564},{x:0.343,z:0.595},{x:0.299,z:0.571},
+          {x:0.343,z:0.591},{x:0.287,z:0.604},{x:0.216,z:0.729},{x:0.184,z:0.681},{x:0.203,z:0.681},
+          {x:0.199,z:0.724},{x:0.256,z:0.689},{x:0.283,z:0.732},{x:0.25,z:0.665},{x:0.245,z:0.727},
+          {x:0.834,z:0.106},{x:0.794,z:0.058},{x:0.848,z:0.093},{x:0.859,z:0.085},{x:0.885,z:0.063},
+          {x:0.41,z:0.182},{x:0.418,z:0.146},{x:0.447,z:0.126},{x:0.472,z:0.139},{x:0.453,z:0.158},
+          {x:0.466,z:0.146},{x:0.473,z:0.136},{x:0.439,z:0.247},{x:0.609,z:0.574},{x:0.621,z:0.497},
+          {x:0.65,z:0.57},{x:0.601,z:0.519},{x:0.58,z:0.565},{x:0.603,z:0.563},{x:0.652,z:0.542},
+          {x:0.618,z:0.568},{x:0.204,z:0.425},{x:0.158,z:0.45},{x:0.18,z:0.387},{x:0.165,z:0.466},
+          {x:0.163,z:0.464}
+        ],
+        rocks: [
+          {x:0.415,z:0.72,rotY:5,scale:0.97},
+          {x:0.627,z:0.831,rotY:5.9,scale:0.61},
+          {x:0.078,z:0.825,rotY:0.3,scale:0.68},
+          {x:0.911,z:0.045,rotY:2.8,scale:0.71},
+          {x:0.905,z:0.912,rotY:3.6,scale:0.89},
+          {x:0.497,z:0.552,rotY:3,scale:0.95},
+          {x:0.65,z:0.704,rotY:0.4,scale:0.79},
+          {x:0.775,z:0.673,rotY:3.2,scale:0.89},
+        ],
+        minables: [
+          { x:0.379, z:0.306, cubes: [
+            {dx:0.013, dz:0.033, sx:0.16, sy:0.14, sz:0.18, rotY:3.1, rotZ:0.02},
+            {dx:-0.005, dz:-0.053, sx:0.31, sy:0.18, sz:0.2, rotY:3.3, rotZ:0.2},
+            {dx:-0.02, dz:-0.016, sx:0.26, sy:0.23, sz:0.19, rotY:5.6, rotZ:-0.21},
+            {dx:-0.031, dz:-0.058, sx:0.14, sy:0.13, sz:0.15, rotY:1.3, rotZ:0.18},
+            {dx:-0.049, dz:0.043, sx:0.3, sy:0.25, sz:0.11, rotY:1.7, rotZ:0.23},
+            {dx:0.054, dz:-0.01, sx:0.18, sy:0.22, sz:0.19, rotY:4.1, rotZ:0.05},
+            {dx:-0.041, dz:0.016, sx:0.16, sy:0.25, sz:0.17, rotY:0.6, rotZ:-0.19},
+            {dx:-0.031, dz:0.059, sx:0.26, sy:0.15, sz:0.16, rotY:1.5, rotZ:-0.11},
+            {dx:-0.017, dz:-0.041, sx:0.3, sy:0.15, sz:0.12, rotY:4.1, rotZ:-0.15},
+            {dx:-0.025, dz:0.048, sx:0.31, sy:0.25, sz:0.13, rotY:4, rotZ:-0.03},
+            {dx:-0.027, dz:-0.003, sx:0.11, sy:0.22, sz:0.14, rotY:2.2, rotZ:-0.18},
+            {dx:-0.013, dz:-0.054, sx:0.17, sy:0.13, sz:0.21, rotY:2.8, rotZ:-0.23},
+            {dx:0.049, dz:-0.043, sx:0.15, sy:0.27, sz:0.2, rotY:2.2, rotZ:0.07},
+            {dx:0.01, dz:0.049, sx:0.22, sy:0.24, sz:0.24, rotY:5.9, rotZ:-0.04},
+          ]},
+          { x:0.546, z:0.665, cubes: [
+            {dx:0.055, dz:-0.037, sx:0.22, sy:0.26, sz:0.16, rotY:1.9, rotZ:0.11},
+            {dx:0.033, dz:0.04, sx:0.19, sy:0.27, sz:0.22, rotY:4, rotZ:0.07},
+            {dx:0.038, dz:0.047, sx:0.28, sy:0.15, sz:0.17, rotY:3.1, rotZ:-0.07},
+            {dx:-0.052, dz:0.007, sx:0.15, sy:0.19, sz:0.11, rotY:2.4, rotZ:-0.07},
+            {dx:0.023, dz:0.045, sx:0.18, sy:0.14, sz:0.14, rotY:0.4, rotZ:0.14},
+            {dx:-0.035, dz:0.06, sx:0.16, sy:0.19, sz:0.16, rotY:5.2, rotZ:0.07},
+            {dx:-0.041, dz:-0.019, sx:0.24, sy:0.19, sz:0.15, rotY:6.1, rotZ:0.01},
+            {dx:0.053, dz:-0.03, sx:0.28, sy:0.14, sz:0.14, rotY:5.2, rotZ:-0.08},
+            {dx:-0.035, dz:0.039, sx:0.13, sy:0.15, sz:0.2, rotY:2.8, rotZ:0.14},
+            {dx:-0.047, dz:-0.003, sx:0.28, sy:0.26, sz:0.16, rotY:1.5, rotZ:0.03},
+            {dx:-0.028, dz:-0.058, sx:0.3, sy:0.18, sz:0.19, rotY:5.5, rotZ:0.22},
+            {dx:-0.037, dz:0.002, sx:0.23, sy:0.15, sz:0.23, rotY:6, rotZ:-0.15},
+            {dx:-0.05, dz:0.057, sx:0.15, sy:0.21, sz:0.14, rotY:2.9, rotZ:-0.14},
+            {dx:-0.029, dz:0.008, sx:0.28, sy:0.18, sz:0.16, rotY:1.4, rotZ:0.14},
+          ]},
+          { x:0.181, z:0.577, cubes: [
+            {dx:0, dz:0.039, sx:0.28, sy:0.18, sz:0.14, rotY:5.3, rotZ:-0.21},
+            {dx:-0.017, dz:-0.004, sx:0.24, sy:0.2, sz:0.14, rotY:5, rotZ:0.11},
+            {dx:0.026, dz:0.037, sx:0.19, sy:0.28, sz:0.12, rotY:4.5, rotZ:-0.19},
+            {dx:-0.016, dz:0.021, sx:0.13, sy:0.2, sz:0.18, rotY:2.9, rotZ:-0.08},
+            {dx:0.036, dz:-0.024, sx:0.22, sy:0.16, sz:0.18, rotY:3, rotZ:0},
+            {dx:-0.051, dz:-0.026, sx:0.26, sy:0.28, sz:0.19, rotY:3.1, rotZ:0.04},
+            {dx:-0.036, dz:0.028, sx:0.14, sy:0.13, sz:0.15, rotY:3.6, rotZ:-0.06},
+            {dx:-0.045, dz:-0.026, sx:0.1, sy:0.28, sz:0.24, rotY:1.5, rotZ:-0.06},
+            {dx:0.038, dz:0.022, sx:0.29, sy:0.19, sz:0.12, rotY:5.8, rotZ:0.09},
+            {dx:0.007, dz:-0.025, sx:0.31, sy:0.22, sz:0.13, rotY:2.3, rotZ:-0.21},
+            {dx:0.022, dz:0.054, sx:0.14, sy:0.27, sz:0.21, rotY:1.1, rotZ:0.2},
+            {dx:0.001, dz:0.026, sx:0.28, sy:0.24, sz:0.16, rotY:3.8, rotZ:0.02},
+            {dx:0, dz:0.009, sx:0.11, sy:0.24, sz:0.19, rotY:3.3, rotZ:0.16},
+          ]},
+          { x:0.89, z:0.47, cubes: [
+            {dx:0.035, dz:-0.02, sx:0.23, sy:0.23, sz:0.23, rotY:2.9, rotZ:-0.08},
+            {dx:0.004, dz:-0.052, sx:0.31, sy:0.16, sz:0.19, rotY:4.9, rotZ:0.24},
+            {dx:-0.033, dz:0.005, sx:0.28, sy:0.19, sz:0.17, rotY:5.9, rotZ:0.17},
+            {dx:-0.05, dz:0.056, sx:0.21, sy:0.25, sz:0.15, rotY:2.3, rotZ:-0.08},
+            {dx:-0.051, dz:-0.012, sx:0.26, sy:0.2, sz:0.19, rotY:3.4, rotZ:0.12},
+            {dx:-0.011, dz:-0.042, sx:0.2, sy:0.19, sz:0.13, rotY:3.6, rotZ:-0.09},
+            {dx:0.043, dz:-0.018, sx:0.12, sy:0.24, sz:0.22, rotY:4.1, rotZ:0.01},
+            {dx:-0.026, dz:0.001, sx:0.12, sy:0.13, sz:0.14, rotY:2.8, rotZ:-0.19},
+            {dx:0.037, dz:-0.023, sx:0.2, sy:0.24, sz:0.22, rotY:4.5, rotZ:0.15},
+            {dx:0.015, dz:-0.012, sx:0.27, sy:0.24, sz:0.18, rotY:0.8, rotZ:-0.05},
+            {dx:0.036, dz:-0.024, sx:0.19, sy:0.21, sz:0.16, rotY:2.5, rotZ:0.21},
+            {dx:0.03, dz:0.053, sx:0.3, sy:0.27, sz:0.16, rotY:5.1, rotZ:-0.12},
+            {dx:0.04, dz:0.001, sx:0.17, sy:0.13, sz:0.21, rotY:4.3, rotZ:-0.08},
+          ]},
+          { x:0.189, z:0.141, cubes: [
+            {dx:-0.042, dz:-0.005, sx:0.22, sy:0.16, sz:0.21, rotY:0.8, rotZ:0.01},
+            {dx:0.013, dz:-0.043, sx:0.23, sy:0.16, sz:0.1, rotY:4.4, rotZ:-0.03},
+            {dx:0.005, dz:0.033, sx:0.31, sy:0.17, sz:0.16, rotY:2.8, rotZ:-0.16},
+            {dx:0.049, dz:0.011, sx:0.22, sy:0.24, sz:0.19, rotY:5.1, rotZ:-0.16},
+            {dx:0.053, dz:0.023, sx:0.27, sy:0.23, sz:0.22, rotY:5.2, rotZ:-0.2},
+            {dx:-0.02, dz:0.011, sx:0.28, sy:0.18, sz:0.23, rotY:0.4, rotZ:0.15},
+            {dx:0.027, dz:-0.059, sx:0.29, sy:0.15, sz:0.21, rotY:0.5, rotZ:-0.14},
+            {dx:-0.04, dz:0.055, sx:0.23, sy:0.26, sz:0.16, rotY:1.1, rotZ:0.24},
+            {dx:-0.031, dz:-0.002, sx:0.28, sy:0.28, sz:0.16, rotY:6.1, rotZ:-0.02},
+            {dx:-0.023, dz:-0.034, sx:0.14, sy:0.22, sz:0.24, rotY:4.7, rotZ:-0.15},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_5',
+        trees: [
+          {x:0.146,z:0.751},{x:0.185,z:0.81},{x:0.245,z:0.723},{x:0.162,z:0.762},{x:0.166,z:0.793},
+          {x:0.167,z:0.772},{x:0.496,z:0.422},{x:0.413,z:0.372},{x:0.392,z:0.413},{x:0.425,z:0.438},
+          {x:0.37,z:0.433},{x:0.6,z:0.227},{x:0.553,z:0.223},{x:0.555,z:0.203},{x:0.637,z:0.168},
+          {x:0.562,z:0.153},{x:0.56,z:0.191},{x:0.562,z:0.248},{x:0.863,z:0.864},{x:0.829,z:0.845},
+          {x:0.859,z:0.77},{x:0.845,z:0.799},{x:0.803,z:0.799},{x:0.871,z:0.785},{x:0.821,z:0.782},
+          {x:0.846,z:0.885},{x:0.824,z:0.852},{x:0.662,z:0.174},{x:0.617,z:0.215},{x:0.673,z:0.239},
+          {x:0.608,z:0.243},{x:0.842,z:0.903},{x:0.757,z:0.902},{x:0.768,z:0.841},{x:0.765,z:0.821},
+          {x:0.788,z:0.82},{x:0.789,z:0.921},{x:0.749,z:0.87},{x:0.281,z:0.142},{x:0.269,z:0.135},
+          {x:0.319,z:0.127},{x:0.272,z:0.122},{x:0.127,z:0.668},{x:0.083,z:0.692},{x:0.028,z:0.621},
+          {x:0.031,z:0.62}
+        ],
+        rocks: [
+          {x:0.879,z:0.32,rotY:6.3,scale:0.95},
+          {x:0.472,z:0.561,rotY:0.8,scale:0.69},
+          {x:0.266,z:0.646,rotY:0.3,scale:0.87},
+          {x:0.209,z:0.747,rotY:2.1,scale:0.68},
+          {x:0.328,z:0.819,rotY:3.9,scale:0.82},
+          {x:0.217,z:0.826,rotY:5.5,scale:0.93},
+          {x:0.529,z:0.771,rotY:0.2,scale:0.86},
+          {x:0.622,z:0.312,rotY:0.6,scale:0.78},
+          {x:0.215,z:0.13,rotY:6.3,scale:0.7},
+          {x:0.562,z:0.586,rotY:2.7,scale:0.84},
+          {x:0.555,z:0.063,rotY:1.4,scale:0.97},
+          {x:0.238,z:0.217,rotY:1.7,scale:0.66},
+          {x:0.778,z:0.237,rotY:0.1,scale:0.85},
+          {x:0.358,z:0.167,rotY:4.1,scale:0.72},
+        ],
+        minables: [
+          { x:0.842, z:0.599, cubes: [
+            {dx:0.055, dz:0.058, sx:0.21, sy:0.26, sz:0.16, rotY:4.7, rotZ:-0.24},
+            {dx:-0.041, dz:0.013, sx:0.17, sy:0.16, sz:0.11, rotY:4.2, rotZ:0},
+            {dx:-0.055, dz:-0.054, sx:0.31, sy:0.2, sz:0.17, rotY:3.8, rotZ:-0.07},
+            {dx:-0.01, dz:0.045, sx:0.15, sy:0.14, sz:0.14, rotY:0.4, rotZ:0.16},
+            {dx:0.025, dz:-0.005, sx:0.25, sy:0.25, sz:0.14, rotY:0.8, rotZ:0.11},
+            {dx:0.043, dz:0.059, sx:0.31, sy:0.16, sz:0.18, rotY:3.4, rotZ:-0.01},
+            {dx:0.051, dz:0.038, sx:0.21, sy:0.24, sz:0.15, rotY:1.5, rotZ:-0.01},
+            {dx:0.023, dz:-0.037, sx:0.29, sy:0.16, sz:0.14, rotY:4.3, rotZ:-0.06},
+            {dx:0.029, dz:-0.033, sx:0.16, sy:0.27, sz:0.23, rotY:5.3, rotZ:0.04},
+            {dx:0.013, dz:0.042, sx:0.32, sy:0.27, sz:0.21, rotY:4.5, rotZ:-0.22},
+            {dx:0.037, dz:0.047, sx:0.26, sy:0.23, sz:0.12, rotY:1.7, rotZ:-0.15},
+            {dx:-0.013, dz:0.002, sx:0.19, sy:0.24, sz:0.13, rotY:4.1, rotZ:-0.16},
+            {dx:-0.013, dz:-0.017, sx:0.27, sy:0.26, sz:0.14, rotY:6.2, rotZ:-0.23},
+          ]},
+          { x:0.75, z:0.775, cubes: [
+            {dx:0.006, dz:0.014, sx:0.14, sy:0.16, sz:0.19, rotY:2.1, rotZ:-0.04},
+            {dx:-0.052, dz:0.039, sx:0.22, sy:0.14, sz:0.14, rotY:5.2, rotZ:-0.18},
+            {dx:0.003, dz:0.044, sx:0.26, sy:0.2, sz:0.1, rotY:1.7, rotZ:-0.2},
+            {dx:-0.056, dz:-0.052, sx:0.16, sy:0.12, sz:0.24, rotY:1, rotZ:0.01},
+            {dx:-0.047, dz:0.016, sx:0.18, sy:0.25, sz:0.17, rotY:4.2, rotZ:0.13},
+            {dx:0.03, dz:0.054, sx:0.13, sy:0.15, sz:0.17, rotY:0.1, rotZ:-0.21},
+            {dx:-0.005, dz:0.001, sx:0.25, sy:0.19, sz:0.11, rotY:4, rotZ:-0.23},
+            {dx:0.032, dz:0.042, sx:0.11, sy:0.24, sz:0.13, rotY:5.9, rotZ:0.19},
+            {dx:-0.042, dz:-0.005, sx:0.16, sy:0.25, sz:0.14, rotY:5.3, rotZ:0.16},
+            {dx:0.04, dz:-0.017, sx:0.27, sy:0.25, sz:0.18, rotY:4.7, rotZ:-0.15},
+            {dx:0.053, dz:-0.058, sx:0.32, sy:0.23, sz:0.15, rotY:2.5, rotZ:0.19},
+            {dx:0.039, dz:0.054, sx:0.19, sy:0.13, sz:0.24, rotY:0.9, rotZ:0.13},
+            {dx:-0.05, dz:0.004, sx:0.22, sy:0.18, sz:0.21, rotY:0.9, rotZ:-0.24},
+            {dx:0.041, dz:0.004, sx:0.13, sy:0.13, sz:0.11, rotY:1.4, rotZ:0.09},
+            {dx:0.015, dz:0.057, sx:0.29, sy:0.21, sz:0.2, rotY:1.4, rotZ:-0.25},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_6',
+        trees: [
+          {x:0.87,z:0.412},{x:0.87,z:0.439},{x:0.891,z:0.4},{x:0.869,z:0.432},{x:0.875,z:0.437},
+          {x:0.902,z:0.442},{x:0.954,z:0.472},{x:0.651,z:0.103},{x:0.711,z:0.087},{x:0.684,z:0.154},
+          {x:0.705,z:0.062},{x:0.626,z:0.109},{x:0.647,z:0.113},{x:0.723,z:0.103},{x:0.919,z:0.726},
+          {x:0.872,z:0.734},{x:0.818,z:0.747},{x:0.855,z:0.759},{x:0.891,z:0.747},{x:0.588,z:0.953},
+          {x:0.547,z:0.968},{x:0.589,z:0.911},{x:0.563,z:0.944},{x:0.444,z:0.36},{x:0.458,z:0.434},
+          {x:0.475,z:0.356},{x:0.433,z:0.425},{x:0.453,z:0.354},{x:0.512,z:0.419},{x:0.511,z:0.395},
+          {x:0.44,z:0.378},{x:0.25,z:0.639},{x:0.248,z:0.717},{x:0.272,z:0.692},{x:0.168,z:0.665},
+          {x:0.204,z:0.712},{x:0.229,z:0.644},{x:0.799,z:0.688},{x:0.784,z:0.754},{x:0.819,z:0.738},
+          {x:0.801,z:0.672},{x:0.831,z:0.637},{x:0.871,z:0.946},{x:0.818,z:0.917},{x:0.892,z:0.906},
+          {x:0.832,z:0.847},{x:0.862,z:0.919},{x:0.863,z:0.867},{x:0.871,z:0.863},{x:0.796,z:0.919},
+          {x:0.841,z:0.927},{x:0.545,z:0.616},{x:0.516,z:0.632},{x:0.553,z:0.646},{x:0.582,z:0.578},
+          {x:0.508,z:0.58},{x:0.553,z:0.533},{x:0.574,z:0.555},{x:0.538,z:0.527}
+        ],
+        rocks: [
+          {x:0.47,z:0.148,rotY:0.4,scale:0.83},
+          {x:0.688,z:0.71,rotY:1.3,scale:0.86},
+          {x:0.239,z:0.877,rotY:1.6,scale:0.8},
+          {x:0.332,z:0.89,rotY:3.2,scale:0.74},
+          {x:0.161,z:0.635,rotY:5.4,scale:0.74},
+          {x:0.477,z:0.851,rotY:0.2,scale:0.98},
+          {x:0.1,z:0.363,rotY:5.2,scale:0.64},
+          {x:0.154,z:0.271,rotY:5,scale:0.98},
+          {x:0.943,z:0.864,rotY:0.7,scale:0.61},
+          {x:0.938,z:0.775,rotY:6.1,scale:0.8},
+          {x:0.423,z:0.092,rotY:1.1,scale:0.99},
+          {x:0.729,z:0.523,rotY:4.8,scale:0.63},
+        ],
+        minables: [
+          { x:0.739, z:0.325, cubes: [
+            {dx:-0.032, dz:0.022, sx:0.25, sy:0.19, sz:0.24, rotY:2.6, rotZ:0.03},
+            {dx:0.053, dz:0, sx:0.17, sy:0.17, sz:0.24, rotY:0.7, rotZ:0.22},
+            {dx:0.036, dz:0.044, sx:0.14, sy:0.23, sz:0.17, rotY:3.3, rotZ:-0.23},
+            {dx:0.031, dz:-0.046, sx:0.29, sy:0.13, sz:0.13, rotY:0.7, rotZ:-0.16},
+            {dx:0.013, dz:-0.053, sx:0.26, sy:0.23, sz:0.16, rotY:1.1, rotZ:-0.01},
+            {dx:0.003, dz:0.006, sx:0.23, sy:0.17, sz:0.11, rotY:6, rotZ:0.1},
+            {dx:0.014, dz:-0.03, sx:0.26, sy:0.14, sz:0.14, rotY:3.2, rotZ:0.17},
+            {dx:-0.033, dz:0.016, sx:0.29, sy:0.13, sz:0.1, rotY:5.6, rotZ:0.12},
+            {dx:-0.047, dz:-0.034, sx:0.2, sy:0.18, sz:0.18, rotY:0.2, rotZ:-0.09},
+            {dx:0.014, dz:-0.049, sx:0.24, sy:0.15, sz:0.17, rotY:2.6, rotZ:-0.22},
+            {dx:0.026, dz:-0.046, sx:0.27, sy:0.12, sz:0.17, rotY:2.3, rotZ:-0.22},
+            {dx:0.048, dz:-0.024, sx:0.13, sy:0.17, sz:0.22, rotY:1.9, rotZ:-0.14},
+            {dx:0.01, dz:-0.058, sx:0.22, sy:0.16, sz:0.11, rotY:4.4, rotZ:-0.15},
+          ]},
+          { x:0.532, z:0.275, cubes: [
+            {dx:-0.017, dz:0.042, sx:0.1, sy:0.19, sz:0.17, rotY:3.9, rotZ:0.09},
+            {dx:0.026, dz:0.034, sx:0.3, sy:0.23, sz:0.24, rotY:3.7, rotZ:0.1},
+            {dx:0.01, dz:-0.026, sx:0.21, sy:0.24, sz:0.18, rotY:1.3, rotZ:-0.15},
+            {dx:0.009, dz:0.034, sx:0.2, sy:0.22, sz:0.19, rotY:4.9, rotZ:-0.24},
+            {dx:-0.004, dz:-0.042, sx:0.28, sy:0.12, sz:0.17, rotY:2, rotZ:-0.24},
+            {dx:-0.024, dz:-0.036, sx:0.25, sy:0.22, sz:0.18, rotY:1, rotZ:-0.21},
+            {dx:0.046, dz:0.02, sx:0.23, sy:0.18, sz:0.18, rotY:5.8, rotZ:0.01},
+            {dx:0.023, dz:-0.047, sx:0.25, sy:0.14, sz:0.12, rotY:0.2, rotZ:-0.09},
+            {dx:-0.04, dz:0.012, sx:0.21, sy:0.27, sz:0.1, rotY:0.3, rotZ:0.14},
+            {dx:0.024, dz:0.008, sx:0.16, sy:0.15, sz:0.13, rotY:5.2, rotZ:0.07},
+            {dx:0.029, dz:0.035, sx:0.13, sy:0.16, sz:0.15, rotY:0.2, rotZ:0.06},
+            {dx:-0.033, dz:-0.021, sx:0.22, sy:0.21, sz:0.2, rotY:3.5, rotZ:-0.03},
+            {dx:-0.052, dz:-0.048, sx:0.12, sy:0.17, sz:0.13, rotY:4.9, rotZ:0.19},
+            {dx:-0.039, dz:0.012, sx:0.28, sy:0.16, sz:0.24, rotY:1.6, rotZ:-0.1},
+          ]},
+          { x:0.367, z:0.329, cubes: [
+            {dx:0.006, dz:-0.021, sx:0.16, sy:0.21, sz:0.18, rotY:5, rotZ:0.15},
+            {dx:0.051, dz:-0.031, sx:0.21, sy:0.26, sz:0.12, rotY:2.9, rotZ:-0.22},
+            {dx:-0.013, dz:0.011, sx:0.25, sy:0.24, sz:0.19, rotY:3.4, rotZ:0.21},
+            {dx:-0.044, dz:0.054, sx:0.28, sy:0.19, sz:0.11, rotY:4.4, rotZ:0.08},
+            {dx:-0.004, dz:0.05, sx:0.17, sy:0.26, sz:0.15, rotY:4.4, rotZ:0.16},
+            {dx:-0.037, dz:-0.017, sx:0.26, sy:0.27, sz:0.16, rotY:0.8, rotZ:-0.21},
+            {dx:-0.058, dz:0.034, sx:0.21, sy:0.27, sz:0.11, rotY:4, rotZ:-0.08},
+            {dx:0.013, dz:0.029, sx:0.17, sy:0.24, sz:0.12, rotY:1, rotZ:0.01},
+            {dx:-0.059, dz:0.027, sx:0.2, sy:0.15, sz:0.15, rotY:3.3, rotZ:-0.11},
+          ]},
+          { x:0.564, z:0.438, cubes: [
+            {dx:-0.019, dz:-0.021, sx:0.19, sy:0.24, sz:0.23, rotY:5.6, rotZ:-0.09},
+            {dx:-0.026, dz:-0.023, sx:0.15, sy:0.27, sz:0.16, rotY:0.5, rotZ:0.18},
+            {dx:-0.046, dz:0.041, sx:0.15, sy:0.13, sz:0.14, rotY:0.2, rotZ:-0.05},
+            {dx:-0.042, dz:0.011, sx:0.23, sy:0.26, sz:0.24, rotY:0.3, rotZ:0.22},
+            {dx:0.012, dz:-0.015, sx:0.18, sy:0.12, sz:0.22, rotY:2.1, rotZ:-0.16},
+            {dx:0, dz:0.038, sx:0.3, sy:0.26, sz:0.18, rotY:0.9, rotZ:0.14},
+            {dx:-0.015, dz:-0.016, sx:0.22, sy:0.21, sz:0.16, rotY:0.4, rotZ:-0.24},
+            {dx:-0.058, dz:0.033, sx:0.24, sy:0.21, sz:0.15, rotY:3.1, rotZ:0.1},
+            {dx:0.038, dz:0.013, sx:0.11, sy:0.21, sz:0.2, rotY:2.1, rotZ:0.09},
+            {dx:-0.033, dz:-0.001, sx:0.13, sy:0.19, sz:0.15, rotY:1.1, rotZ:-0.09},
+            {dx:-0.059, dz:-0.003, sx:0.11, sy:0.2, sz:0.19, rotY:5.2, rotZ:-0.07},
+            {dx:-0.011, dz:0.049, sx:0.16, sy:0.14, sz:0.18, rotY:3.1, rotZ:-0.22},
+            {dx:0.06, dz:-0.035, sx:0.24, sy:0.19, sz:0.19, rotY:2.3, rotZ:0},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_7',
+        trees: [
+          {x:0.746,z:0.18},{x:0.797,z:0.145},{x:0.795,z:0.131},{x:0.74,z:0.133},{x:0.788,z:0.085},
+          {x:0.823,z:0.151},{x:0.804,z:0.094},{x:0.025,z:0.746},{x:0.027,z:0.729},{x:0.059,z:0.693},
+          {x:0.069,z:0.707},{x:0.094,z:0.685},{x:0.081,z:0.715},{x:0.247,z:0.469},{x:0.239,z:0.398},
+          {x:0.209,z:0.403},{x:0.222,z:0.39},{x:0.248,z:0.481},{x:0.268,z:0.481},{x:0.19,z:0.45},
+          {x:0.234,z:0.483},{x:0.259,z:0.41},{x:0.216,z:0.144},{x:0.206,z:0.192},{x:0.245,z:0.192},
+          {x:0.253,z:0.161},{x:0.254,z:0.201},{x:0.209,z:0.183},{x:0.33,z:0.561},{x:0.225,z:0.526},
+          {x:0.292,z:0.491},{x:0.288,z:0.585},{x:0.286,z:0.6},{x:0.281,z:0.551},{x:0.518,z:0.53},
+          {x:0.6,z:0.453},{x:0.53,z:0.49},{x:0.541,z:0.456},{x:0.465,z:0.277},{x:0.439,z:0.306},
+          {x:0.517,z:0.335},{x:0.55,z:0.31},{x:0.442,z:0.351},{x:0.457,z:0.323},{x:0.66,z:0.169},
+          {x:0.742,z:0.141},{x:0.755,z:0.19},{x:0.747,z:0.213},{x:0.703,z:0.235},{x:0.719,z:0.234},
+          {x:0.675,z:0.159},{x:0.764,z:0.194},{x:0.642,z:0.7},{x:0.567,z:0.727},{x:0.661,z:0.701},
+          {x:0.579,z:0.795},{x:0.609,z:0.774}
+        ],
+        rocks: [
+          {x:0.915,z:0.531,rotY:3.7,scale:0.92},
+          {x:0.386,z:0.96,rotY:0.1,scale:1},
+          {x:0.364,z:0.701,rotY:2.2,scale:0.98},
+          {x:0.425,z:0.802,rotY:4.4,scale:0.71},
+          {x:0.566,z:0.836,rotY:3.3,scale:0.79},
+          {x:0.299,z:0.866,rotY:4.7,scale:0.62},
+          {x:0.36,z:0.54,rotY:2.2,scale:0.84},
+          {x:0.747,z:0.427,rotY:0.5,scale:0.67},
+          {x:0.606,z:0.094,rotY:3.9,scale:0.8},
+          {x:0.698,z:0.091,rotY:4.6,scale:0.61},
+          {x:0.957,z:0.211,rotY:3.9,scale:0.9},
+          {x:0.373,z:0.3,rotY:1.2,scale:0.85},
+          {x:0.135,z:0.711,rotY:4.5,scale:0.64},
+          {x:0.687,z:0.465,rotY:3.2,scale:0.71},
+        ],
+        minables: [
+          { x:0.526, z:0.69, cubes: [
+            {dx:-0.059, dz:0.022, sx:0.23, sy:0.22, sz:0.22, rotY:0.7, rotZ:-0.12},
+            {dx:0.048, dz:-0.053, sx:0.18, sy:0.13, sz:0.16, rotY:4.7, rotZ:0.23},
+            {dx:0.034, dz:-0.029, sx:0.24, sy:0.13, sz:0.21, rotY:3.6, rotZ:-0.06},
+            {dx:-0.02, dz:-0.017, sx:0.2, sy:0.24, sz:0.2, rotY:5.4, rotZ:0.07},
+            {dx:0.06, dz:0.04, sx:0.21, sy:0.2, sz:0.11, rotY:4.8, rotZ:-0.08},
+            {dx:-0.037, dz:-0.045, sx:0.16, sy:0.25, sz:0.16, rotY:5.4, rotZ:0.05},
+            {dx:-0.019, dz:0.035, sx:0.26, sy:0.14, sz:0.14, rotY:5.1, rotZ:-0.11},
+            {dx:0.052, dz:0.04, sx:0.31, sy:0.26, sz:0.16, rotY:3.8, rotZ:-0.21},
+            {dx:0.043, dz:0.021, sx:0.32, sy:0.19, sz:0.12, rotY:0.1, rotZ:0.16},
+            {dx:-0.013, dz:-0.029, sx:0.27, sy:0.25, sz:0.2, rotY:3.4, rotZ:-0.01},
+            {dx:-0.047, dz:0.038, sx:0.21, sy:0.15, sz:0.17, rotY:3.7, rotZ:0.16},
+            {dx:0.057, dz:-0.005, sx:0.26, sy:0.24, sz:0.1, rotY:0.6, rotZ:-0.04},
+            {dx:0.048, dz:0.051, sx:0.11, sy:0.19, sz:0.22, rotY:2.5, rotZ:-0.02},
+          ]},
+          { x:0.839, z:0.83, cubes: [
+            {dx:-0.051, dz:-0.021, sx:0.15, sy:0.17, sz:0.16, rotY:3, rotZ:0.06},
+            {dx:-0.002, dz:-0.009, sx:0.24, sy:0.25, sz:0.23, rotY:0.7, rotZ:0.22},
+            {dx:0.019, dz:0.048, sx:0.23, sy:0.19, sz:0.17, rotY:2.4, rotZ:0.06},
+            {dx:-0.025, dz:0.004, sx:0.14, sy:0.13, sz:0.16, rotY:4.2, rotZ:0.19},
+            {dx:-0.003, dz:-0.056, sx:0.28, sy:0.23, sz:0.13, rotY:5, rotZ:-0.14},
+            {dx:-0.031, dz:0.016, sx:0.22, sy:0.23, sz:0.15, rotY:0.7, rotZ:-0.15},
+            {dx:0.03, dz:-0.017, sx:0.2, sy:0.19, sz:0.21, rotY:6.2, rotZ:-0.14},
+            {dx:-0.008, dz:0.036, sx:0.17, sy:0.17, sz:0.13, rotY:2, rotZ:0.03},
+            {dx:0.035, dz:0.021, sx:0.24, sy:0.14, sz:0.23, rotY:0.4, rotZ:0.12},
+            {dx:0.045, dz:-0.058, sx:0.21, sy:0.17, sz:0.14, rotY:6.2, rotZ:0.07},
+            {dx:0.001, dz:0.024, sx:0.26, sy:0.24, sz:0.17, rotY:0.4, rotZ:-0.09},
+            {dx:0.006, dz:-0.02, sx:0.12, sy:0.15, sz:0.23, rotY:3.5, rotZ:0.13},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_8',
+        trees: [
+          {x:0.587,z:0.677},{x:0.584,z:0.731},{x:0.627,z:0.686},{x:0.666,z:0.737},{x:0.624,z:0.759},
+          {x:0.572,z:0.743},{x:0.638,z:0.703},{x:0.663,z:0.756},{x:0.297,z:0.414},{x:0.292,z:0.452},
+          {x:0.32,z:0.416},{x:0.341,z:0.39},{x:0.252,z:0.475},{x:0.259,z:0.411},{x:0.273,z:0.488},
+          {x:0.359,z:0.436},{x:0.274,z:0.461},{x:0.578,z:0.123},{x:0.51,z:0.101},{x:0.559,z:0.105},
+          {x:0.594,z:0.101},{x:0.562,z:0.158},{x:0.565,z:0.09},{x:0.548,z:0.024},{x:0.764,z:0.291},
+          {x:0.82,z:0.323},{x:0.861,z:0.305},{x:0.829,z:0.238},{x:0.802,z:0.254},{x:0.808,z:0.285},
+          {x:0.79,z:0.285},{x:0.061,z:0.719},{x:0.061,z:0.625},{x:0.066,z:0.705},{x:0.085,z:0.623},
+          {x:0.053,z:0.703},{x:0.916,z:0.303},{x:0.891,z:0.295},{x:0.865,z:0.218},{x:0.926,z:0.279},
+          {x:0.868,z:0.334},{x:0.853,z:0.236},{x:0.852,z:0.225},{x:0.873,z:0.306},{x:0.903,z:0.257},
+          {x:0.103,z:0.901},{x:0.131,z:0.788},{x:0.084,z:0.86},{x:0.172,z:0.836},{x:0.164,z:0.87},
+          {x:0.166,z:0.917},{x:0.176,z:0.817},{x:0.544,z:0.46},{x:0.639,z:0.419},{x:0.592,z:0.447},
+          {x:0.6,z:0.481},{x:0.543,z:0.45},{x:0.63,z:0.434},{x:0.589,z:0.453},{x:0.604,z:0.858},
+          {x:0.639,z:0.842},{x:0.673,z:0.828},{x:0.686,z:0.822},{x:0.687,z:0.843},{x:0.611,z:0.918},
+          {x:0.69,z:0.862},{x:0.715,z:0.872},{x:0.642,z:0.863},{x:0.102,z:0.824},{x:0.087,z:0.778},
+          {x:0.168,z:0.789},{x:0.165,z:0.837},{x:0.123,z:0.868},{x:0.161,z:0.836},{x:0.099,z:0.795},
+          {x:0.116,z:0.87}
+        ],
+        rocks: [
+          {x:0.439,z:0.355,rotY:5.2,scale:0.79},
+          {x:0.665,z:0.597,rotY:2.9,scale:0.91},
+          {x:0.142,z:0.224,rotY:2.8,scale:0.73},
+          {x:0.331,z:0.884,rotY:6.1,scale:0.68},
+          {x:0.851,z:0.553,rotY:1.2,scale:0.9},
+          {x:0.524,z:0.891,rotY:4.2,scale:0.72},
+          {x:0.887,z:0.783,rotY:5.8,scale:0.69},
+          {x:0.663,z:0.347,rotY:2.2,scale:0.84},
+          {x:0.222,z:0.571,rotY:1.9,scale:0.85},
+          {x:0.408,z:0.776,rotY:4.4,scale:0.79},
+          {x:0.433,z:0.099,rotY:4.9,scale:0.95},
+          {x:0.066,z:0.402,rotY:3.4,scale:0.6},
+          {x:0.832,z:0.176,rotY:2.9,scale:0.69},
+          {x:0.784,z:0.483,rotY:5.6,scale:0.81},
+        ],
+        minables: [
+          { x:0.263, z:0.793, cubes: [
+            {dx:0.054, dz:-0.025, sx:0.27, sy:0.24, sz:0.17, rotY:0.4, rotZ:-0.08},
+            {dx:0.033, dz:-0.05, sx:0.15, sy:0.14, sz:0.2, rotY:4, rotZ:-0.23},
+            {dx:-0.053, dz:0.019, sx:0.27, sy:0.17, sz:0.16, rotY:3.8, rotZ:-0.18},
+            {dx:0.005, dz:0.008, sx:0.27, sy:0.12, sz:0.15, rotY:1, rotZ:-0.04},
+            {dx:0.042, dz:-0.016, sx:0.1, sy:0.23, sz:0.22, rotY:3.1, rotZ:0.01},
+            {dx:-0.034, dz:-0.017, sx:0.19, sy:0.25, sz:0.18, rotY:0.3, rotZ:0.06},
+            {dx:-0.024, dz:-0.035, sx:0.14, sy:0.26, sz:0.18, rotY:1.4, rotZ:0.17},
+            {dx:0.004, dz:0.017, sx:0.24, sy:0.14, sz:0.2, rotY:1.9, rotZ:0.05},
+            {dx:-0.028, dz:0.036, sx:0.28, sy:0.18, sz:0.13, rotY:1.6, rotZ:-0.08},
+            {dx:0.007, dz:-0.03, sx:0.11, sy:0.17, sz:0.24, rotY:5.6, rotZ:0.06},
+            {dx:-0.037, dz:0.028, sx:0.21, sy:0.22, sz:0.12, rotY:2.7, rotZ:0.03},
+            {dx:-0.056, dz:-0.059, sx:0.16, sy:0.26, sz:0.16, rotY:0.9, rotZ:0.03},
+            {dx:0.03, dz:-0.001, sx:0.3, sy:0.25, sz:0.15, rotY:5.6, rotZ:-0.1},
+          ]},
+          { x:0.429, z:0.244, cubes: [
+            {dx:-0.012, dz:0.03, sx:0.14, sy:0.13, sz:0.15, rotY:3.9, rotZ:-0.23},
+            {dx:-0.021, dz:-0.005, sx:0.31, sy:0.13, sz:0.23, rotY:1.1, rotZ:-0.01},
+            {dx:0.055, dz:0.002, sx:0.16, sy:0.22, sz:0.21, rotY:2.6, rotZ:0.13},
+            {dx:0.031, dz:-0.018, sx:0.27, sy:0.13, sz:0.2, rotY:0.3, rotZ:-0.02},
+            {dx:0.021, dz:-0.01, sx:0.17, sy:0.14, sz:0.19, rotY:1.7, rotZ:0.06},
+            {dx:-0.022, dz:-0.031, sx:0.25, sy:0.14, sz:0.1, rotY:5.5, rotZ:-0.08},
+            {dx:0.015, dz:0.046, sx:0.12, sy:0.21, sz:0.11, rotY:4.8, rotZ:0.14},
+            {dx:0.057, dz:0.043, sx:0.18, sy:0.28, sz:0.11, rotY:5.4, rotZ:-0.06},
+            {dx:0.045, dz:-0.042, sx:0.26, sy:0.23, sz:0.17, rotY:1.9, rotZ:-0.2},
+          ]},
+          { x:0.488, z:0.572, cubes: [
+            {dx:0.033, dz:-0.012, sx:0.18, sy:0.24, sz:0.13, rotY:5.6, rotZ:-0.08},
+            {dx:-0.026, dz:0.016, sx:0.31, sy:0.16, sz:0.1, rotY:2, rotZ:0.04},
+            {dx:0.044, dz:-0.046, sx:0.21, sy:0.25, sz:0.14, rotY:0, rotZ:-0.1},
+            {dx:-0.041, dz:-0.017, sx:0.11, sy:0.14, sz:0.18, rotY:6, rotZ:-0.14},
+            {dx:-0.042, dz:-0.038, sx:0.23, sy:0.23, sz:0.16, rotY:2, rotZ:-0.06},
+            {dx:0.043, dz:-0.004, sx:0.27, sy:0.28, sz:0.12, rotY:0.2, rotZ:0.05},
+            {dx:0.028, dz:0.001, sx:0.18, sy:0.21, sz:0.22, rotY:4.9, rotZ:-0.09},
+            {dx:0.024, dz:0.041, sx:0.26, sy:0.12, sz:0.11, rotY:2.4, rotZ:-0.15},
+            {dx:0.006, dz:-0.018, sx:0.31, sy:0.14, sz:0.16, rotY:5.8, rotZ:-0.24},
+            {dx:-0.052, dz:0.01, sx:0.24, sy:0.14, sz:0.15, rotY:5.9, rotZ:-0.15},
+            {dx:-0.03, dz:0.051, sx:0.17, sy:0.15, sz:0.18, rotY:5.2, rotZ:0.25},
+          ]},
+        ],
+      },
+      {
+        id: 'rock_9',
+        trees: [
+          {x:0.528,z:0.409},{x:0.468,z:0.36},{x:0.453,z:0.436},{x:0.465,z:0.361},{x:0.463,z:0.361},
+          {x:0.418,z:0.44},{x:0.487,z:0.441},{x:0.49,z:0.401},{x:0.507,z:0.344},{x:0.574,z:0.122},
+          {x:0.579,z:0.199},{x:0.513,z:0.164},{x:0.64,z:0.155},{x:0.861,z:0.635},{x:0.784,z:0.701},
+          {x:0.787,z:0.631},{x:0.847,z:0.678},{x:0.771,z:0.639},{x:0.512,z:0.454},{x:0.493,z:0.396},
+          {x:0.594,z:0.455},{x:0.525,z:0.399},{x:0.566,z:0.397},{x:0.532,z:0.472},{x:0.539,z:0.364},
+          {x:0.499,z:0.401},{x:0.823,z:0.842},{x:0.805,z:0.868},{x:0.806,z:0.873},{x:0.77,z:0.899},
+          {x:0.765,z:0.843},{x:0.8,z:0.89},{x:0.768,z:0.799},{x:0.794,z:0.822},{x:0.753,z:0.846},
+          {x:0.375,z:0.057},{x:0.284,z:0.044},{x:0.3,z:0.105},{x:0.291,z:0.122},{x:0.302,z:0.09},
+          {x:0.38,z:0.076},{x:0.351,z:0.06},{x:0.313,z:0.094},{x:0.718,z:0.499},{x:0.664,z:0.454},
+          {x:0.719,z:0.439},{x:0.674,z:0.489},{x:0.658,z:0.481},{x:0.653,z:0.475},{x:0.716,z:0.47},
+          {x:0.711,z:0.512},{x:0.508,z:0.626},{x:0.493,z:0.693},{x:0.446,z:0.684},{x:0.483,z:0.67},
+          {x:0.44,z:0.638},{x:0.741,z:0.12},{x:0.685,z:0.082},{x:0.765,z:0.133},{x:0.665,z:0.125},
+          {x:0.696,z:0.095},{x:0.763,z:0.124},{x:0.759,z:0.787},{x:0.821,z:0.768},{x:0.77,z:0.81},
+          {x:0.799,z:0.81},{x:0.869,z:0.789},{x:0.858,z:0.806}
+        ],
+        rocks: [
+          {x:0.365,z:0.886,rotY:5.7,scale:0.74},
+          {x:0.432,z:0.778,rotY:1.6,scale:0.81},
+          {x:0.536,z:0.151,rotY:2.7,scale:0.87},
+          {x:0.858,z:0.559,rotY:2.6,scale:0.65},
+          {x:0.234,z:0.733,rotY:0.1,scale:0.95},
+          {x:0.452,z:0.132,rotY:3.4,scale:0.71},
+          {x:0.259,z:0.962,rotY:0.1,scale:0.99},
+          {x:0.882,z:0.051,rotY:4,scale:0.74},
+          {x:0.329,z:0.959,rotY:5.3,scale:0.9},
+          {x:0.057,z:0.439,rotY:0.6,scale:0.83},
+          {x:0.183,z:0.433,rotY:4.2,scale:0.6},
+          {x:0.517,z:0.566,rotY:2.4,scale:0.84},
+          {x:0.334,z:0.441,rotY:2.6,scale:0.65},
+        ],
+        minables: [
+          { x:0.401, z:0.644, cubes: [
+            {dx:-0.003, dz:0.043, sx:0.25, sy:0.15, sz:0.21, rotY:2.1, rotZ:0.01},
+            {dx:0.033, dz:-0.013, sx:0.13, sy:0.13, sz:0.14, rotY:5.9, rotZ:-0.21},
+            {dx:0.005, dz:-0.027, sx:0.24, sy:0.25, sz:0.12, rotY:4.1, rotZ:-0.05},
+            {dx:0.035, dz:0.045, sx:0.28, sy:0.13, sz:0.13, rotY:2.6, rotZ:-0.17},
+            {dx:-0.018, dz:-0.03, sx:0.14, sy:0.19, sz:0.12, rotY:0.2, rotZ:0.15},
+            {dx:-0.018, dz:0.011, sx:0.12, sy:0.23, sz:0.15, rotY:6.3, rotZ:0.17},
+            {dx:0.053, dz:0.011, sx:0.31, sy:0.27, sz:0.14, rotY:5.1, rotZ:-0.1},
+            {dx:0.046, dz:-0.034, sx:0.31, sy:0.21, sz:0.15, rotY:0.4, rotZ:-0.08},
+            {dx:-0.045, dz:0.033, sx:0.3, sy:0.23, sz:0.15, rotY:4.3, rotZ:0.15},
+          ]},
+          { x:0.126, z:0.764, cubes: [
+            {dx:0.036, dz:0.052, sx:0.25, sy:0.17, sz:0.24, rotY:3.3, rotZ:-0.11},
+            {dx:0.011, dz:-0.045, sx:0.12, sy:0.15, sz:0.17, rotY:0.1, rotZ:0.1},
+            {dx:-0.054, dz:-0.042, sx:0.29, sy:0.14, sz:0.16, rotY:5.1, rotZ:-0.19},
+            {dx:0.025, dz:0.045, sx:0.18, sy:0.24, sz:0.16, rotY:4.6, rotZ:-0.24},
+            {dx:0.009, dz:0.046, sx:0.29, sy:0.19, sz:0.19, rotY:3.1, rotZ:0.15},
+            {dx:0.041, dz:-0.055, sx:0.23, sy:0.24, sz:0.18, rotY:0.8, rotZ:0.01},
+            {dx:-0.029, dz:0.037, sx:0.32, sy:0.12, sz:0.16, rotY:3, rotZ:0.11},
+            {dx:-0.036, dz:-0.002, sx:0.13, sy:0.13, sz:0.19, rotY:5.8, rotZ:-0.17},
+            {dx:0.011, dz:0.024, sx:0.16, sy:0.26, sz:0.11, rotY:0.3, rotZ:0.16},
+            {dx:0.047, dz:0.006, sx:0.25, sy:0.13, sz:0.19, rotY:1.4, rotZ:0.21},
+            {dx:0.045, dz:0.004, sx:0.17, sy:0.17, sz:0.19, rotY:0.2, rotZ:0.02},
+            {dx:0.049, dz:0.031, sx:0.28, sy:0.14, sz:0.2, rotY:1.2, rotZ:-0.07},
+          ]},
+          { x:0.231, z:0.543, cubes: [
+            {dx:0.007, dz:-0.014, sx:0.23, sy:0.22, sz:0.16, rotY:0.8, rotZ:0.21},
+            {dx:0.008, dz:-0.034, sx:0.25, sy:0.24, sz:0.15, rotY:3.7, rotZ:-0.21},
+            {dx:-0.016, dz:0.017, sx:0.28, sy:0.2, sz:0.2, rotY:3.8, rotZ:0.21},
+            {dx:-0.057, dz:-0.021, sx:0.16, sy:0.16, sz:0.22, rotY:2.3, rotZ:-0.06},
+            {dx:0.021, dz:0.001, sx:0.28, sy:0.14, sz:0.17, rotY:1.7, rotZ:0.04},
+            {dx:0.056, dz:0.037, sx:0.31, sy:0.18, sz:0.1, rotY:5.9, rotZ:0.24},
+            {dx:0.04, dz:-0.021, sx:0.22, sy:0.17, sz:0.17, rotY:1.2, rotZ:-0.07},
+            {dx:0.007, dz:-0.02, sx:0.14, sy:0.15, sz:0.13, rotY:5.5, rotZ:-0.06},
+            {dx:-0.009, dz:0.029, sx:0.31, sy:0.18, sz:0.19, rotY:0.3, rotZ:-0.25},
+            {dx:-0.017, dz:-0.026, sx:0.31, sy:0.13, sz:0.11, rotY:5.4, rotZ:-0.2},
+            {dx:-0.013, dz:-0.015, sx:0.21, sy:0.19, sz:0.15, rotY:0.5, rotZ:0.22},
+          ]},
+          { x:0.579, z:0.434, cubes: [
+            {dx:-0.011, dz:-0.006, sx:0.19, sy:0.17, sz:0.14, rotY:4.7, rotZ:-0.16},
+            {dx:0.058, dz:-0.028, sx:0.15, sy:0.22, sz:0.19, rotY:0.1, rotZ:0},
+            {dx:0.044, dz:0.029, sx:0.12, sy:0.26, sz:0.2, rotY:0.7, rotZ:0},
+            {dx:-0.057, dz:0.015, sx:0.23, sy:0.22, sz:0.19, rotY:4.3, rotZ:0.18},
+            {dx:0.047, dz:0.059, sx:0.23, sy:0.26, sz:0.17, rotY:4.7, rotZ:0},
+            {dx:0.055, dz:0.047, sx:0.14, sy:0.14, sz:0.19, rotY:5.2, rotZ:0.18},
+            {dx:-0.006, dz:-0.036, sx:0.24, sy:0.22, sz:0.24, rotY:2.7, rotZ:-0.04},
+            {dx:-0.023, dz:-0.007, sx:0.28, sy:0.25, sz:0.13, rotY:0.9, rotZ:-0.2},
+            {dx:0.04, dz:0.052, sx:0.19, sy:0.23, sz:0.22, rotY:4.8, rotZ:-0.23},
+            {dx:-0.013, dz:0.031, sx:0.27, sy:0.2, sz:0.1, rotY:5.1, rotZ:0.23},
+            {dx:0.041, dz:-0.007, sx:0.13, sy:0.27, sz:0.14, rotY:6.2, rotZ:-0.23},
+          ]},
+          { x:0.743, z:0.688, cubes: [
+            {dx:-0.05, dz:0.029, sx:0.32, sy:0.16, sz:0.11, rotY:4.2, rotZ:-0.2},
+            {dx:-0.032, dz:-0.057, sx:0.22, sy:0.21, sz:0.21, rotY:3.6, rotZ:0.02},
+            {dx:-0.027, dz:-0.004, sx:0.28, sy:0.26, sz:0.17, rotY:1.6, rotZ:-0.04},
+            {dx:-0.031, dz:0.036, sx:0.22, sy:0.27, sz:0.14, rotY:2.3, rotZ:-0.2},
+            {dx:-0.037, dz:0.051, sx:0.26, sy:0.25, sz:0.12, rotY:4.4, rotZ:-0.18},
+            {dx:-0.044, dz:-0.037, sx:0.24, sy:0.14, sz:0.12, rotY:2.6, rotZ:0.18},
+            {dx:0.054, dz:0.057, sx:0.16, sy:0.23, sz:0.15, rotY:0.9, rotZ:0.11},
+            {dx:-0.029, dz:0.014, sx:0.21, sy:0.24, sz:0.17, rotY:4, rotZ:0.01},
+            {dx:-0.035, dz:0.035, sx:0.22, sy:0.23, sz:0.12, rotY:4.7, rotZ:-0.19},
+            {dx:-0.057, dz:-0.038, sx:0.23, sy:0.13, sz:0.12, rotY:1.5, rotZ:-0.11},
+            {dx:0.026, dz:-0.041, sx:0.3, sy:0.18, sz:0.12, rotY:1.7, rotZ:-0.2},
+            {dx:0.038, dz:0.02, sx:0.23, sy:0.27, sz:0.14, rotY:4.3, rotZ:-0.06},
+          ]},
+        ],
+      },
+    ],
+  },
+  // Future biomes (forest, desert, ice, etc.) go here
+};
+
+// ============================================================
+// ACTIVE BIOME STATE — populated by loadBiome()
+// ============================================================
+let activeBiome = null;
+let activeConfig = null;
+let HILLS = [];
+let TREES = [];
+let ROCKS = [];
+let MINABLES = [];
+
+function loadBiomeConfig(biomeName, configIndex) {
+  const biome = BIOMES[biomeName];
+  if (!biome) throw new Error(`Unknown biome: ${biomeName}`);
+  const config = biome.configs[configIndex || 0];
+  if (!config) throw new Error(`Unknown config index ${configIndex} for biome ${biomeName}`);
+  activeBiome = biome;
+  activeConfig = config;
+  HILLS = biome.hills;
+  TREES = config.trees;
+  ROCKS = config.rocks;
+  MINABLES = config.minables;
+}
+
+// Load default biome
+loadBiomeConfig('rock', 1);
+
+function getHillHeight(u, v) {
+  let h = 0;
+  for (const hill of HILLS) {
+    const dx = u - hill.x;
+    const dz = v - hill.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const t = Math.max(0, 1 - dist / hill.radius);
+    // Smooth cosine falloff for gentle shape
+    h += hill.height * (0.5 + 0.5 * Math.cos(Math.PI * (1 - t)));
+  }
+  return h;
+}
+
+// --- Subdivided Ground Mesh ---
+const S = 5.0;
+const RES = 80; // grid resolution
+const vertCount = (RES + 1) * (RES + 1);
+const vertData = new Float32Array(vertCount * 5); // x,y,z,u,v
+const idxCount = RES * RES * 6;
+const indices = new Uint16Array(idxCount);
+
+// Generate vertices
+for (let j = 0; j <= RES; j++) {
+  for (let i = 0; i <= RES; i++) {
+    const idx = (j * (RES + 1) + i) * 5;
+    const u = i / RES;
+    const v = j / RES;
+    const x = -S + u * 2 * S;
+    const z = -S + v * 2 * S;
+    const y = getHillHeight(u, v);
+    vertData[idx]     = x;
+    vertData[idx + 1] = y;
+    vertData[idx + 2] = z;
+    vertData[idx + 3] = u;
+    vertData[idx + 4] = v;
+  }
+}
+
+// Generate indices
+let ii = 0;
+for (let j = 0; j < RES; j++) {
+  for (let i = 0; i < RES; i++) {
+    const tl = j * (RES + 1) + i;
+    const tr = tl + 1;
+    const bl = (j + 1) * (RES + 1) + i;
+    const br = bl + 1;
+    indices[ii++] = tl; indices[ii++] = bl; indices[ii++] = tr;
+    indices[ii++] = tr; indices[ii++] = bl; indices[ii++] = br;
+  }
+}
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, vertData, gl.STATIC_DRAW);
+
+const ibo = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+const stride = 5 * 4;
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
+gl.enableVertexAttribArray(aUV);
+gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
+
+// --- Tree Billboard Shader ---
+const treeVS = `
+  attribute vec3 aPos;
+  attribute vec2 aUV;
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  uniform vec3 uTreePos;
+  uniform float uTreeScale;
+  varying vec2 vUV;
+  void main() {
+    vec3 camRight = vec3(uView[0][0], uView[1][0], uView[2][0]);
+    vec3 camUp = vec3(uView[0][1], uView[1][1], uView[2][1]);
+    float w = 0.35 * uTreeScale;
+    float h = 0.7 * uTreeScale;
+    vec3 worldPos = uTreePos + camRight * aPos.x * w + camUp * aPos.y * h;
+    vUV = aUV;
+    gl_Position = uProj * uView * vec4(worldPos, 1.0);
+  }
+`;
+
+const treeFS = `
+  precision mediump float;
+  varying vec2 vUV;
+  uniform sampler2D uTreeTex;
+  void main() {
+    vec4 c = texture2D(uTreeTex, vUV);
+    if (c.a < 0.5) discard;
+    gl_FragColor = c;
+  }
+`;
+
+const treeVShader = createShader(gl.VERTEX_SHADER, treeVS);
+const treeFShader = createShader(gl.FRAGMENT_SHADER, treeFS);
+const treeProg = gl.createProgram();
+gl.attachShader(treeProg, treeVShader);
+gl.attachShader(treeProg, treeFShader);
+gl.linkProgram(treeProg);
+
+const tAPos = gl.getAttribLocation(treeProg, 'aPos');
+const tAUV = gl.getAttribLocation(treeProg, 'aUV');
+const tUProj = gl.getUniformLocation(treeProg, 'uProj');
+const tUView = gl.getUniformLocation(treeProg, 'uView');
+const tUTreePos = gl.getUniformLocation(treeProg, 'uTreePos');
+const tUTreeScale = gl.getUniformLocation(treeProg, 'uTreeScale');
+const tUTreeTex = gl.getUniformLocation(treeProg, 'uTreeTex');
+
+// Tree billboard quad: centered horizontally, bottom at y=0
+const treeQuadVerts = new Float32Array([
+  // x, y, z, u, v
+  -0.5, 0, 0,  0, 1,
+   0.5, 0, 0,  1, 1,
+   0.5, 1, 0,  1, 0,
+  -0.5, 1, 0,  0, 0,
+]);
+const treeQuadIdx = new Uint16Array([0,1,2, 0,2,3]);
+
+const treeVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, treeVBO);
+gl.bufferData(gl.ARRAY_BUFFER, treeQuadVerts, gl.STATIC_DRAW);
+
+const treeIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, treeIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, treeQuadIdx, gl.STATIC_DRAW);
+
+// --- Static tree textures (pre-rendered PNGs embedded as data URIs) ---
+const TREE_IMAGES = {
+  dry: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABzElEQVR4nO2WvUoDQRSFv1XB1SKEKBYSYhQD2gS0EkvL9GnENxAsU/gAKVIKvoDYpfcBLMRCDNhYKCYGSaUhpIhrIWsRZl2TyfzsJojggYVlfu49c+6dOxf+8ctwVJOFYtZfzS2zkoTnDpyWr5Trx0pAOAcCAqAnYUtaOhl2LgjAN4n6Qwsxv5lxuW96Q+OmpKdkg2HnwvGg882MC0Cv6wUEw/vEeh2MFFBBOB+EjIBMCakCUTGfcK33jI1AqXTl9LreZAmIuMtwdLDtv9xNiEDt+gkgyHYZ0nmXdH5CIdjaWQv+p5se0woipZJdsZqxWQzwqQgDQKWy6wMBSd16qQIX1YZTf2ghDKlOLGrE4HdyfuuEnY8qRtoQfGbckacYZbR2/cThcV8JHZTxOjrY9gEeP9pcVBtOoZj1YbhS6qAqxcocuGm1SC70Ty+ch2EaZxWMMrZQzPrrsymgr4aNArrX0PgWPH60Aei8eZAzO71J/2B8ZwdDoFPBtHmx7nB0iWjbNUVqsfb3NnyAbHrpx3j57NLa3lif4yiwLsUyLKZSkffGUqDTfY+zPT6BZGLudwlAfBViE4irQqwk7HTfSSbmeG23I9v4+zkQF1/Jlq84lfYzVQAAAABJRU5ErkJggg==",
+  sparse: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABe0lEQVR4nO2VoU7DQBzGv3YTxTAyCKJZllU0QaIrKpB4DKIvUIe8B6jG7AUQ0zzBBGLPsGRiZFkmCFlWDBPAIZZrbuPa6921KWKf613/9/3+//S+Akcd9Z8Vk4DGJKB1eth5G7d3g8xYB6IsvBAgJgH1fDd7bi22SuYq8O2izc7PzjjtO0JI/nmYTCx+Pau1/9byEk6AFedJ1FVep7KzhBNg1KntYD5bFRrxnfJ7qe2gtdjiWzA9KQAbJxOJQnod9Wny9JKt853xY2bAnu9KzQHAkr5xAJL2voQA89kKnu9imEwsEoUUAHjgSgDub67o5nxnzN8SXp1lu5SxFgAPAgCD3uXe+uvyDQAwGk9Ln1t4DVWlYlwpwEW3q12bG8VltPn4NCk3Bzg7PWkWADCfgjGA6RRq+QZIFFIWRjIZ3YLD7lUSUAmg7MEsiFSk/C/gjVgSshx4eHyuN4h0OpRJ6SMcjaeWTtxWBlCHGgeo5Gf0vl5r1zY+gcYBfgEeCJEIXnU+OQAAAABJRU5ErkJggg==",
+  bare: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA8ElEQVR4nO2VMQrCQBBFf8TGRiSIlYWlp0jhMVLkIDmAB7HIMSw8haWFlUgIaVKuhQxoCMnszsAo7K8z+1/+zs4AUVFRv6qyyJw1A8oicxog4jNCQTh1Ceeg/LB3ALDbbgAAx9NltI5Mp74DgDkHoDpfkzcIRv+GjG/3B+dYAMwE+uonQiJjAuaIlQBXPsaqAOs0Da6dSYybtpOUywFWy4UtADCcgs/MEPfAZwo+718FoGm7LwAfY9J/9IDWUhoS6woo2pBRqwJA4hr7NKPKLqBJ+KxrcI1Jqrsg5GrMl5F4EkplDqByBdR8ITJPwBzgBcb6XFbN+90rAAAAAElFTkSuQmCC",
+  scraggly: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR4nGNgGAWjYBSMAjwgu8rqf3aV1f+B0s/AwMDAUBVnR5EBVXlGFDogz+h/VZzdf3IcQqnjsRpIjKGkOJiFFAc8ePKKoMUMDAwMbYsOMRJrJtEKkUGUk8Z/BgYGBgUZMRRxmAOX7btBtLkkhQAhQIrFVHWAiJAQ2XqZKLH4w6fvlGin3AECfJwD6wAGBspDgWIHUBoKo2mA4igYdcCoA0YdQCmgSm345t07svUOeAgMuAMA80c5beNYnwAAAAAASUVORK5CYII=",
+};
+
+// Load static PNGs into WebGL textures
+const treeVariants = activeBiome.treeVariants;
+const treeTextures = new Array(treeVariants.length);
+let treesLoaded = 0;
+
+// Upscale helper: nearest-neighbor 4x for crisp pixel art at any zoom
+function upscaleImage(img, factor) {
+  const c = document.createElement('canvas');
+  c.width = img.width * factor;
+  c.height = img.height * factor;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+treeVariants.forEach((v, i) => {
+  const img = new Image();
+  img.onload = () => {
+    const upscaled = upscaleImage(img, 4);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, upscaled);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    treeTextures[i] = tex;
+    treesLoaded++;
+  };
+  img.src = TREE_IMAGES[v];
+});
+
+// Assign a deterministic variant to each tree
+let treeVariantIndex = [];
+
+// Precompute tree world positions (on terrain surface)
+let treeWorldPositions = [];
+
+const TREE_COLLISION_RADIUS = 0.025;
+const ROCK_COLLISION_RADIUS_BASE = 0.15;
+
+// Compute sub-colliders for minable clusters using k-means grouping
+function computeClusterColliders(cubes, numColliders) {
+  const active = cubes.filter(c => !c.mined);
+  if (active.length === 0) return [];
+  numColliders = Math.min(numColliders, active.length);
+  let centers = [];
+  for (let i = 0; i < numColliders; i++) {
+    const c = active[Math.floor(i * active.length / numColliders)];
+    centers.push({ x: c.x, z: c.z });
+  }
+  for (let iter = 0; iter < 8; iter++) {
+    const groups = centers.map(() => []);
+    for (const c of active) {
+      let best = 0, bestD = Infinity;
+      for (let k = 0; k < centers.length; k++) {
+        const dx = c.x - centers[k].x, dz = c.z - centers[k].z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) { bestD = d; best = k; }
+      }
+      groups[best].push(c);
+    }
+    for (let k = 0; k < centers.length; k++) {
+      if (groups[k].length === 0) continue;
+      let sx = 0, sz = 0;
+      for (const c of groups[k]) { sx += c.x; sz += c.z; }
+      centers[k].x = sx / groups[k].length;
+      centers[k].z = sz / groups[k].length;
+    }
+  }
+  const groups = centers.map(() => []);
+  for (const c of active) {
+    let best = 0, bestD = Infinity;
+    for (let k = 0; k < centers.length; k++) {
+      const dx = c.x - centers[k].x, dz = c.z - centers[k].z;
+      const d = dx * dx + dz * dz;
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    groups[best].push(c);
+  }
+  const colliders = [];
+  for (let k = 0; k < centers.length; k++) {
+    if (groups[k].length === 0) continue;
+    if (groups[k].length === 1) {
+      const c = groups[k][0];
+      colliders.push({ x: centers[k].x, z: centers[k].z, radius: Math.max(c.sx, c.sz) * 0.7 });
+    } else {
+      let maxR = 0;
+      for (const c of groups[k]) {
+        const dx = c.x - centers[k].x, dz = c.z - centers[k].z;
+        const r = Math.sqrt(dx * dx + dz * dz) + Math.max(c.sx, c.sz) * 0.5;
+        if (r > maxR) maxR = r;
+      }
+      colliders.push({ x: centers[k].x, z: centers[k].z, radius: Math.max(maxR * 0.75, 0.04) });
+    }
+  }
+  // Check for cubes that fall outside all colliders and give them their own
+  for (const c of active) {
+    let covered = false;
+    for (const col of colliders) {
+      const dx = c.x - col.x, dz = c.z - col.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= col.radius + 0.01) { covered = true; break; }
+    }
+    if (!covered) {
+      const r = Math.max(c.sx, c.sz) * 0.7;
+      colliders.push({ x: c.x, z: c.z, radius: r });
+    }
+  }
+  return colliders;
+}
+
+// --- Static Rock Configuration (terrain decoration, scattered, infrequent) ---
+// (loaded from active biome config)
+
+// --- Static Minable Material Configuration ---
+// (loaded from active biome config)
+
+// --- Rock/Crystal Shader (3D lit cubes) ---
+const cubeVS = `
+  attribute vec3 aPos;
+  attribute vec3 aNormal;
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  uniform mat4 uModel;
+  varying vec3 vNormal;
+  varying vec3 vWorldPos;
+  void main() {
+    vec4 world = uModel * vec4(aPos, 1.0);
+    vWorldPos = world.xyz;
+    vNormal = mat3(uModel) * aNormal;
+    gl_Position = uProj * uView * world;
+  }
+`;
+
+const cubeFS = `
+  precision mediump float;
+  varying vec3 vNormal;
+  varying vec3 vWorldPos;
+  uniform vec3 uColor;
+  uniform float uEmissive;
+  uniform float uIsRock;
+  void main() {
+    vec3 n = normalize(vNormal);
+    // Simple directional light from above-right
+    vec3 lightDir = normalize(vec3(0.4, 0.8, 0.3));
+    float diff = max(dot(n, lightDir), 0.0);
+    float ambient = 0.3;
+    vec3 col = uColor;
+    // Rock flat highlights: vary color by face orientation
+    if (uIsRock > 0.5) {
+      float upFace = max(dot(n, vec3(0.0, 1.0, 0.0)), 0.0);
+      float sideFace = abs(dot(n, vec3(1.0, 0.0, 0.0)));
+      // Lighten upward faces, warm side faces slightly
+      col += vec3(0.08, 0.07, 0.05) * upFace;
+      col += vec3(0.03, 0.02, 0.0) * sideFace;
+      // Subtle face variation from world position for natural look
+      float faceVar = fract(abs(vWorldPos.x * 3.7 + vWorldPos.z * 5.3)) * 0.06 - 0.03;
+      col += vec3(faceVar, faceVar * 0.8, faceVar * 0.6);
+      ambient = 0.35;
+    }
+    vec3 lit = col * (ambient + diff * 0.7);
+    lit += uColor * uEmissive;
+    gl_FragColor = vec4(lit, 1.0);
+  }
+`;
+
+const cubeVShader = createShader(gl.VERTEX_SHADER, cubeVS);
+const cubeFShader = createShader(gl.FRAGMENT_SHADER, cubeFS);
+const cubeProg = gl.createProgram();
+gl.attachShader(cubeProg, cubeVShader);
+gl.attachShader(cubeProg, cubeFShader);
+gl.linkProgram(cubeProg);
+
+const cAPos = gl.getAttribLocation(cubeProg, 'aPos');
+const cANormal = gl.getAttribLocation(cubeProg, 'aNormal');
+const cUProj = gl.getUniformLocation(cubeProg, 'uProj');
+const cUView = gl.getUniformLocation(cubeProg, 'uView');
+const cUModel = gl.getUniformLocation(cubeProg, 'uModel');
+const cUColor = gl.getUniformLocation(cubeProg, 'uColor');
+const cUEmissive = gl.getUniformLocation(cubeProg, 'uEmissive');
+const cUIsRock = gl.getUniformLocation(cubeProg, 'uIsRock');
+
+// Unit cube geometry: vertices with normals (centered at origin, size 1)
+const cubeVerts = new Float32Array([
+  // front
+  -0.5,-0.5, 0.5,  0, 0, 1,   0.5,-0.5, 0.5,  0, 0, 1,
+   0.5, 0.5, 0.5,  0, 0, 1,  -0.5, 0.5, 0.5,  0, 0, 1,
+  // back
+   0.5,-0.5,-0.5,  0, 0,-1,  -0.5,-0.5,-0.5,  0, 0,-1,
+  -0.5, 0.5,-0.5,  0, 0,-1,   0.5, 0.5,-0.5,  0, 0,-1,
+  // top
+  -0.5, 0.5, 0.5,  0, 1, 0,   0.5, 0.5, 0.5,  0, 1, 0,
+   0.5, 0.5,-0.5,  0, 1, 0,  -0.5, 0.5,-0.5,  0, 1, 0,
+  // bottom
+  -0.5,-0.5,-0.5,  0,-1, 0,   0.5,-0.5,-0.5,  0,-1, 0,
+   0.5,-0.5, 0.5,  0,-1, 0,  -0.5,-0.5, 0.5,  0,-1, 0,
+  // right
+   0.5,-0.5, 0.5,  1, 0, 0,   0.5,-0.5,-0.5,  1, 0, 0,
+   0.5, 0.5,-0.5,  1, 0, 0,   0.5, 0.5, 0.5,  1, 0, 0,
+  // left
+  -0.5,-0.5,-0.5, -1, 0, 0,  -0.5,-0.5, 0.5, -1, 0, 0,
+  -0.5, 0.5, 0.5, -1, 0, 0,  -0.5, 0.5,-0.5, -1, 0, 0,
+]);
+const cubeIdx = new Uint16Array([
+  0,1,2,0,2,3, 4,5,6,4,6,7, 8,9,10,8,10,11,
+  12,13,14,12,14,15, 16,17,18,16,18,19, 20,21,22,20,22,23
+]);
+
+const cubeVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, cubeVBO);
+gl.bufferData(gl.ARRAY_BUFFER, cubeVerts, gl.STATIC_DRAW);
+
+const cubeIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIdx, gl.STATIC_DRAW);
+
+// --- 5 Low-poly rock mesh variants ---
+// Each rock is a deformed icosphere-like shape, unique silhouette
+function buildRockMesh(deformSeed) {
+  // Start with a rough dodecahedron-ish set of vertices, then deform
+  // Use a simple approach: take base vertices, jitter with seeded random
+  let s = deformSeed;
+  function srand() { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }
+
+  // Base: 8-corner box + 6 face centers + top peak, bottom flat
+  const baseVerts = [
+    // 8 corners of a slightly irregular box
+    [-0.45, -0.5,  0.45], [ 0.45, -0.5,  0.45],
+    [ 0.45, -0.5, -0.45], [-0.45, -0.5, -0.45],
+    [-0.35,  0.25,  0.35], [ 0.35,  0.25,  0.35],
+    [ 0.35,  0.25, -0.35], [-0.35,  0.25, -0.35],
+    // Top peak
+    [ 0.0,  0.5,  0.0],
+    // Mid-edge vertices for more facets
+    [ 0.0, -0.5,  0.5],  // 9: front bottom mid
+    [ 0.5, -0.5,  0.0],  // 10: right bottom mid
+    [ 0.0, -0.5, -0.5],  // 11: back bottom mid
+    [-0.5, -0.5,  0.0],  // 12: left bottom mid
+    [ 0.0,  0.35, 0.4],  // 13: front top mid
+    [ 0.4,  0.35, 0.0],  // 14: right top mid
+    [ 0.0,  0.35,-0.4],  // 15: back top mid
+    [-0.4,  0.35, 0.0],  // 16: left top mid
+  ];
+
+  // Deform each vertex
+  const verts = baseVerts.map(v => [
+    v[0] * (0.7 + srand() * 0.6),
+    v[1] * (0.8 + srand() * 0.4),
+    v[2] * (0.7 + srand() * 0.6),
+  ]);
+  // Flatten bottom
+  for (let i = 0; i < 5; i++) { if (verts[i]) verts[i][1] = Math.min(verts[i][1], -0.35); }
+  verts[0][1] = verts[1][1] = verts[2][1] = verts[3][1] = -0.5;
+  verts[9][1] = verts[10][1] = verts[11][1] = verts[12][1] = -0.5;
+
+  // Triangles (manually defined for a rock shape)
+  const tris = [
+    // Front face
+    [0, 9, 4], [9, 1, 5], [9, 5, 13], [4, 9, 13],
+    // Right face
+    [1, 10, 5], [10, 2, 6], [10, 6, 14], [5, 10, 14],
+    // Back face
+    [2, 11, 6], [11, 3, 7], [11, 7, 15], [6, 11, 15],
+    // Left face
+    [3, 12, 7], [12, 0, 4], [12, 4, 16], [7, 12, 16],
+    // Top cap
+    [4, 13, 8], [13, 5, 8], [5, 14, 8], [14, 6, 8],
+    [6, 15, 8], [15, 7, 8], [7, 16, 8], [16, 4, 8],
+    // Bottom cap
+    [0, 1, 9], [1, 2, 10], [2, 3, 11], [3, 0, 12],
+    [0, 3, 12], [1, 0, 9], [2, 1, 10], [3, 2, 11],
+  ];
+
+  // Build vertex + normal arrays (flat shading: unique verts per triangle)
+  const vertData = [];
+  const idxData = [];
+  let vi = 0;
+  for (const tri of tris) {
+    const a = verts[tri[0]], b = verts[tri[1]], c = verts[tri[2]];
+    // Face normal
+    const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+    const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+    let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+    const nl = Math.sqrt(nx*nx+ny*ny+nz*nz) || 1;
+    nx /= nl; ny /= nl; nz /= nl;
+    vertData.push(a[0],a[1],a[2], nx,ny,nz);
+    vertData.push(b[0],b[1],b[2], nx,ny,nz);
+    vertData.push(c[0],c[1],c[2], nx,ny,nz);
+    idxData.push(vi, vi+1, vi+2);
+    vi += 3;
+  }
+
+  return {
+    verts: new Float32Array(vertData),
+    idx: new Uint16Array(idxData),
+    triCount: idxData.length,
+  };
+}
+
+const ROCK_MESH_COUNT = 5;
+const rockMeshes = [];
+for (let i = 0; i < ROCK_MESH_COUNT; i++) {
+  const mesh = buildRockMesh(7919 + i * 6271);
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, mesh.verts, gl.STATIC_DRAW);
+  const ibo = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.idx, gl.STATIC_DRAW);
+  rockMeshes.push({ vbo, ibo, triCount: mesh.triCount });
+}
+
+// --- Glow Billboard Shader (additive blended quad around crystals) ---
+const glowVS = `
+  attribute vec3 aPos;
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  uniform vec3 uGlowPos;
+  uniform float uGlowSize;
+  varying vec2 vOffset;
+  void main() {
+    vec3 camRight = vec3(uView[0][0], uView[1][0], uView[2][0]);
+    vec3 camUp = vec3(uView[0][1], uView[1][1], uView[2][1]);
+    vec3 worldPos = uGlowPos + camRight * aPos.x * uGlowSize + camUp * aPos.y * uGlowSize;
+    vOffset = aPos.xy;
+    gl_Position = uProj * uView * vec4(worldPos, 1.0);
+  }
+`;
+
+const glowFS = `
+  precision mediump float;
+  varying vec2 vOffset;
+  uniform vec3 uGlowColor;
+  uniform float uGlowAlpha;
+  void main() {
+    float d = length(vOffset);
+    float glow = 1.0 - smoothstep(0.0, 1.0, d);
+    glow = glow * glow; // falloff
+    gl_FragColor = vec4(uGlowColor, glow * uGlowAlpha);
+  }
+`;
+
+const glowVShader = createShader(gl.VERTEX_SHADER, glowVS);
+const glowFShader = createShader(gl.FRAGMENT_SHADER, glowFS);
+const glowProg = gl.createProgram();
+gl.attachShader(glowProg, glowVShader);
+gl.attachShader(glowProg, glowFShader);
+gl.linkProgram(glowProg);
+
+const gAPos = gl.getAttribLocation(glowProg, 'aPos');
+const gUProj = gl.getUniformLocation(glowProg, 'uProj');
+const gUView = gl.getUniformLocation(glowProg, 'uView');
+const gUGlowPos = gl.getUniformLocation(glowProg, 'uGlowPos');
+const gUGlowSize = gl.getUniformLocation(glowProg, 'uGlowSize');
+const gUGlowColor = gl.getUniformLocation(glowProg, 'uGlowColor');
+const gUGlowAlpha = gl.getUniformLocation(glowProg, 'uGlowAlpha');
+
+// Glow quad: centered, unit size
+const glowQuadVerts = new Float32Array([
+  -1, -1, 0,
+   1, -1, 0,
+   1,  1, 0,
+  -1,  1, 0,
+]);
+const glowQuadIdx = new Uint16Array([0,1,2, 0,2,3]);
+
+const glowVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
+gl.bufferData(gl.ARRAY_BUFFER, glowQuadVerts, gl.STATIC_DRAW);
+
+const glowIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, glowIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, glowQuadIdx, gl.STATIC_DRAW);
+
+// --- Debug circle outline shader (drawn on top of everything) ---
+const dbgCircleVS = `
+  attribute vec3 aPos;
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  uniform vec3 uCenter;
+  uniform float uRadius;
+  void main() {
+    vec3 worldPos = uCenter + vec3(aPos.x * uRadius, 0.05, aPos.z * uRadius);
+    gl_Position = uProj * uView * vec4(worldPos, 1.0);
+  }
+`;
+const dbgCircleFS = `
+  precision mediump float;
+  uniform vec3 uColor;
+  void main() {
+    gl_FragColor = vec4(uColor, 1.0);
+  }
+`;
+const dbgVS = createShader(gl.VERTEX_SHADER, dbgCircleVS);
+const dbgFS = createShader(gl.FRAGMENT_SHADER, dbgCircleFS);
+const dbgProg = gl.createProgram();
+gl.attachShader(dbgProg, dbgVS);
+gl.attachShader(dbgProg, dbgFS);
+gl.linkProgram(dbgProg);
+
+const dbgAPos = gl.getAttribLocation(dbgProg, 'aPos');
+const dbgUProj = gl.getUniformLocation(dbgProg, 'uProj');
+const dbgUView = gl.getUniformLocation(dbgProg, 'uView');
+const dbgUCenter = gl.getUniformLocation(dbgProg, 'uCenter');
+const dbgURadius = gl.getUniformLocation(dbgProg, 'uRadius');
+const dbgUColor = gl.getUniformLocation(dbgProg, 'uColor');
+
+// Circle ring vertices (unit circle on XZ plane)
+const DBG_RING_SEGS = 32;
+const dbgRingVerts = new Float32Array(DBG_RING_SEGS * 3);
+for (let i = 0; i < DBG_RING_SEGS; i++) {
+  const a = (i / DBG_RING_SEGS) * Math.PI * 2;
+  dbgRingVerts[i * 3] = Math.cos(a);
+  dbgRingVerts[i * 3 + 1] = 0;
+  dbgRingVerts[i * 3 + 2] = Math.sin(a);
+}
+const dbgRingVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, dbgRingVBO);
+gl.bufferData(gl.ARRAY_BUFFER, dbgRingVerts, gl.STATIC_DRAW);
+
+// Model matrix: TRS with per-axis scale
+const _modelMat = new Float32Array(16);
+function buildModelMatrix(tx, ty, tz, rotY, rotZ, sx, sy, sz) {
+  if (sy === undefined) { sy = sx; sz = sx; }
+  const cy = Math.cos(rotY), sy2 = Math.sin(rotY);
+  const cz = Math.cos(rotZ), sz2 = Math.sin(rotZ);
+  const m00 = cy * cz,   m01 = cy * sz2,   m02 = -sy2;
+  const m10 = -sz2,       m11 = cz,          m12 = 0;
+  const m20 = sy2 * cz,  m21 = sy2 * sz2,  m22 = cy;
+  _modelMat[0]  = m00*sx; _modelMat[1]  = m10*sx; _modelMat[2]  = m20*sx; _modelMat[3]  = 0;
+  _modelMat[4]  = m01*sy; _modelMat[5]  = m11*sy; _modelMat[6]  = m21*sy; _modelMat[7]  = 0;
+  _modelMat[8]  = m02*sz; _modelMat[9]  = m12*sz; _modelMat[10] = m22*sz; _modelMat[11] = 0;
+  _modelMat[12] = tx;     _modelMat[13] = ty;     _modelMat[14] = tz;     _modelMat[15] = 1;
+  return _modelMat;
+}
+
+// Precompute rock world data
+let rockWorldData = [];
+let minableWorldData = [];
+
+function recomputeWorldData() {
+  treeVariantIndex = TREES.map((t, i) => {
+    const h = Math.floor((t.x * 7919 + t.z * 6271) * 1000) % activeBiome.treeVariants.length;
+    return h;
+  });
+  treeWorldPositions = TREES.map(t => {
+    const wx = -S + t.x * 2 * S;
+    const wz = -S + t.z * 2 * S;
+    const wy = getHillHeight(t.x, t.z);
+    return { x: wx, y: wy, z: wz };
+  });
+  rockWorldData = ROCKS.map((r, i) => {
+    const wx = -S + r.x * 2 * S;
+    const wz = -S + r.z * 2 * S;
+    const wy = getHillHeight(r.x, r.z);
+    const rockH = 0.175 * r.scale;
+    const meshIdx = i % ROCK_MESH_COUNT;
+    return { x: wx, y: wy + rockH * 0.5, z: wz, rotY: r.rotY, scale: r.scale, h: rockH, meshIdx };
+  });
+  minableWorldData = MINABLES.map(cluster => {
+    const baseWx = -S + cluster.x * 2 * S;
+    const baseWz = -S + cluster.z * 2 * S;
+    const baseWy = getHillHeight(cluster.x, cluster.z);
+    return {
+      clusterX: cluster.x, clusterZ: cluster.z,
+      cubes: cluster.cubes.map(c => {
+        const wx = baseWx + c.dx * 2 * S;
+        const wz = baseWz + c.dz * 2 * S;
+        const sy = c.sy * 0.7;
+        // Get terrain height at each cube's own position
+        const cubeU = cluster.x + c.dx;
+        const cubeV = cluster.z + c.dz;
+        const cubeWy = getHillHeight(cubeU, cubeV);
+        return {
+          x: wx, y: cubeWy + sy * 0.5, z: wz,
+          rotY: c.rotY, rotZ: c.rotZ,
+          sx: c.sx * 0.7, sy: sy, sz: c.sz * 0.7,
+          glowSize: Math.max(c.sx, c.sy, c.sz) * 0.7 * 1.8,
+          health: 1.0, mined: false,
+        };
+      }),
+    };
+  });
+  for (const cluster of minableWorldData) {
+    cluster.colliders = computeClusterColliders(cluster.cubes, 4);
+  }
+}
+recomputeWorldData();
+
+// --- Character (collision cylinder) ---
+// Cylinder: radius 0.15, height 0.5 (roughly half tree height)
+const CHAR_RADIUS = 0.15;
+const CHAR_HEIGHT = 0.5;
+const CHAR_SPEED = 4.0; // world units per second
+
+// Generate cylinder mesh (reuses cubeProg shader)
+const CYL_SEGS = 12;
+const cylVerts = [];
+const cylIdx = [];
+
+// Side faces
+for (let i = 0; i < CYL_SEGS; i++) {
+  const a0 = (i / CYL_SEGS) * Math.PI * 2;
+  const a1 = ((i + 1) / CYL_SEGS) * Math.PI * 2;
+  const c0 = Math.cos(a0), s0 = Math.sin(a0);
+  const c1 = Math.cos(a1), s1 = Math.sin(a1);
+  const nx0 = c0, nz0 = s0, nx1 = c1, nz1 = s1;
+  const base = cylVerts.length / 6;
+  // 4 verts per quad: bottom-left, bottom-right, top-right, top-left
+  cylVerts.push(
+    c0*0.5, -0.5, s0*0.5,  nx0, 0, nz0,
+    c1*0.5, -0.5, s1*0.5,  nx1, 0, nz1,
+    c1*0.5,  0.5, s1*0.5,  nx1, 0, nz1,
+    c0*0.5,  0.5, s0*0.5,  nx0, 0, nz0,
+  );
+  cylIdx.push(base, base+1, base+2, base, base+2, base+3);
+}
+
+// Top cap
+const topBase = cylVerts.length / 6;
+cylVerts.push(0, 0.5, 0,  0, 1, 0); // center
+for (let i = 0; i < CYL_SEGS; i++) {
+  const a = (i / CYL_SEGS) * Math.PI * 2;
+  cylVerts.push(Math.cos(a)*0.5, 0.5, Math.sin(a)*0.5,  0, 1, 0);
+}
+for (let i = 0; i < CYL_SEGS; i++) {
+  cylIdx.push(topBase, topBase + 1 + i, topBase + 1 + ((i + 1) % CYL_SEGS));
+}
+
+// Bottom cap
+const botBase = cylVerts.length / 6;
+cylVerts.push(0, -0.5, 0,  0, -1, 0);
+for (let i = 0; i < CYL_SEGS; i++) {
+  const a = (i / CYL_SEGS) * Math.PI * 2;
+  cylVerts.push(Math.cos(a)*0.5, -0.5, Math.sin(a)*0.5,  0, -1, 0);
+}
+for (let i = 0; i < CYL_SEGS; i++) {
+  cylIdx.push(botBase, botBase + 1 + ((i + 1) % CYL_SEGS), botBase + 1 + i);
+}
+
+const cylVertData = new Float32Array(cylVerts);
+const cylIdxData = new Uint16Array(cylIdx);
+const cylIdxCount = cylIdx.length;
+
+const cylVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, cylVBO);
+gl.bufferData(gl.ARRAY_BUFFER, cylVertData, gl.STATIC_DRAW);
+
+const cylIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cylIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cylIdxData, gl.STATIC_DRAW);
+
+// Character state
+const player = {
+  x: 0,  // world x
+  z: 0,  // world z
+  y: 0,  // computed from terrain
+};
+
+// WASD input tracking (use KeyCode for reliable multi-key)
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Gamepad input
+const gamepadState = { lx: 0, lz: 0 };
+const DEADZONE = 0.15;
+
+function pollGamepad() {
+  try {
+    const gamepads = navigator.getGamepads();
+    for (const gp of gamepads) {
+      if (!gp) continue;
+      let lx = gp.axes[0] || 0;
+      let ly = gp.axes[1] || 0;
+      if (Math.abs(lx) < DEADZONE) lx = 0;
+      if (Math.abs(ly) < DEADZONE) ly = 0;
+      gamepadState.lx = lx;
+      gamepadState.lz = ly;
+      return;
+    }
+  } catch(e) {}
+  gamepadState.lx = 0;
+  gamepadState.lz = 0;
+}
+
+// Convert world position to UV for terrain height lookup
+function worldToUV(wx, wz) {
+  return { u: (wx + S) / (2 * S), v: (wz + S) / (2 * S) };
+}
+
+function resolveCollisions() {
+  for (const t of treeWorldPositions) {
+    const dx = player.x - t.x, dz = player.z - t.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const minDist = CHAR_RADIUS + TREE_COLLISION_RADIUS;
+    if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
+  }
+  for (const r of rockWorldData) {
+    const dx = player.x - r.x, dz = player.z - r.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const minDist = CHAR_RADIUS + ROCK_COLLISION_RADIUS_BASE * r.scale;
+    if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
+  }
+  for (const cluster of minableWorldData) {
+    for (const col of cluster.colliders) {
+      const dx = player.x - col.x, dz = player.z - col.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const minDist = CHAR_RADIUS + col.radius;
+      if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
+    }
+  }
+  player.x = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.x));
+  player.z = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.z));
+}
+
+// --- Matrix helpers ---
+function ortho(left, right, bottom, top, near, far) {
+  const lr = 1 / (left - right);
+  const bt = 1 / (bottom - top);
+  const nf = 1 / (near - far);
+  return new Float32Array([
+    -2 * lr, 0, 0, 0,
+    0, -2 * bt, 0, 0,
+    0, 0, 2 * nf, 0,
+    (left + right) * lr, (top + bottom) * bt, (far + near) * nf, 1
+  ]);
+}
+
+function lookAt(eye, center, up) {
+  const zx = eye[0]-center[0], zy = eye[1]-center[1], zz = eye[2]-center[2];
+  let l = Math.sqrt(zx*zx+zy*zy+zz*zz);
+  const z = [zx/l, zy/l, zz/l];
+  const xx = up[1]*z[2]-up[2]*z[1], xy = up[2]*z[0]-up[0]*z[2], xz = up[0]*z[1]-up[1]*z[0];
+  l = Math.sqrt(xx*xx+xy*xy+xz*xz);
+  const x = [xx/l, xy/l, xz/l];
+  const y = [z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+  return new Float32Array([
+    x[0], y[0], z[0], 0,
+    x[1], y[1], z[1], 0,
+    x[2], y[2], z[2], 0,
+    -(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]),
+    -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+    -(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]),
+    1
+  ]);
+}
+
+// --- Interactive Camera ---
+let camRotY = Math.PI / 4;        // horizontal orbit angle
+let camRotX = Math.atan(1 / Math.sqrt(2)); // elevation (~35.26° isometric)
+let camDist = 8;  // ortho half-size (zoom level)
+let camTarget = [0, 0, 0];        // look-at point
+
+// Right-click drag to pan/orbit
+let isDragging = false;
+let lastMouse = [0, 0];
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 2) {
+    isDragging = true;
+    lastMouse = [e.clientX, e.clientY];
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  if (e.button === 2) isDragging = false;
+});
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - lastMouse[0];
+  const dy = e.clientY - lastMouse[1];
+  lastMouse = [e.clientX, e.clientY];
+
+  // Pan the target in the ground plane relative to camera orientation
+  const panSpeed = 0.02 * (camDist / 8);
+  const sinY = Math.sin(camRotY);
+  const cosY = Math.cos(camRotY);
+
+  // Right vector on ground plane
+  camTarget[0] -= (cosY * dx + sinY * dy) * panSpeed;
+  camTarget[2] -= (-sinY * dx + cosY * dy) * panSpeed;
+});
+
+// Scroll to zoom
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  camDist *= 1 + e.deltaY * 0.001;
+  camDist = Math.max(2, Math.min(20, camDist));
+}, { passive: false });
+
+// --- Fullscreen toggle ---
+const fsBtn = document.getElementById('fsBtn');
+const fsIcon = document.getElementById('fsIcon');
+
+const expandSVG = '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>';
+const shrinkSVG = '<polyline points="4 14 4 20 10 20"/><polyline points="20 10 20 4 14 4"/><line x1="14" y1="10" x2="20" y2="4"/><line x1="4" y1="20" x2="10" y2="14"/>';
+
+fsBtn.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+document.addEventListener('fullscreenchange', () => {
+  fsIcon.innerHTML = document.fullscreenElement ? shrinkSVG : expandSVG;
+});
+
+// --- Stats toggle ---
+const statsWrap = document.getElementById('statsWrap');
+const statsPanel = document.getElementById('stats');
+const statsToggle = document.getElementById('statsToggle');
+const statsArrow = document.getElementById('statsArrow');
+let statsOpen = true;
+
+statsToggle.addEventListener('click', () => {
+  statsOpen = !statsOpen;
+  if (statsOpen) {
+    statsPanel.style.display = '';
+    statsArrow.innerHTML = '<polyline points="15 18 9 12 15 6"/>';
+    statsToggle.title = 'Hide stats';
+  } else {
+    statsPanel.style.display = 'none';
+    statsArrow.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+    statsToggle.title = 'Show stats';
+  }
+});
+
+let showColliders = false;
+const colBtn = document.getElementById('colBtn');
+colBtn.addEventListener('click', () => {
+  showColliders = !showColliders;
+  colBtn.classList.toggle('active', showColliders);
+});
+
+// --- Biome HUD: populate config dropdown and handle switching ---
+const biomeNameEl = document.getElementById('biomeName');
+const configSelect = document.getElementById('configSelect');
+
+function populateConfigDropdown() {
+  configSelect.innerHTML = '';
+  const configs = activeBiome.configs;
+  for (let i = 0; i < configs.length; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = configs[i].id;
+    if (configs[i] === activeConfig) opt.selected = true;
+    configSelect.appendChild(opt);
+  }
+  biomeNameEl.textContent = activeBiome.name.replace(' Biome', '');
+}
+populateConfigDropdown();
+
+configSelect.addEventListener('change', () => {
+  const idx = parseInt(configSelect.value);
+  // Find current biome name from BIOMES
+  let biomeName = 'rock';
+  for (const [k, v] of Object.entries(BIOMES)) {
+    if (v === activeBiome) { biomeName = k; break; }
+  }
+  loadBiomeConfig(biomeName, idx);
+  recomputeWorldData();
+  populateConfigDropdown();
+});
+
+gl.enable(gl.DEPTH_TEST);
+
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let drawCalls = 0;
+let tris = 0;
+let frameMs = 0;
+let frameMsMin = Infinity;
+let frameMsMax = 0;
+const statsEl = document.getElementById('stats');
+let statsText = '';
+
+// Tracked draw call
+function draw(mode, count, type, offset) {
+  gl.drawElements(mode, count, type, offset);
+  drawCalls++;
+  tris += count / 3;
+}
+
+function render() {
+  const frameStart = performance.now();
+  drawCalls = 0;
+  tris = 0;
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    const gpu = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = gpu ? gl.getParameter(gpu.UNMASKED_RENDERER_WEBGL) : 'unknown';
+    statsText = `${frameCount} FPS | ${frameMs.toFixed(1)}ms (${frameMsMin.toFixed(1)}-${frameMsMax.toFixed(1)})`;
+    // drawCalls/tris filled from previous frame
+    frameCount = 0;
+    lastFpsTime = now;
+    frameMsMin = Infinity;
+    frameMsMax = 0;
+  }
+  gl.clearColor(0.03, 0.03, 0.05, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // --- Delta time ---
+  const dt = Math.min((now - (render.lastTime || now)) / 1000, 0.05); // cap at 50ms
+  render.lastTime = now;
+
+  // --- Update character (WASD + gamepad movement) ---
+  pollGamepad();
+  // Screen-aligned: W=up, S=down, A=left, D=right
+  // Isometric: screen-up=(-x,-z), screen-right=(+x,-z)
+  let mx = 0, mz = 0;
+  if (keys['KeyW']) { mx -= 1; mz -= 1; }
+  if (keys['KeyS']) { mx += 1; mz += 1; }
+  if (keys['KeyA']) { mx -= 1; mz += 1; }
+  if (keys['KeyD']) { mx += 1; mz -= 1; }
+  if (mx !== 0 || mz !== 0) {
+    const len = Math.sqrt(mx * mx + mz * mz);
+    mx /= len; mz /= len;
+  }
+  // Gamepad: rotate stick input by 45° to match isometric view
+  if (gamepadState.lx !== 0 || gamepadState.lz !== 0) {
+    const slx = gamepadState.lx, sly = gamepadState.lz;
+    mx += slx + sly;   // screen-right + screen-down -> world +x
+    mz += -slx + sly;  // screen-down - screen-right -> world +z
+    const cLen = Math.sqrt(mx * mx + mz * mz);
+    if (cLen > 1) { mx /= cLen; mz /= cLen; }
+  }
+  if (mx !== 0 || mz !== 0) {
+    player.x += mx * CHAR_SPEED * dt;
+    player.z += mz * CHAR_SPEED * dt;
+    // Clamp to terrain bounds
+    player.x = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.x));
+    player.z = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.z));
+  }
+  resolveCollisions();
+  // Snap to terrain height
+  const pUV = worldToUV(player.x, player.z);
+  player.y = getHillHeight(pUV.u, pUV.v);
+
+  const aspect = canvas.width / canvas.height;
+  const proj = ortho(-camDist * aspect, camDist * aspect, -camDist, camDist, -50, 50);
+
+  // Fixed isometric direction (no distance needed for ortho, just direction)
+  const isoDist = 20;
+  const cx = camTarget[0] + isoDist * Math.cos(camRotX) * Math.sin(camRotY);
+  const cy = camTarget[1] + isoDist * Math.sin(camRotX);
+  const cz = camTarget[2] + isoDist * Math.cos(camRotX) * Math.cos(camRotY);
+  const view = lookAt([cx, cy, cz], camTarget, [0, 1, 0]);
+
+  // --- Draw ground ---
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
+  gl.enableVertexAttribArray(aUV);
+  gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
+  gl.uniformMatrix4fv(uProj, false, proj);
+  gl.uniformMatrix4fv(uView, false, view);
+  draw(gl.TRIANGLES, idxCount, gl.UNSIGNED_SHORT, 0);
+
+  // --- Draw trees + character sorted back-to-front ---
+  // viewDir points from scene toward camera eye; larger dot = closer to viewer
+  const viewDirX = Math.cos(camRotX) * Math.sin(camRotY);
+  const viewDirZ = Math.cos(camRotX) * Math.cos(camRotY);
+
+  const sortables = [];
+  if (treesLoaded === treeVariants.length) {
+    for (let i = 0; i < treeWorldPositions.length; i++) {
+      const t = treeWorldPositions[i];
+      sortables.push({ type: 'tree', sortKey: t.x * viewDirX + t.z * viewDirZ + TREE_COLLISION_RADIUS, index: i, x: t.x, y: t.y, z: t.z });
+    }
+  }
+  // Rocks: sort by collider center
+  for (let i = 0; i < rockWorldData.length; i++) {
+    const r = rockWorldData[i];
+    const rr = ROCK_COLLISION_RADIUS_BASE * r.scale;
+    sortables.push({ type: 'rock', sortKey: r.x * viewDirX + r.z * viewDirZ + rr, rock: r });
+  }
+  // Minable cubes: sort individually by leading edge (center + half-extent toward camera)
+  const time = now * 0.001;
+  for (const cluster of minableWorldData) {
+    for (const c of cluster.cubes) {
+      if (c.mined) continue;
+      const cubeRadius = Math.max(c.sx, c.sz) * 0.5;
+      sortables.push({ type: 'crystal', sortKey: c.x * viewDirX + c.z * viewDirZ + cubeRadius, cube: c, time });
+    }
+  }
+  // Player sort key = front bottom edge (center + radius toward camera)
+  sortables.push({ type: 'player', sortKey: player.x * viewDirX + player.z * viewDirZ + CHAR_RADIUS });
+  // Sort ascending: smallest (furthest from viewer) drawn first
+  sortables.sort((a, b) => a.sortKey - b.sortKey);
+
+  let lastType = '';
+  for (const obj of sortables) {
+    if (obj.type === 'tree') {
+      if (lastType !== 'tree') {
+        if (lastType === 'tree') gl.disable(gl.BLEND);
+        gl.depthMask(false);
+        gl.useProgram(treeProg);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.bindBuffer(gl.ARRAY_BUFFER, treeVBO);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, treeIBO);
+        gl.enableVertexAttribArray(tAPos);
+        gl.vertexAttribPointer(tAPos, 3, gl.FLOAT, false, 5 * 4, 0);
+        gl.enableVertexAttribArray(tAUV);
+        gl.vertexAttribPointer(tAUV, 2, gl.FLOAT, false, 5 * 4, 3 * 4);
+        gl.uniformMatrix4fv(tUProj, false, proj);
+        gl.uniformMatrix4fv(tUView, false, view);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(tUTreeTex, 0);
+        lastType = 'tree';
+      }
+      gl.bindTexture(gl.TEXTURE_2D, treeTextures[treeVariantIndex[obj.index]]);
+      gl.uniform3f(tUTreePos, obj.x, obj.y, obj.z);
+      gl.uniform1f(tUTreeScale, 1.0);
+      draw(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+    } else if (obj.type === 'rock') {
+      if (lastType === 'tree') gl.disable(gl.BLEND);
+      gl.depthMask(true);
+      gl.useProgram(cubeProg);
+      const r = obj.rock;
+      const rm = rockMeshes[r.meshIdx];
+      gl.bindBuffer(gl.ARRAY_BUFFER, rm.vbo);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, rm.ibo);
+      gl.enableVertexAttribArray(cAPos);
+      gl.vertexAttribPointer(cAPos, 3, gl.FLOAT, false, 6 * 4, 0);
+      gl.enableVertexAttribArray(cANormal);
+      gl.vertexAttribPointer(cANormal, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+      gl.uniformMatrix4fv(cUProj, false, proj);
+      gl.uniformMatrix4fv(cUView, false, view);
+      gl.uniform3f(cUColor, 0.28, 0.26, 0.24);
+      gl.uniform1f(cUEmissive, 0.0);
+      gl.uniform1f(cUIsRock, 1.0);
+      const model = buildModelMatrix(r.x, r.y, r.z, r.rotY, 0.0, r.h);
+      gl.uniformMatrix4fv(cUModel, false, model);
+      draw(gl.TRIANGLES, rm.triCount, gl.UNSIGNED_SHORT, 0);
+      lastType = 'rock';
+
+    } else if (obj.type === 'crystal') {
+      if (lastType === 'tree') gl.disable(gl.BLEND);
+      gl.depthMask(true);
+      if (lastType !== 'crystal') {
+        gl.useProgram(cubeProg);
+        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVBO);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIBO);
+        gl.enableVertexAttribArray(cAPos);
+        gl.vertexAttribPointer(cAPos, 3, gl.FLOAT, false, 6 * 4, 0);
+        gl.enableVertexAttribArray(cANormal);
+        gl.vertexAttribPointer(cANormal, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+        gl.uniformMatrix4fv(cUProj, false, proj);
+        gl.uniformMatrix4fv(cUView, false, view);
+      }
+      const c = obj.cube;
+      const pulse = 0.15 + 0.08 * Math.sin(obj.time * 1.5 + c.x * 3.0 + c.z * 5.0);
+      gl.uniform3f(cUColor, 0.2, 0.35, 0.65);
+      gl.uniform1f(cUEmissive, pulse);
+      gl.uniform1f(cUIsRock, 0.0);
+      const model = buildModelMatrix(c.x, c.y, c.z, c.rotY, c.rotZ, c.sx, c.sy, c.sz);
+      gl.uniformMatrix4fv(cUModel, false, model);
+      draw(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+      lastType = 'crystal';
+
+    } else {
+      // Player
+      if (lastType === 'tree') gl.disable(gl.BLEND);
+      gl.depthMask(true);
+      gl.useProgram(cubeProg);
+      gl.bindBuffer(gl.ARRAY_BUFFER, cylVBO);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cylIBO);
+      gl.enableVertexAttribArray(cAPos);
+      gl.vertexAttribPointer(cAPos, 3, gl.FLOAT, false, 6 * 4, 0);
+      gl.enableVertexAttribArray(cANormal);
+      gl.vertexAttribPointer(cANormal, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+      gl.uniformMatrix4fv(cUProj, false, proj);
+      gl.uniformMatrix4fv(cUView, false, view);
+      gl.uniform3f(cUColor, 0.7, 0.85, 0.3);
+      gl.uniform1f(cUEmissive, 0.05);
+      gl.uniform1f(cUIsRock, 0.0);
+      const charModel = buildModelMatrix(
+        player.x, player.y + CHAR_HEIGHT * 0.5, player.z, 0, 0,
+        CHAR_RADIUS * 2, CHAR_HEIGHT, CHAR_RADIUS * 2
+      );
+      gl.uniformMatrix4fv(cUModel, false, charModel);
+      draw(gl.TRIANGLES, cylIdxCount, gl.UNSIGNED_SHORT, 0);
+      lastType = 'player';
+    }
+  }
+  if (lastType === 'tree') gl.disable(gl.BLEND);
+  gl.depthMask(true);
+
+  // --- DEBUG: Draw collider outlines when toggled (on top of everything) ---
+  if (showColliders) {
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(dbgProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, dbgRingVBO);
+    gl.enableVertexAttribArray(dbgAPos);
+    gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(dbgUProj, false, proj);
+    gl.uniformMatrix4fv(dbgUView, false, view);
+
+    // Tree colliders - red
+    gl.uniform3f(dbgUColor, 1.0, 0.15, 0.1);
+    for (const t of treeWorldPositions) {
+      gl.uniform3f(dbgUCenter, t.x, t.y, t.z);
+      gl.uniform1f(dbgURadius, TREE_COLLISION_RADIUS);
+      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+      drawCalls++; tris += DBG_RING_SEGS;
+    }
+
+    // Rock colliders - yellow
+    gl.uniform3f(dbgUColor, 1.0, 0.85, 0.1);
+    for (const r of rockWorldData) {
+      gl.uniform3f(dbgUCenter, r.x, r.y - r.h * 0.5, r.z);
+      gl.uniform1f(dbgURadius, ROCK_COLLISION_RADIUS_BASE * r.scale);
+      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+      drawCalls++; tris += DBG_RING_SEGS;
+    }
+
+    // Crystal cluster colliders - purple
+    gl.uniform3f(dbgUColor, 0.7, 0.15, 0.9);
+    for (const cluster of minableWorldData) {
+      const baseY = getHillHeight(cluster.clusterX, cluster.clusterZ);
+      for (const col of cluster.colliders) {
+        gl.uniform3f(dbgUCenter, col.x, baseY, col.z);
+        gl.uniform1f(dbgURadius, col.radius);
+        gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+        drawCalls++; tris += DBG_RING_SEGS;
+      }
+    }
+
+    // Player collider - lime green
+    gl.uniform3f(dbgUColor, 0.3, 1.0, 0.1);
+    gl.uniform3f(dbgUCenter, player.x, player.y, player.z);
+    gl.uniform1f(dbgURadius, CHAR_RADIUS);
+    gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+    drawCalls++; tris += DBG_RING_SEGS;
+
+    gl.enable(gl.DEPTH_TEST);
+  }
+
+  // --- Draw glow billboards for crystals ---
+  gl.useProgram(glowProg);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive blending
+  gl.depthMask(false); // don't write depth
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, glowIBO);
+  gl.enableVertexAttribArray(gAPos);
+  gl.vertexAttribPointer(gAPos, 3, gl.FLOAT, false, 3 * 4, 0);
+
+  gl.uniformMatrix4fv(gUProj, false, proj);
+  gl.uniformMatrix4fv(gUView, false, view);
+  gl.uniform3f(gUGlowColor, 0.15, 0.25, 0.55);
+
+  for (const cluster of minableWorldData) {
+    for (const c of cluster.cubes) {
+      if (c.mined) continue;
+      const pulse = 0.12 + 0.05 * Math.sin(time * 1.5 + c.x * 3.0 + c.z * 5.0);
+      gl.uniform3f(gUGlowPos, c.x, c.y, c.z);
+      gl.uniform1f(gUGlowSize, c.glowSize);
+      gl.uniform1f(gUGlowAlpha, pulse);
+      draw(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    }
+  }
+
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+
+  // --- Update stats ---
+  frameMs = performance.now() - frameStart;
+  frameMsMin = Math.min(frameMsMin, frameMs);
+  frameMsMax = Math.max(frameMsMax, frameMs);
+  statsEl.textContent = statsText + `\n${drawCalls} draws | ${tris.toLocaleString()} tris`;
+
+  requestAnimationFrame(render);
+}
+render();
+</script>
+
+
+</body></html>
