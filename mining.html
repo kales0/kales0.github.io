@@ -10,22 +10,24 @@ body { background: #08080c; overflow: hidden; display: flex; align-items: center
 canvas { display: block; }
 #fsBtn {
   position: fixed; top: 14px; right: 14px; z-index: 10;
-  width: 38px; height: 38px; border: none; border-radius: 6px;
-  background: rgba(255,255,255,0.08); backdrop-filter: blur(6px);
+  width: 38px; height: 38px; border: 1px solid rgba(255,255,255,0.22); border-radius: 6px;
+  background: linear-gradient(180deg, rgba(180,180,190,0.25) 0%, rgba(10,10,15,0.65) 100%);
+  backdrop-filter: blur(6px);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
-#fsBtn:hover { background: rgba(255,255,255,0.16); }
-#statsToggle:hover { background: rgba(255,255,255,0.16); }
+#fsBtn:hover { background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%); border-color: rgba(255,255,255,0.25); }
+#statsToggle:hover { background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%); border-color: rgba(255,255,255,0.25); }
 #fsBtn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.7); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #colBtn {
   position: fixed; top: 14px; right: 58px; z-index: 10;
-  width: 38px; height: 38px; border: none; border-radius: 6px;
-  background: rgba(255,255,255,0.08); backdrop-filter: blur(6px);
+  width: 38px; height: 38px; border: 1px solid rgba(255,255,255,0.22); border-radius: 6px;
+  background: linear-gradient(180deg, rgba(180,180,190,0.25) 0%, rgba(10,10,15,0.65) 100%);
+  backdrop-filter: blur(6px);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
-#colBtn:hover { background: rgba(255,255,255,0.16); }
+#colBtn:hover { background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%); border-color: rgba(255,255,255,0.25); }
 #colBtn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.7); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #colBtn.active { background: rgba(255,80,80,0.25); }
 #biomeHud {
@@ -39,14 +41,15 @@ canvas { display: block; }
 }
 #configDropdown {
   position: relative; display: inline-block; cursor: pointer;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(180deg, rgba(180,180,190,0.25) 0%, rgba(10,10,15,0.65) 100%);
+  border: 1px solid rgba(255,255,255,0.22);
   border-radius: 5px; padding: 0 22px 0 8px;
   font: 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: rgba(255,255,255,0.5); transition: background 0.2s, border-color 0.2s;
   user-select: none; min-width: 28px; text-align: center;
   height: 38px; line-height: 38px;
 }
-#configDropdown:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+#configDropdown:hover { background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%); border-color: rgba(255,255,255,0.25); }
 #configOptions {
   display: none; position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
   background: rgba(20,20,30,0.95); border: 1px solid rgba(255,255,255,0.1);
@@ -59,18 +62,19 @@ canvas { display: block; }
   text-align: center; transition: background 0.15s; line-height: 1;
 }
 .cfg-opt:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
-.cfg-opt.active { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.08); }
+.cfg-opt.active { color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.35); }
 </style>
 </head>
 <body>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 0.0ms (0.0-2.0)
-168 draws | 13,720 tris</div>
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 1.0ms (0.0-3.0)
+1179 draws | 83,918 tris
+zoom -2</div>
   <button id="statsToggle" title="Hide stats" style="
-    width:27px;height:38px;border:none;border-radius:6px;
-    background:rgba(255,255,255,0.08);backdrop-filter:blur(6px);
+    width:27px;height:38px;border:1px solid rgba(255,255,255,0.22);border-radius:6px;
+    background:linear-gradient(180deg, rgba(180,180,190,0.25) 0%, rgba(10,10,15,0.65) 100%);backdrop-filter:blur(6px);
     cursor:pointer;display:flex;align-items:center;justify-content:center;
-    transition:background 0.2s;flex-shrink:0;padding:0;
+    transition:background 0.2s,border-color 0.2s;flex-shrink:0;padding:0;
   ">
     <svg id="statsArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="15 18 9 12 15 6"></polyline>
@@ -78,12 +82,20 @@ canvas { display: block; }
   </button>
 </div>
 <div id="biomeHud">
-  <span style="color:rgba(255,255,255,0.3);font-size:11px;">Biome:</span>
-  <span id="biomeName">Rock</span>
+  <div style="display:flex;flex-direction:column;gap:2px;">
+    <div>
+      <span style="color:rgba(255,255,255,0.3);font-size:11px;">Biome:</span>
+      <span id="biomeName">Forest</span>
+    </div>
+    <div>
+      <span style="color:rgba(255,255,255,0.3);font-size:11px;">Region:</span>
+      <span id="regionCoords" style="color:rgba(255,255,255,0.45);font-size:11px;">0, 0</span>
+    </div>
+  </div>
   <div id="configDropdown">
-    <div id="configSelected"></div>
-    <svg width="10" height="6" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);pointer-events:none;" fill="none"><path d="M1 1l4 4 4-4" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div id="configOptions"></div>
+    <div id="configSelected">1</div>
+    <svg width="10" height="6" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);pointer-events:none;" fill="none"><path d="M1 1l4 4 4-4" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    <div id="configOptions"><div class="cfg-opt active" data-idx="0">1</div></div>
   </div>
 </div>
 <button id="colBtn" title="Toggle colliders">
@@ -99,7 +111,7 @@ canvas { display: block; }
     <line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>
   </svg>
 </button>
-<canvas id="gl" width="951" height="1017"></canvas>
+<canvas id="gl" width="2486" height="1326" style="width: 1906px; height: 1017px;"></canvas>
 <script>
 const canvas = document.getElementById('gl');
 const gl = canvas.getContext('webgl');
@@ -121,12 +133,14 @@ const vsSource = `
   attribute vec2 aUV;
   uniform mat4 uProj;
   uniform mat4 uView;
+  uniform vec3 uWorldOffset;
   varying vec2 vUV;
   varying vec3 vWorldPos;
   void main() {
+    vec3 pos = aPos + uWorldOffset;
     vUV = aUV;
-    vWorldPos = aPos;
-    gl_Position = uProj * uView * vec4(aPos, 1.0);
+    vWorldPos = pos;
+    gl_Position = uProj * uView * vec4(pos, 1.0);
   }
 `;
 
@@ -134,6 +148,10 @@ const fsSource = `
   precision mediump float;
   varying vec2 vUV;
   varying vec3 vWorldPos;
+  uniform vec3 uPlayerPos;
+  uniform float uGroundType; // 0.0 = rock, 1.0 = grass
+  uniform float uMineralOnly; // 0.0 = normal ground, 1.0 = mineral overlay only
+  uniform sampler2D uMineralMask; // per-region mineral mask texture
 
   // Hash functions for procedural noise
   float hash(vec2 p) {
@@ -180,27 +198,16 @@ const fsSource = `
     return minDist;
   }
 
-  void main() {
-    vec2 uv = vUV;
-
-    // Base rock value
+  vec3 rockGround(vec2 uv) {
     float rock = rockTexture(uv);
-    // Quantize for pixelated retro look
     rock = floor(rock * 6.0) / 6.0;
-
-    // Dark stone palette
     vec3 darkRock  = vec3(0.22, 0.20, 0.19);
     vec3 midRock   = vec3(0.30, 0.27, 0.24);
     vec3 lightRock = vec3(0.38, 0.34, 0.30);
-
     vec3 color = mix(darkRock, midRock, rock);
-
-    // Lighter pixel highlights
     float highlight = pixelNoise(uv + 5.5, 24.0);
     highlight = step(0.82, highlight);
     color = mix(color, lightRock, highlight * 0.5);
-
-    // Mineral flecks
     float fleck = pixelNoise(uv + 99.9, 48.0);
     if (fleck > 0.93) {
       float fleckType = pixelNoise(uv + 44.4, 48.0);
@@ -212,14 +219,206 @@ const fsSource = `
         color = mix(color, vec3(0.35, 0.25, 0.30), 0.3);
       }
     }
-
-    // Crack overlay
     float crk = cracks(uv, 6.0);
     crk = floor(crk * 5.0) / 5.0;
     float crkLine = smoothstep(0.0, 0.08, crk);
     color *= mix(0.78, 1.0, crkLine);
+    return color;
+  }
 
-    gl_FragColor = vec4(color, 1.0);
+  vec3 grassGround(vec2 uv) {
+    // Base grass: coarse pixelated pattern at low res
+    float base = pixelNoise(uv, 10.0);
+    // Second layer at slightly different scale for variety
+    float mid = pixelNoise(uv + 3.14, 18.0);
+    // Fine detail
+    float fine = pixelNoise(uv + 7.77, 32.0);
+
+    float n = base * 0.5 + mid * 0.3 + fine * 0.2;
+    // Quantize hard for chunky pixel look
+    n = floor(n * 5.0) / 5.0;
+
+    // Grass palette: dark green, mid green, yellow-green, brown
+    vec3 darkGrass  = vec3(0.18, 0.28, 0.10);
+    vec3 midGrass   = vec3(0.26, 0.38, 0.14);
+    vec3 lightGrass = vec3(0.34, 0.44, 0.18);
+    vec3 dryGrass   = vec3(0.38, 0.34, 0.16);
+    vec3 dirt       = vec3(0.30, 0.22, 0.12);
+
+    vec3 color = mix(darkGrass, midGrass, n);
+
+    // Lighter grass highlights
+    float hl = pixelNoise(uv + 22.2, 14.0);
+    hl = floor(hl * 4.0) / 4.0;
+    color = mix(color, lightGrass, step(0.7, hl) * 0.5);
+
+    // Dry/yellow patches - medium blobs
+    float dry = pixelNoise(uv + 55.5, 6.0);
+    dry = step(0.72, dry);
+    color = mix(color, dryGrass, dry * 0.6);
+
+    // Dirt/brown patches - scattered, irregular
+    float dirtPatch = pixelNoise(uv + 88.8, 8.0);
+    float dirtFine = pixelNoise(uv + 33.3, 20.0);
+    float dirtMask = step(0.78, dirtPatch) * step(0.4, dirtFine);
+    color = mix(color, dirt, dirtMask * 0.7);
+
+    // Tiny dark spots (shadow between blades)
+    float shadow = pixelNoise(uv + 11.11, 40.0);
+    color *= mix(1.0, 0.82, step(0.88, shadow));
+
+    return color;
+  }
+
+  // Blue mineral ground texture — larger blocks, brighter, emissive to match crystals
+  // Returns vec4: rgb color + emissive strength in alpha
+  vec4 mineralGround(vec2 worldXZ) {
+    vec2 wc = worldXZ * 0.42; // between old 0.35 (too big) and 0.5 (too small)
+
+    float base = pixelNoise(wc, 12.0);
+    float mid = pixelNoise(wc + 5.5, 20.0);
+    float n = base * 0.6 + mid * 0.4;
+    n = floor(n * 5.0) / 5.0;
+
+    // Lightened palette, desaturated for contrast against crystals
+    vec3 deepBlue   = vec3(0.12, 0.17, 0.32);
+    vec3 midBlue    = vec3(0.17, 0.26, 0.46);
+    vec3 brightBlue = vec3(0.12, 0.20, 0.48);
+    vec3 glowBlue   = vec3(0.14, 0.24, 0.55);
+
+    vec3 color = mix(deepBlue, midBlue, n);
+
+    // Bright patches
+    float hl = pixelNoise(wc + 17.7, 14.0);
+    color = mix(color, brightBlue, step(0.72, hl) * 0.55);
+
+    // Glowing flecks
+    float fleck = pixelNoise(wc + 44.4, 22.0);
+    float fleckMask = step(0.85, fleck);
+    color = mix(color, glowBlue, fleckMask * 0.6);
+
+    // Emissive: subtle base glow + mild on flecks
+    float emissive = 0.03 + fleckMask * 0.05;
+
+    return vec4(color, emissive);
+  }
+
+  // Sample mineral mask, snapped to block grid to prevent slivers
+  float mineralMask(vec2 uv, vec3 worldPos) {
+    // Snap to the same block grid used by edge dissolution noise
+    // pixelNoise uses floor(pos * scale * freq), so snap worldPos the same way
+    float sf = 0.42 * 14.0; // scale * freq from edge noise
+    vec2 blockCenter = (floor(worldPos.xz * sf) + 0.5) / sf;
+    // Convert world block center to UV: world = offset + (-S + uv * 2*S)
+    // We don't have offset in shader, but uv tracks linearly with world
+    // So snap uv by the same block size in UV space
+    float blockSizeUV = 1.0 / (sf * 10.0); // 10.0 = REGION_SIZE / (2*S) = 2*S
+    vec2 snappedUV = (floor(uv / blockSizeUV) + 0.5) * blockSizeUV;
+    vec2 muv = clamp(snappedUV, 0.0, 1.0);
+    return texture2D(uMineralMask, muv).r;
+  }
+
+  // Edge blending: the core region (UV 0-1) is always fully opaque.
+  // The overlap extensions (UV outside 0-1) use a world-space blocky
+  // pattern to interleave with the neighbor's overlap, creating a
+  // ragged pixelated transition.
+  float edgeMask(vec2 uv, vec3 worldPos) {
+    // If fully inside the 0-1 region, always solid
+    if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) return 1.0;
+
+    // We're in the overlap zone. Use world-space blocky noise to decide
+    // which region "owns" this pixel.
+    float blockScale = 1.2; // ~12 blocks per 10-unit region
+    vec2 wc = worldPos.xz * blockScale;
+
+    // For X overlap: are we past the left (uv.x < 0) or right (uv.x > 1) edge?
+    // For Z overlap: are we past the top (uv.y < 0) or bottom (uv.y > 1) edge?
+    float ax = 1.0; // alpha contribution from x-axis
+    float az = 1.0; // alpha contribution from z-axis
+
+    float overlap = 0.15;
+
+    if (uv.x < 0.0) {
+      float t = -uv.x / overlap; // 0 at edge, 1 at max extension
+      float noise = pixelNoise(wc, 1.0);
+      ax = step(t, 1.0 - noise); // fade out further from edge, blocky
+    } else if (uv.x > 1.0) {
+      float t = (uv.x - 1.0) / overlap;
+      float noise = pixelNoise(wc, 1.0);
+      ax = step(t, noise); // complement of neighbor's left overlap
+    }
+
+    if (uv.y < 0.0) {
+      float t = -uv.y / overlap;
+      float noise = pixelNoise(wc + 33.3, 1.0);
+      az = step(t, 1.0 - noise);
+    } else if (uv.y > 1.0) {
+      float t = (uv.y - 1.0) / overlap;
+      float noise = pixelNoise(wc + 33.3, 1.0);
+      az = step(t, noise);
+    }
+
+    return ax * az;
+  }
+
+  void main() {
+    vec2 uv = vUV;
+
+    if (uMineralOnly > 0.5) {
+      // Sample prebaked mineral texture (RGB = color, A = emissive*4)
+      vec4 baked = texture2D(uMineralMask, vUV);
+      if (baked.a < 0.004 && baked.r < 0.004) discard; // transparent = hole or no mineral
+      vec3 color = baked.rgb;
+      float emissive = baked.a * 0.25; // undo the *4 scaling
+
+      // Player proximity shadow (kept real-time)
+      float dx = vWorldPos.x - uPlayerPos.x;
+      float dz = vWorldPos.z - uPlayerPos.z;
+      float dist = sqrt(dx * dx + dz * dz);
+      float shadow = smoothstep(3.0, 12.0, dist);
+      vec3 shadowed = color * mix(1.0, 0.55, shadow);
+
+      float worldHalf = 15.0;
+      float fadeStart = 3.0;
+      float edgeDist = min(min(worldHalf - vWorldPos.x, worldHalf + vWorldPos.x),
+                           min(worldHalf - vWorldPos.z, worldHalf + vWorldPos.z));
+      float worldEdgeShadow = smoothstep(0.0, fadeStart, edgeDist);
+      shadowed *= mix(0.625, 1.0, worldEdgeShadow);
+
+      // Add emissive glow (not affected by shadow)
+      color = shadowed + baked.rgb * emissive;
+
+      gl_FragColor = vec4(color, 1.0);
+      return;
+    }
+
+    // Normal ground pass (no mineral texture)
+    vec3 color;
+    if (uGroundType < 0.5) {
+      color = rockGround(uv);
+    } else {
+      color = grassGround(uv);
+    }
+
+    // Region shadow: darken terrain further from player
+    float dx = vWorldPos.x - uPlayerPos.x;
+    float dz = vWorldPos.z - uPlayerPos.z;
+    float dist = sqrt(dx * dx + dz * dz);
+    float shadow = smoothstep(3.0, 12.0, dist);
+    color *= mix(1.0, 0.55, shadow);
+
+    // Blocky alpha mask at region edges
+    float alpha = edgeMask(uv, vWorldPos);
+
+    // Darken at world edges (outer boundary of the grid)
+    float worldHalf = 15.0; // (GRID_HALF + 0.5) * REGION_SIZE
+    float fadeStart = 3.0;  // start darkening this far from edge
+    float edgeDist = min(min(worldHalf - vWorldPos.x, worldHalf + vWorldPos.x),
+                         min(worldHalf - vWorldPos.z, worldHalf + vWorldPos.z));
+    float worldEdgeShadow = smoothstep(0.0, fadeStart, edgeDist);
+    color *= mix(0.625, 1.0, worldEdgeShadow);
+
+    gl_FragColor = vec4(color, alpha);
   }
 `;
 
@@ -247,6 +446,11 @@ const aPos = gl.getAttribLocation(prog, 'aPos');
 const aUV = gl.getAttribLocation(prog, 'aUV');
 const uProj = gl.getUniformLocation(prog, 'uProj');
 const uView = gl.getUniformLocation(prog, 'uView');
+const uWorldOffset = gl.getUniformLocation(prog, 'uWorldOffset');
+const uPlayerPos = gl.getUniformLocation(prog, 'uPlayerPos');
+const uGroundType = gl.getUniformLocation(prog, 'uGroundType');
+const uMineralOnly = gl.getUniformLocation(prog, 'uMineralOnly');
+const uMineralMask = gl.getUniformLocation(prog, 'uMineralMask');
 
 // ============================================================
 // BIOME REGISTRY
@@ -257,9 +461,77 @@ const uView = gl.getUniformLocation(prog, 'uView');
 const BIOMES = {
   rock: {
     name: 'Rock Biome',
-    // Terrain shape shared across all configs of this biome
-    hills: [
-      // Back region (z 0.05–0.40) - dense cluster
+    // --------------------------------------------------------
+    // Generation rules used to produce each static config.
+    // Apply these with a seeded PRNG to create new configs.
+    // The static data below was generated from these rules
+    // and should not be regenerated — only new configs use them.
+    // --------------------------------------------------------
+    generationRules: {
+      hills: {
+        count: { min: 7, max: 13 },
+        x: { min: 0.10, max: 0.90 },
+        z: { distribution: 'weighted', // 45% back, 30% mid, 25% front
+          back:  { range: [0.05, 0.40], weight: 0.45 },
+          mid:   { range: [0.35, 0.60], weight: 0.30 },
+          front: { range: [0.60, 0.90], weight: 0.25 },
+        },
+        radius: { min: 0.18, max: 0.40 },
+        height: { // base determined by z-zone, then random addition
+          backBase: 0.40, midBase: 0.25, frontBase: 0.12,
+          randomAdd: { min: 0.0, max: 0.30 },
+        },
+      },
+      trees: {
+        clusterCount: { min: 8, max: 12 },
+        treesPerCluster: { min: 4, max: 11 },
+        totalRange: { min: 46, max: 76 }, // observed across configs
+        clusterCenter: { x: [0.05, 0.95], z: [0.05, 0.95] },
+        intraClusterSpacing: { min: 0.025, max: 0.060 },
+        clusterRadius: 0.12, // max distance from cluster center to member
+      },
+      rocks: {
+        count: { min: 8, max: 14 },
+        x: { min: 0.05, max: 0.95 },
+        z: { min: 0.05, max: 0.95 },
+        scale: { min: 0.60, max: 1.00 },
+        rotY: { min: 0.0, max: 6.28 }, // full rotation
+      },
+      minables: {
+        clusterCount: { min: 2, max: 5 },
+        cubesPerCluster: { min: 8, max: 15 },
+        clusterCenter: { x: [0.10, 0.90], z: [0.10, 0.90] },
+        cube: {
+          dx: { min: -0.065, max: 0.065 },
+          dz: { min: -0.065, max: 0.065 },
+          sx: { min: 0.10, max: 0.32 },
+          sy: { min: 0.12, max: 0.28 },
+          sz: { min: 0.10, max: 0.24 },
+          rotY: { min: 0.0, max: 6.28 },
+          rotZ: { min: -0.28, max: 0.28 },
+        },
+        cubeScaleFactor: 0.7, // applied at build time to sx/sy/sz
+        glowSizeMultiplier: 1.8, // max(sx,sy,sz) * scaleFactor * this
+      },
+    },
+    // ---- ROCK BIOME HILL GENERATION RULES ----
+    // When generating new rock configs, follow these rules for hills:
+    //   - Number of hills: 7-13 per config (vary for diversity)
+    //   - Hill x position: 0.10 to 0.90 (avoid extreme edges)
+    //   - Hill z distribution (weighted toward back):
+    //       45% chance: back region,  z = 0.05 to 0.40
+    //       30% chance: mid region,   z = 0.35 to 0.60
+    //       25% chance: front region, z = 0.60 to 0.90
+    //   - Radius: 0.18 to 0.40
+    //   - Height varies by z region + random 0.00-0.30:
+    //       back (z < 0.35):  base 0.40, total ~0.40-0.70
+    //       mid (z 0.35-0.60): base 0.25, total ~0.25-0.55
+    //       front (z > 0.60): base 0.12, total ~0.12-0.42
+    //   - Config 5 (rock_5, array index 4) uses defaultHills — do NOT change
+    //   - Hills blend across region boundaries via getBlendedHeight()
+    // -------------------------------------------
+    // Default hills (used by config 5 / rock_5)
+    defaultHills: [
       { x: 0.30, z: 0.10, radius: 0.30, height: 0.55 },
       { x: 0.70, z: 0.12, radius: 0.28, height: 0.60 },
       { x: 0.50, z: 0.22, radius: 0.32, height: 0.65 },
@@ -267,10 +539,8 @@ const BIOMES = {
       { x: 0.82, z: 0.28, radius: 0.27, height: 0.55 },
       { x: 0.45, z: 0.38, radius: 0.30, height: 0.55 },
       { x: 0.65, z: 0.42, radius: 0.25, height: 0.42 },
-      // Mid region (z 0.40–0.60) - a few scattered
       { x: 0.25, z: 0.52, radius: 0.28, height: 0.30 },
       { x: 0.78, z: 0.55, radius: 0.26, height: 0.25 },
-      // Front region (z 0.60–1.0) - sparse, very gentle
       { x: 0.55, z: 0.75, radius: 0.30, height: 0.20 },
     ],
     // Tree sprite variants for this biome
@@ -279,96 +549,99 @@ const BIOMES = {
     configs: [
       {
         id: 'rock_1',
+        hills: [
+          { x: 0.49, z: 0.63, radius: 0.19, height: 0.30 },
+          { x: 0.86, z: 0.10, radius: 0.34, height: 0.57 },
+          { x: 0.89, z: 0.58, radius: 0.25, height: 0.39 },
+          { x: 0.40, z: 0.26, radius: 0.39, height: 0.62 },
+          { x: 0.56, z: 0.45, radius: 0.38, height: 0.28 },
+          { x: 0.64, z: 0.32, radius: 0.28, height: 0.57 },
+          { x: 0.90, z: 0.30, radius: 0.35, height: 0.55 },
+          { x: 0.16, z: 0.45, radius: 0.20, height: 0.27 },
+          { x: 0.67, z: 0.27, radius: 0.23, height: 0.63 },
+          { x: 0.75, z: 0.82, radius: 0.33, height: 0.22 },
+          { x: 0.43, z: 0.64, radius: 0.34, height: 0.20 },
+          { x: 0.41, z: 0.82, radius: 0.31, height: 0.12 },
+          { x: 0.24, z: 0.26, radius: 0.23, height: 0.61 },
+        ],
         trees: [
-          {x:0.148,z:0.071},{x:0.183,z:0.102},{x:0.121,z:0.138},{x:0.196,z:0.155},
-          {x:0.158,z:0.189},{x:0.103,z:0.217},{x:0.223,z:0.195},{x:0.142,z:0.252},
-          {x:0.207,z:0.238},{x:0.086,z:0.178},{x:0.168,z:0.221},
-          {x:0.553,z:0.108},{x:0.601,z:0.141},{x:0.562,z:0.179},{x:0.627,z:0.158},
-          {x:0.518,z:0.195},{x:0.593,z:0.213},{x:0.648,z:0.188},
-          {x:0.768,z:0.308},{x:0.821,z:0.337},{x:0.873,z:0.312},{x:0.793,z:0.371},
-          {x:0.847,z:0.356},{x:0.902,z:0.382},{x:0.762,z:0.418},{x:0.831,z:0.403},
-          {x:0.876,z:0.431},{x:0.812,z:0.462},{x:0.858,z:0.448},
-          {x:0.358,z:0.427},{x:0.412,z:0.453},{x:0.371,z:0.491},{x:0.423,z:0.472},
-          {x:0.338,z:0.518},{x:0.402,z:0.537},{x:0.441,z:0.503},
-          {x:0.162,z:0.558},{x:0.208,z:0.537},{x:0.143,z:0.601},{x:0.197,z:0.583},
-          {x:0.248,z:0.562},{x:0.168,z:0.642},{x:0.221,z:0.618},
-          {x:0.647,z:0.613},{x:0.698,z:0.638},{x:0.731,z:0.611},{x:0.662,z:0.672},
-          {x:0.713,z:0.657},{x:0.688,z:0.718},{x:0.738,z:0.693},
-          {x:0.473,z:0.738},{x:0.518,z:0.762},{x:0.461,z:0.797},{x:0.512,z:0.781},
-          {x:0.558,z:0.773},{x:0.482,z:0.841},{x:0.531,z:0.818},{x:0.548,z:0.852},
-          {x:0.878,z:0.742},{x:0.922,z:0.768},{x:0.891,z:0.803},{x:0.918,z:0.841},
-          {x:0.862,z:0.828},
-          {x:0.261,z:0.838},{x:0.308,z:0.862},{x:0.272,z:0.901},{x:0.318,z:0.883},
-          {x:0.348,z:0.912},{x:0.291,z:0.938},{x:0.342,z:0.951},
+          {x:0.146,z:0.751},{x:0.185,z:0.81},{x:0.245,z:0.723},{x:0.162,z:0.762},{x:0.166,z:0.793},
+          {x:0.167,z:0.772},{x:0.496,z:0.422},{x:0.413,z:0.372},{x:0.392,z:0.413},{x:0.425,z:0.438},
+          {x:0.37,z:0.433},{x:0.6,z:0.227},{x:0.553,z:0.223},{x:0.555,z:0.203},{x:0.637,z:0.168},
+          {x:0.562,z:0.153},{x:0.56,z:0.191},{x:0.562,z:0.248},{x:0.863,z:0.864},{x:0.829,z:0.845},
+          {x:0.859,z:0.77},{x:0.845,z:0.799},{x:0.803,z:0.799},{x:0.871,z:0.785},{x:0.821,z:0.782},
+          {x:0.846,z:0.885},{x:0.824,z:0.852},{x:0.662,z:0.174},{x:0.617,z:0.215},{x:0.673,z:0.239},
+          {x:0.608,z:0.243},{x:0.842,z:0.903},{x:0.757,z:0.902},{x:0.768,z:0.841},{x:0.765,z:0.821},
+          {x:0.788,z:0.82},{x:0.789,z:0.921},{x:0.749,z:0.87},{x:0.281,z:0.142},{x:0.269,z:0.135},
+          {x:0.319,z:0.127},{x:0.272,z:0.122},{x:0.127,z:0.668},{x:0.083,z:0.692},{x:0.028,z:0.621},
+          {x:0.031,z:0.62}
         ],
         rocks: [
-          {x:0.42,z:0.13,rotY:0.8,scale:0.9},
-          {x:0.78,z:0.19,rotY:2.1,scale:0.7},
-          {x:0.057,z:0.554,rotY:1.4,scale:1.0},
-          {x:0.744,z:0.338,rotY:3.8,scale:0.8},
-          {x:0.91,z:0.58,rotY:0.3,scale:0.75},
-          {x:0.35,z:0.72,rotY:5.1,scale:0.85},
-          {x:0.08,z:0.88,rotY:2.7,scale:0.65},
-          {x:0.72,z:0.82,rotY:4.2,scale:0.9},
-          {x:0.55,z:0.55,rotY:1.9,scale:0.7},
-          {x:0.232,z:0.24,rotY:3.3,scale:1.0},
-          {x:0.85,z:0.42,rotY:0.6,scale:0.8},
-          {x:0.48,z:0.91,rotY:2.4,scale:0.75},
+          {x:0.879,z:0.32,rotY:6.3,scale:0.95},
+          {x:0.472,z:0.561,rotY:0.8,scale:0.69},
+          {x:0.266,z:0.646,rotY:0.3,scale:0.87},
+          {x:0.209,z:0.747,rotY:2.1,scale:0.68},
+          {x:0.328,z:0.819,rotY:3.9,scale:0.82},
+          {x:0.217,z:0.826,rotY:5.5,scale:0.93},
+          {x:0.529,z:0.771,rotY:0.2,scale:0.86},
+          {x:0.622,z:0.312,rotY:0.6,scale:0.78},
+          {x:0.215,z:0.13,rotY:6.3,scale:0.7},
+          {x:0.562,z:0.586,rotY:2.7,scale:0.84},
+          {x:0.555,z:0.063,rotY:1.4,scale:0.97},
+          {x:0.238,z:0.217,rotY:1.7,scale:0.66},
+          {x:0.778,z:0.237,rotY:0.1,scale:0.85},
+          {x:0.358,z:0.167,rotY:4.1,scale:0.72},
         ],
         minables: [
-          { x:0.575, z:0.400, cubes: [
-            {dx: 0.000, dz: 0.000, sx:0.30, sy:0.22, sz:0.14, rotY:0.4, rotZ:0.12},
-            {dx: 0.040, dz: 0.025, sx:0.18, sy:0.28, sz:0.12, rotY:1.2, rotZ:-0.18},
-            {dx:-0.035, dz: 0.030, sx:0.14, sy:0.16, sz:0.22, rotY:2.5, rotZ:0.25},
-            {dx: 0.055, dz:-0.015, sx:0.24, sy:0.18, sz:0.10, rotY:0.8, rotZ:-0.08},
-            {dx:-0.045, dz:-0.020, sx:0.12, sy:0.20, sz:0.16, rotY:3.1, rotZ:0.20},
-            {dx: 0.015, dz: 0.050, sx:0.20, sy:0.14, sz:0.18, rotY:1.7, rotZ:-0.14},
-            {dx:-0.060, dz: 0.010, sx:0.26, sy:0.24, sz:0.12, rotY:4.2, rotZ:0.06},
-            {dx: 0.065, dz: 0.035, sx:0.14, sy:0.12, sz:0.20, rotY:5.0, rotZ:-0.22},
-            {dx:-0.020, dz:-0.045, sx:0.22, sy:0.16, sz:0.14, rotY:2.1, rotZ:0.16},
-            {dx: 0.030, dz:-0.040, sx:0.16, sy:0.24, sz:0.10, rotY:3.6, rotZ:-0.28},
-            {dx:-0.050, dz: 0.045, sx:0.18, sy:0.14, sz:0.22, rotY:0.2, rotZ:0.10},
-            {dx: 0.010, dz: 0.060, sx:0.24, sy:0.20, sz:0.12, rotY:4.8, rotZ:-0.10},
-            {dx:-0.030, dz:-0.035, sx:0.12, sy:0.18, sz:0.16, rotY:5.5, rotZ:0.18},
-            {dx: 0.050, dz: 0.010, sx:0.28, sy:0.22, sz:0.14, rotY:1.0, rotZ:-0.06},
-            {dx:-0.015, dz: 0.020, sx:0.32, sy:0.26, sz:0.16, rotY:2.8, rotZ:0.04},
+          { x:0.842, z:0.599, cubes: [
+            {dx:0.055, dz:0.058, sx:0.21, sy:0.26, sz:0.16, rotY:4.7, rotZ:-0.24},
+            {dx:-0.041, dz:0.013, sx:0.17, sy:0.16, sz:0.11, rotY:4.2, rotZ:0},
+            {dx:-0.055, dz:-0.054, sx:0.31, sy:0.2, sz:0.17, rotY:3.8, rotZ:-0.07},
+            {dx:-0.01, dz:0.045, sx:0.15, sy:0.14, sz:0.14, rotY:0.4, rotZ:0.16},
+            {dx:0.025, dz:-0.005, sx:0.25, sy:0.25, sz:0.14, rotY:0.8, rotZ:0.11},
+            {dx:0.043, dz:0.059, sx:0.31, sy:0.16, sz:0.18, rotY:3.4, rotZ:-0.01},
+            {dx:0.051, dz:0.038, sx:0.21, sy:0.24, sz:0.15, rotY:1.5, rotZ:-0.01},
+            {dx:0.023, dz:-0.037, sx:0.29, sy:0.16, sz:0.14, rotY:4.3, rotZ:-0.06},
+            {dx:0.029, dz:-0.033, sx:0.16, sy:0.27, sz:0.23, rotY:5.3, rotZ:0.04},
+            {dx:0.013, dz:0.042, sx:0.32, sy:0.27, sz:0.21, rotY:4.5, rotZ:-0.22},
+            {dx:0.037, dz:0.047, sx:0.26, sy:0.23, sz:0.12, rotY:1.7, rotZ:-0.15},
+            {dx:-0.013, dz:0.002, sx:0.19, sy:0.24, sz:0.13, rotY:4.1, rotZ:-0.16},
+            {dx:-0.013, dz:-0.017, sx:0.27, sy:0.26, sz:0.14, rotY:6.2, rotZ:-0.23},
           ]},
-          { x:0.375, z:0.255, cubes: [
-            {dx: 0.000, dz: 0.000, sx:0.26, sy:0.20, sz:0.16, rotY:1.8, rotZ:0.15},
-            {dx: 0.035, dz: 0.030, sx:0.18, sy:0.26, sz:0.12, rotY:0.5, rotZ:-0.12},
-            {dx:-0.040, dz: 0.015, sx:0.22, sy:0.16, sz:0.20, rotY:2.9, rotZ:0.08},
-            {dx: 0.025, dz:-0.035, sx:0.14, sy:0.22, sz:0.10, rotY:4.0, rotZ:-0.25},
-            {dx:-0.020, dz: 0.045, sx:0.28, sy:0.18, sz:0.14, rotY:1.1, rotZ:0.14},
-            {dx: 0.050, dz: 0.005, sx:0.16, sy:0.24, sz:0.12, rotY:3.3, rotZ:-0.18},
-            {dx:-0.050, dz:-0.025, sx:0.20, sy:0.14, sz:0.22, rotY:5.1, rotZ:0.10},
-            {dx: 0.015, dz: 0.055, sx:0.18, sy:0.20, sz:0.14, rotY:0.7, rotZ:-0.06},
-            {dx: 0.045, dz:-0.020, sx:0.24, sy:0.18, sz:0.16, rotY:2.4, rotZ:0.20},
-            {dx:-0.035, dz: 0.040, sx:0.14, sy:0.22, sz:0.18, rotY:4.6, rotZ:-0.14},
-            {dx:-0.055, dz: 0.030, sx:0.20, sy:0.16, sz:0.24, rotY:3.8, rotZ:0.12},
-            {dx: 0.030, dz: 0.045, sx:0.16, sy:0.24, sz:0.10, rotY:5.7, rotZ:-0.08},
-          ]},
-          { x:0.150, z:0.400, cubes: [
-            {dx: 0.000, dz: 0.000, sx:0.30, sy:0.24, sz:0.14, rotY:0.9, rotZ:-0.08},
-            {dx:-0.035, dz: 0.030, sx:0.20, sy:0.18, sz:0.22, rotY:2.2, rotZ:0.16},
-            {dx: 0.045, dz: 0.020, sx:0.16, sy:0.26, sz:0.12, rotY:3.5, rotZ:-0.20},
-            {dx: 0.030, dz:-0.030, sx:0.24, sy:0.16, sz:0.18, rotY:1.1, rotZ:0.12},
-            {dx:-0.050, dz:-0.010, sx:0.14, sy:0.22, sz:0.16, rotY:4.8, rotZ:0.24},
-            {dx: 0.010, dz: 0.050, sx:0.18, sy:0.14, sz:0.24, rotY:5.5, rotZ:-0.06},
-            {dx: 0.055, dz: 0.035, sx:0.22, sy:0.20, sz:0.14, rotY:0.3, rotZ:0.18},
-            {dx:-0.025, dz: 0.055, sx:0.28, sy:0.24, sz:0.12, rotY:2.7, rotZ:-0.12},
-            {dx:-0.060, dz: 0.020, sx:0.16, sy:0.18, sz:0.20, rotY:1.6, rotZ:0.06},
-            {dx: 0.040, dz:-0.040, sx:0.20, sy:0.26, sz:0.14, rotY:3.9, rotZ:-0.16},
-            {dx: 0.020, dz: 0.040, sx:0.14, sy:0.12, sz:0.22, rotY:5.1, rotZ:0.22},
-            {dx:-0.045, dz:-0.030, sx:0.24, sy:0.20, sz:0.16, rotY:4.3, rotZ:-0.10},
-            {dx: 0.060, dz: 0.005, sx:0.16, sy:0.22, sz:0.18, rotY:0.6, rotZ:0.14},
-            {dx:-0.015, dz:-0.050, sx:0.18, sy:0.16, sz:0.24, rotY:2.0, rotZ:-0.04},
-            {dx: 0.005, dz: 0.025, sx:0.32, sy:0.28, sz:0.16, rotY:3.2, rotZ:0.08},
+          { x:0.75, z:0.775, cubes: [
+            {dx:0.006, dz:0.014, sx:0.14, sy:0.16, sz:0.19, rotY:2.1, rotZ:-0.04},
+            {dx:-0.052, dz:0.039, sx:0.22, sy:0.14, sz:0.14, rotY:5.2, rotZ:-0.18},
+            {dx:0.003, dz:0.044, sx:0.26, sy:0.2, sz:0.1, rotY:1.7, rotZ:-0.2},
+            {dx:-0.056, dz:-0.052, sx:0.16, sy:0.12, sz:0.24, rotY:1, rotZ:0.01},
+            {dx:-0.047, dz:0.016, sx:0.18, sy:0.25, sz:0.17, rotY:4.2, rotZ:0.13},
+            {dx:0.03, dz:0.054, sx:0.13, sy:0.15, sz:0.17, rotY:0.1, rotZ:-0.21},
+            {dx:-0.005, dz:0.001, sx:0.25, sy:0.19, sz:0.11, rotY:4, rotZ:-0.23},
+            {dx:0.032, dz:0.042, sx:0.11, sy:0.24, sz:0.13, rotY:5.9, rotZ:0.19},
+            {dx:-0.042, dz:-0.005, sx:0.16, sy:0.25, sz:0.14, rotY:5.3, rotZ:0.16},
+            {dx:0.04, dz:-0.017, sx:0.27, sy:0.25, sz:0.18, rotY:4.7, rotZ:-0.15},
+            {dx:0.053, dz:-0.058, sx:0.32, sy:0.23, sz:0.15, rotY:2.5, rotZ:0.19},
+            {dx:0.039, dz:0.054, sx:0.19, sy:0.13, sz:0.24, rotY:0.9, rotZ:0.13},
+            {dx:-0.05, dz:0.004, sx:0.22, sy:0.18, sz:0.21, rotY:0.9, rotZ:-0.24},
+            {dx:0.041, dz:0.004, sx:0.13, sy:0.13, sz:0.11, rotY:1.4, rotZ:0.09},
+            {dx:0.015, dz:0.057, sx:0.29, sy:0.21, sz:0.2, rotY:1.4, rotZ:-0.25},
           ]},
         ],
       },
       // Future configs (rock_2, rock_3, etc.) go here
       {
         id: 'rock_2',
+        hills: [
+          { x: 0.73, z: 0.81, radius: 0.22, height: 0.23 },
+          { x: 0.27, z: 0.53, radius: 0.29, height: 0.32 },
+          { x: 0.13, z: 0.47, radius: 0.28, height: 0.28 },
+          { x: 0.17, z: 0.07, radius: 0.33, height: 0.50 },
+          { x: 0.46, z: 0.88, radius: 0.23, height: 0.30 },
+          { x: 0.11, z: 0.26, radius: 0.25, height: 0.50 },
+          { x: 0.62, z: 0.40, radius: 0.30, height: 0.44 },
+          { x: 0.54, z: 0.22, radius: 0.24, height: 0.60 },
+          { x: 0.51, z: 0.47, radius: 0.36, height: 0.50 },
+          { x: 0.88, z: 0.22, radius: 0.26, height: 0.68 },
+        ],
         trees: [
           {x:0.266,z:0.15},{x:0.217,z:0.117},{x:0.199,z:0.171},{x:0.265,z:0.143},{x:0.188,z:0.144},
           {x:0.268,z:0.188},{x:0.255,z:0.125},{x:0.221,z:0.182},{x:0.734,z:0.113},{x:0.768,z:0.117},
@@ -454,6 +727,18 @@ const BIOMES = {
       },
       {
         id: 'rock_3',
+        hills: [
+          { x: 0.66, z: 0.53, radius: 0.33, height: 0.35 },
+          { x: 0.29, z: 0.82, radius: 0.32, height: 0.30 },
+          { x: 0.53, z: 0.48, radius: 0.30, height: 0.54 },
+          { x: 0.59, z: 0.14, radius: 0.36, height: 0.47 },
+          { x: 0.82, z: 0.42, radius: 0.30, height: 0.48 },
+          { x: 0.62, z: 0.60, radius: 0.25, height: 0.27 },
+          { x: 0.57, z: 0.79, radius: 0.30, height: 0.40 },
+          { x: 0.76, z: 0.41, radius: 0.35, height: 0.42 },
+          { x: 0.65, z: 0.61, radius: 0.38, height: 0.23 },
+          { x: 0.19, z: 0.44, radius: 0.39, height: 0.53 },
+        ],
         trees: [
           {x:0.483,z:0.494},{x:0.513,z:0.508},{x:0.55,z:0.471},{x:0.475,z:0.452},{x:0.455,z:0.446},
           {x:0.776,z:0.111},{x:0.793,z:0.038},{x:0.802,z:0.07},{x:0.783,z:0.077},{x:0.831,z:0.067},
@@ -538,6 +823,20 @@ const BIOMES = {
       },
       {
         id: 'rock_4',
+        hills: [
+          { x: 0.31, z: 0.47, radius: 0.19, height: 0.48 },
+          { x: 0.40, z: 0.36, radius: 0.25, height: 0.38 },
+          { x: 0.32, z: 0.34, radius: 0.20, height: 0.65 },
+          { x: 0.56, z: 0.26, radius: 0.23, height: 0.44 },
+          { x: 0.36, z: 0.30, radius: 0.25, height: 0.42 },
+          { x: 0.76, z: 0.51, radius: 0.37, height: 0.31 },
+          { x: 0.85, z: 0.71, radius: 0.30, height: 0.24 },
+          { x: 0.16, z: 0.35, radius: 0.37, height: 0.59 },
+          { x: 0.13, z: 0.27, radius: 0.24, height: 0.68 },
+          { x: 0.85, z: 0.23, radius: 0.19, height: 0.40 },
+          { x: 0.70, z: 0.49, radius: 0.25, height: 0.41 },
+          { x: 0.69, z: 0.36, radius: 0.32, height: 0.35 },
+        ],
         trees: [
           {x:0.313,z:0.177},{x:0.34,z:0.141},{x:0.374,z:0.155},{x:0.399,z:0.172},{x:0.393,z:0.149},
           {x:0.225,z:0.654},{x:0.156,z:0.721},{x:0.211,z:0.739},{x:0.137,z:0.694},{x:0.344,z:0.575},
@@ -640,71 +939,111 @@ const BIOMES = {
       },
       {
         id: 'rock_5',
+        // uses default hills (config 5 - unchanged)
         trees: [
-          {x:0.146,z:0.751},{x:0.185,z:0.81},{x:0.245,z:0.723},{x:0.162,z:0.762},{x:0.166,z:0.793},
-          {x:0.167,z:0.772},{x:0.496,z:0.422},{x:0.413,z:0.372},{x:0.392,z:0.413},{x:0.425,z:0.438},
-          {x:0.37,z:0.433},{x:0.6,z:0.227},{x:0.553,z:0.223},{x:0.555,z:0.203},{x:0.637,z:0.168},
-          {x:0.562,z:0.153},{x:0.56,z:0.191},{x:0.562,z:0.248},{x:0.863,z:0.864},{x:0.829,z:0.845},
-          {x:0.859,z:0.77},{x:0.845,z:0.799},{x:0.803,z:0.799},{x:0.871,z:0.785},{x:0.821,z:0.782},
-          {x:0.846,z:0.885},{x:0.824,z:0.852},{x:0.662,z:0.174},{x:0.617,z:0.215},{x:0.673,z:0.239},
-          {x:0.608,z:0.243},{x:0.842,z:0.903},{x:0.757,z:0.902},{x:0.768,z:0.841},{x:0.765,z:0.821},
-          {x:0.788,z:0.82},{x:0.789,z:0.921},{x:0.749,z:0.87},{x:0.281,z:0.142},{x:0.269,z:0.135},
-          {x:0.319,z:0.127},{x:0.272,z:0.122},{x:0.127,z:0.668},{x:0.083,z:0.692},{x:0.028,z:0.621},
-          {x:0.031,z:0.62}
+          {x:0.148,z:0.071},{x:0.183,z:0.102},{x:0.121,z:0.138},{x:0.196,z:0.155},
+          {x:0.158,z:0.189},{x:0.103,z:0.217},{x:0.223,z:0.195},{x:0.142,z:0.252},
+          {x:0.207,z:0.238},{x:0.086,z:0.178},{x:0.168,z:0.221},
+          {x:0.553,z:0.108},{x:0.601,z:0.141},{x:0.562,z:0.179},{x:0.627,z:0.158},
+          {x:0.518,z:0.195},{x:0.593,z:0.213},{x:0.648,z:0.188},
+          {x:0.768,z:0.308},{x:0.821,z:0.337},{x:0.873,z:0.312},{x:0.793,z:0.371},
+          {x:0.847,z:0.356},{x:0.902,z:0.382},{x:0.762,z:0.418},{x:0.831,z:0.403},
+          {x:0.876,z:0.431},{x:0.812,z:0.462},{x:0.858,z:0.448},
+          {x:0.358,z:0.427},{x:0.412,z:0.453},{x:0.371,z:0.491},{x:0.423,z:0.472},
+          {x:0.338,z:0.518},{x:0.402,z:0.537},{x:0.441,z:0.503},
+          {x:0.162,z:0.558},{x:0.208,z:0.537},{x:0.143,z:0.601},{x:0.197,z:0.583},
+          {x:0.248,z:0.562},{x:0.168,z:0.642},{x:0.221,z:0.618},
+          {x:0.647,z:0.613},{x:0.698,z:0.638},{x:0.731,z:0.611},{x:0.662,z:0.672},
+          {x:0.713,z:0.657},{x:0.688,z:0.718},{x:0.738,z:0.693},
+          {x:0.473,z:0.738},{x:0.518,z:0.762},{x:0.461,z:0.797},{x:0.512,z:0.781},
+          {x:0.558,z:0.773},{x:0.482,z:0.841},{x:0.531,z:0.818},{x:0.548,z:0.852},
+          {x:0.878,z:0.742},{x:0.922,z:0.768},{x:0.891,z:0.803},{x:0.918,z:0.841},
+          {x:0.862,z:0.828},
+          {x:0.261,z:0.838},{x:0.308,z:0.862},{x:0.272,z:0.901},{x:0.318,z:0.883},
+          {x:0.348,z:0.912},{x:0.291,z:0.938},{x:0.342,z:0.951},
         ],
         rocks: [
-          {x:0.879,z:0.32,rotY:6.3,scale:0.95},
-          {x:0.472,z:0.561,rotY:0.8,scale:0.69},
-          {x:0.266,z:0.646,rotY:0.3,scale:0.87},
-          {x:0.209,z:0.747,rotY:2.1,scale:0.68},
-          {x:0.328,z:0.819,rotY:3.9,scale:0.82},
-          {x:0.217,z:0.826,rotY:5.5,scale:0.93},
-          {x:0.529,z:0.771,rotY:0.2,scale:0.86},
-          {x:0.622,z:0.312,rotY:0.6,scale:0.78},
-          {x:0.215,z:0.13,rotY:6.3,scale:0.7},
-          {x:0.562,z:0.586,rotY:2.7,scale:0.84},
-          {x:0.555,z:0.063,rotY:1.4,scale:0.97},
-          {x:0.238,z:0.217,rotY:1.7,scale:0.66},
-          {x:0.778,z:0.237,rotY:0.1,scale:0.85},
-          {x:0.358,z:0.167,rotY:4.1,scale:0.72},
+          {x:0.42,z:0.13,rotY:0.8,scale:0.9},
+          {x:0.78,z:0.19,rotY:2.1,scale:0.7},
+          {x:0.057,z:0.554,rotY:1.4,scale:1.0},
+          {x:0.744,z:0.338,rotY:3.8,scale:0.8},
+          {x:0.91,z:0.58,rotY:0.3,scale:0.75},
+          {x:0.35,z:0.72,rotY:5.1,scale:0.85},
+          {x:0.08,z:0.88,rotY:2.7,scale:0.65},
+          {x:0.72,z:0.82,rotY:4.2,scale:0.9},
+          {x:0.55,z:0.55,rotY:1.9,scale:0.7},
+          {x:0.232,z:0.24,rotY:3.3,scale:1.0},
+          {x:0.85,z:0.42,rotY:0.6,scale:0.8},
+          {x:0.48,z:0.91,rotY:2.4,scale:0.75},
         ],
         minables: [
-          { x:0.842, z:0.599, cubes: [
-            {dx:0.055, dz:0.058, sx:0.21, sy:0.26, sz:0.16, rotY:4.7, rotZ:-0.24},
-            {dx:-0.041, dz:0.013, sx:0.17, sy:0.16, sz:0.11, rotY:4.2, rotZ:0},
-            {dx:-0.055, dz:-0.054, sx:0.31, sy:0.2, sz:0.17, rotY:3.8, rotZ:-0.07},
-            {dx:-0.01, dz:0.045, sx:0.15, sy:0.14, sz:0.14, rotY:0.4, rotZ:0.16},
-            {dx:0.025, dz:-0.005, sx:0.25, sy:0.25, sz:0.14, rotY:0.8, rotZ:0.11},
-            {dx:0.043, dz:0.059, sx:0.31, sy:0.16, sz:0.18, rotY:3.4, rotZ:-0.01},
-            {dx:0.051, dz:0.038, sx:0.21, sy:0.24, sz:0.15, rotY:1.5, rotZ:-0.01},
-            {dx:0.023, dz:-0.037, sx:0.29, sy:0.16, sz:0.14, rotY:4.3, rotZ:-0.06},
-            {dx:0.029, dz:-0.033, sx:0.16, sy:0.27, sz:0.23, rotY:5.3, rotZ:0.04},
-            {dx:0.013, dz:0.042, sx:0.32, sy:0.27, sz:0.21, rotY:4.5, rotZ:-0.22},
-            {dx:0.037, dz:0.047, sx:0.26, sy:0.23, sz:0.12, rotY:1.7, rotZ:-0.15},
-            {dx:-0.013, dz:0.002, sx:0.19, sy:0.24, sz:0.13, rotY:4.1, rotZ:-0.16},
-            {dx:-0.013, dz:-0.017, sx:0.27, sy:0.26, sz:0.14, rotY:6.2, rotZ:-0.23},
+          { x:0.575, z:0.400, cubes: [
+            {dx: 0.000, dz: 0.000, sx:0.30, sy:0.22, sz:0.14, rotY:0.4, rotZ:0.12},
+            {dx: 0.040, dz: 0.025, sx:0.18, sy:0.28, sz:0.12, rotY:1.2, rotZ:-0.18},
+            {dx:-0.035, dz: 0.030, sx:0.14, sy:0.16, sz:0.22, rotY:2.5, rotZ:0.25},
+            {dx: 0.055, dz:-0.015, sx:0.24, sy:0.18, sz:0.10, rotY:0.8, rotZ:-0.08},
+            {dx:-0.045, dz:-0.020, sx:0.12, sy:0.20, sz:0.16, rotY:3.1, rotZ:0.20},
+            {dx: 0.015, dz: 0.050, sx:0.20, sy:0.14, sz:0.18, rotY:1.7, rotZ:-0.14},
+            {dx:-0.060, dz: 0.010, sx:0.26, sy:0.24, sz:0.12, rotY:4.2, rotZ:0.06},
+            {dx: 0.065, dz: 0.035, sx:0.14, sy:0.12, sz:0.20, rotY:5.0, rotZ:-0.22},
+            {dx:-0.020, dz:-0.045, sx:0.22, sy:0.16, sz:0.14, rotY:2.1, rotZ:0.16},
+            {dx: 0.030, dz:-0.040, sx:0.16, sy:0.24, sz:0.10, rotY:3.6, rotZ:-0.28},
+            {dx:-0.050, dz: 0.045, sx:0.18, sy:0.14, sz:0.22, rotY:0.2, rotZ:0.10},
+            {dx: 0.010, dz: 0.060, sx:0.24, sy:0.20, sz:0.12, rotY:4.8, rotZ:-0.10},
+            {dx:-0.030, dz:-0.035, sx:0.12, sy:0.18, sz:0.16, rotY:5.5, rotZ:0.18},
+            {dx: 0.050, dz: 0.010, sx:0.28, sy:0.22, sz:0.14, rotY:1.0, rotZ:-0.06},
+            {dx:-0.015, dz: 0.020, sx:0.32, sy:0.26, sz:0.16, rotY:2.8, rotZ:0.04},
           ]},
-          { x:0.75, z:0.775, cubes: [
-            {dx:0.006, dz:0.014, sx:0.14, sy:0.16, sz:0.19, rotY:2.1, rotZ:-0.04},
-            {dx:-0.052, dz:0.039, sx:0.22, sy:0.14, sz:0.14, rotY:5.2, rotZ:-0.18},
-            {dx:0.003, dz:0.044, sx:0.26, sy:0.2, sz:0.1, rotY:1.7, rotZ:-0.2},
-            {dx:-0.056, dz:-0.052, sx:0.16, sy:0.12, sz:0.24, rotY:1, rotZ:0.01},
-            {dx:-0.047, dz:0.016, sx:0.18, sy:0.25, sz:0.17, rotY:4.2, rotZ:0.13},
-            {dx:0.03, dz:0.054, sx:0.13, sy:0.15, sz:0.17, rotY:0.1, rotZ:-0.21},
-            {dx:-0.005, dz:0.001, sx:0.25, sy:0.19, sz:0.11, rotY:4, rotZ:-0.23},
-            {dx:0.032, dz:0.042, sx:0.11, sy:0.24, sz:0.13, rotY:5.9, rotZ:0.19},
-            {dx:-0.042, dz:-0.005, sx:0.16, sy:0.25, sz:0.14, rotY:5.3, rotZ:0.16},
-            {dx:0.04, dz:-0.017, sx:0.27, sy:0.25, sz:0.18, rotY:4.7, rotZ:-0.15},
-            {dx:0.053, dz:-0.058, sx:0.32, sy:0.23, sz:0.15, rotY:2.5, rotZ:0.19},
-            {dx:0.039, dz:0.054, sx:0.19, sy:0.13, sz:0.24, rotY:0.9, rotZ:0.13},
-            {dx:-0.05, dz:0.004, sx:0.22, sy:0.18, sz:0.21, rotY:0.9, rotZ:-0.24},
-            {dx:0.041, dz:0.004, sx:0.13, sy:0.13, sz:0.11, rotY:1.4, rotZ:0.09},
-            {dx:0.015, dz:0.057, sx:0.29, sy:0.21, sz:0.2, rotY:1.4, rotZ:-0.25},
+          { x:0.375, z:0.255, cubes: [
+            {dx: 0.000, dz: 0.000, sx:0.26, sy:0.20, sz:0.16, rotY:1.8, rotZ:0.15},
+            {dx: 0.035, dz: 0.030, sx:0.18, sy:0.26, sz:0.12, rotY:0.5, rotZ:-0.12},
+            {dx:-0.040, dz: 0.015, sx:0.22, sy:0.16, sz:0.20, rotY:2.9, rotZ:0.08},
+            {dx: 0.025, dz:-0.035, sx:0.14, sy:0.22, sz:0.10, rotY:4.0, rotZ:-0.25},
+            {dx:-0.020, dz: 0.045, sx:0.28, sy:0.18, sz:0.14, rotY:1.1, rotZ:0.14},
+            {dx: 0.050, dz: 0.005, sx:0.16, sy:0.24, sz:0.12, rotY:3.3, rotZ:-0.18},
+            {dx:-0.050, dz:-0.025, sx:0.20, sy:0.14, sz:0.22, rotY:5.1, rotZ:0.10},
+            {dx: 0.015, dz: 0.055, sx:0.18, sy:0.20, sz:0.14, rotY:0.7, rotZ:-0.06},
+            {dx: 0.045, dz:-0.020, sx:0.24, sy:0.18, sz:0.16, rotY:2.4, rotZ:0.20},
+            {dx:-0.035, dz: 0.040, sx:0.14, sy:0.22, sz:0.18, rotY:4.6, rotZ:-0.14},
+            {dx:-0.055, dz: 0.030, sx:0.20, sy:0.16, sz:0.24, rotY:3.8, rotZ:0.12},
+            {dx: 0.030, dz: 0.045, sx:0.16, sy:0.24, sz:0.10, rotY:5.7, rotZ:-0.08},
+          ]},
+          { x:0.150, z:0.400, cubes: [
+            {dx: 0.000, dz: 0.000, sx:0.30, sy:0.24, sz:0.14, rotY:0.9, rotZ:-0.08},
+            {dx:-0.035, dz: 0.030, sx:0.20, sy:0.18, sz:0.22, rotY:2.2, rotZ:0.16},
+            {dx: 0.045, dz: 0.020, sx:0.16, sy:0.26, sz:0.12, rotY:3.5, rotZ:-0.20},
+            {dx: 0.030, dz:-0.030, sx:0.24, sy:0.16, sz:0.18, rotY:1.1, rotZ:0.12},
+            {dx:-0.050, dz:-0.010, sx:0.14, sy:0.22, sz:0.16, rotY:4.8, rotZ:0.24},
+            {dx: 0.010, dz: 0.050, sx:0.18, sy:0.14, sz:0.24, rotY:5.5, rotZ:-0.06},
+            {dx: 0.055, dz: 0.035, sx:0.22, sy:0.20, sz:0.14, rotY:0.3, rotZ:0.18},
+            {dx:-0.025, dz: 0.055, sx:0.28, sy:0.24, sz:0.12, rotY:2.7, rotZ:-0.12},
+            {dx:-0.060, dz: 0.020, sx:0.16, sy:0.18, sz:0.20, rotY:1.6, rotZ:0.06},
+            {dx: 0.040, dz:-0.040, sx:0.20, sy:0.26, sz:0.14, rotY:3.9, rotZ:-0.16},
+            {dx: 0.020, dz: 0.040, sx:0.14, sy:0.12, sz:0.22, rotY:5.1, rotZ:0.22},
+            {dx:-0.045, dz:-0.030, sx:0.24, sy:0.20, sz:0.16, rotY:4.3, rotZ:-0.10},
+            {dx: 0.060, dz: 0.005, sx:0.16, sy:0.22, sz:0.18, rotY:0.6, rotZ:0.14},
+            {dx:-0.015, dz:-0.050, sx:0.18, sy:0.16, sz:0.24, rotY:2.0, rotZ:-0.04},
+            {dx: 0.005, dz: 0.025, sx:0.32, sy:0.28, sz:0.16, rotY:3.2, rotZ:0.08},
           ]},
         ],
       },
       {
         id: 'rock_6',
+        hills: [
+          { x: 0.57, z: 0.47, radius: 0.34, height: 0.37 },
+          { x: 0.54, z: 0.72, radius: 0.25, height: 0.37 },
+          { x: 0.84, z: 0.49, radius: 0.19, height: 0.41 },
+          { x: 0.77, z: 0.41, radius: 0.37, height: 0.49 },
+          { x: 0.76, z: 0.38, radius: 0.23, height: 0.31 },
+          { x: 0.86, z: 0.16, radius: 0.20, height: 0.65 },
+          { x: 0.30, z: 0.29, radius: 0.19, height: 0.57 },
+          { x: 0.73, z: 0.71, radius: 0.22, height: 0.18 },
+          { x: 0.43, z: 0.52, radius: 0.36, height: 0.50 },
+          { x: 0.58, z: 0.09, radius: 0.24, height: 0.52 },
+          { x: 0.34, z: 0.51, radius: 0.30, height: 0.36 },
+          { x: 0.44, z: 0.13, radius: 0.18, height: 0.70 },
+          { x: 0.47, z: 0.78, radius: 0.28, height: 0.31 },
+        ],
         trees: [
           {x:0.87,z:0.412},{x:0.87,z:0.439},{x:0.891,z:0.4},{x:0.869,z:0.432},{x:0.875,z:0.437},
           {x:0.902,z:0.442},{x:0.954,z:0.472},{x:0.651,z:0.103},{x:0.711,z:0.087},{x:0.684,z:0.154},
@@ -795,6 +1134,21 @@ const BIOMES = {
       },
       {
         id: 'rock_7',
+        hills: [
+          { x: 0.55, z: 0.71, radius: 0.22, height: 0.21 },
+          { x: 0.25, z: 0.12, radius: 0.27, height: 0.60 },
+          { x: 0.86, z: 0.19, radius: 0.24, height: 0.54 },
+          { x: 0.46, z: 0.38, radius: 0.39, height: 0.55 },
+          { x: 0.30, z: 0.80, radius: 0.28, height: 0.19 },
+          { x: 0.40, z: 0.29, radius: 0.33, height: 0.55 },
+          { x: 0.24, z: 0.15, radius: 0.27, height: 0.67 },
+          { x: 0.43, z: 0.49, radius: 0.39, height: 0.47 },
+          { x: 0.14, z: 0.29, radius: 0.37, height: 0.43 },
+          { x: 0.30, z: 0.10, radius: 0.39, height: 0.52 },
+          { x: 0.90, z: 0.48, radius: 0.35, height: 0.55 },
+          { x: 0.57, z: 0.71, radius: 0.22, height: 0.13 },
+          { x: 0.39, z: 0.59, radius: 0.33, height: 0.46 },
+        ],
         trees: [
           {x:0.746,z:0.18},{x:0.797,z:0.145},{x:0.795,z:0.131},{x:0.74,z:0.133},{x:0.788,z:0.085},
           {x:0.823,z:0.151},{x:0.804,z:0.094},{x:0.025,z:0.746},{x:0.027,z:0.729},{x:0.059,z:0.693},
@@ -859,6 +1213,15 @@ const BIOMES = {
       },
       {
         id: 'rock_8',
+        hills: [
+          { x: 0.14, z: 0.84, radius: 0.29, height: 0.36 },
+          { x: 0.56, z: 0.57, radius: 0.30, height: 0.35 },
+          { x: 0.16, z: 0.08, radius: 0.22, height: 0.43 },
+          { x: 0.58, z: 0.65, radius: 0.24, height: 0.23 },
+          { x: 0.87, z: 0.76, radius: 0.34, height: 0.35 },
+          { x: 0.37, z: 0.47, radius: 0.32, height: 0.52 },
+          { x: 0.12, z: 0.39, radius: 0.22, height: 0.38 },
+        ],
         trees: [
           {x:0.587,z:0.677},{x:0.584,z:0.731},{x:0.627,z:0.686},{x:0.666,z:0.737},{x:0.624,z:0.759},
           {x:0.572,z:0.743},{x:0.638,z:0.703},{x:0.663,z:0.756},{x:0.297,z:0.414},{x:0.292,z:0.452},
@@ -937,6 +1300,21 @@ const BIOMES = {
       },
       {
         id: 'rock_9',
+        hills: [
+          { x: 0.85, z: 0.42, radius: 0.32, height: 0.39 },
+          { x: 0.24, z: 0.55, radius: 0.20, height: 0.49 },
+          { x: 0.84, z: 0.41, radius: 0.31, height: 0.26 },
+          { x: 0.27, z: 0.26, radius: 0.32, height: 0.52 },
+          { x: 0.16, z: 0.39, radius: 0.31, height: 0.53 },
+          { x: 0.58, z: 0.64, radius: 0.21, height: 0.28 },
+          { x: 0.70, z: 0.40, radius: 0.33, height: 0.26 },
+          { x: 0.16, z: 0.47, radius: 0.25, height: 0.29 },
+          { x: 0.48, z: 0.12, radius: 0.29, height: 0.68 },
+          { x: 0.33, z: 0.59, radius: 0.31, height: 0.48 },
+          { x: 0.29, z: 0.67, radius: 0.23, height: 0.17 },
+          { x: 0.80, z: 0.39, radius: 0.37, height: 0.44 },
+          { x: 0.51, z: 0.20, radius: 0.27, height: 0.48 },
+        ],
         trees: [
           {x:0.528,z:0.409},{x:0.468,z:0.36},{x:0.453,z:0.436},{x:0.465,z:0.361},{x:0.463,z:0.361},
           {x:0.418,z:0.44},{x:0.487,z:0.441},{x:0.49,z:0.401},{x:0.507,z:0.344},{x:0.574,z:0.122},
@@ -1038,134 +1416,210 @@ const BIOMES = {
       },
     ],
   },
-  // Future biomes (forest, desert, ice, etc.) go here
+  forest: {
+    name: 'Forest Biome',
+    generationRules: {
+      // Forest configs have NO terrain elements (rocks, trees, minables).
+      // Each config defines exactly 1 hill formation covering ~half the region,
+      // pushed against one of the 4 edges. Shape is rectangular or triangular, low.
+      hills: {
+        count: 1, // single hill formation per config
+        shape: 'rectangular or triangular',
+        coverage: 'half the region',
+        edge: 'any of 4 edges (left/right/front/back)',
+        // Rectangular: use 3-6 overlapping hills along the chosen edge
+        //   x or z pinned near 0.0 or 1.0 depending on edge
+        //   radius: 0.40-0.60 (broad, overlapping to form a flat-top plateau)
+        //   height: 0.15-0.30 (low)
+        // Triangular: use 2-4 hills with decreasing radius away from edge
+        //   height: 0.15-0.30 (low)
+      },
+      trees: null,    // not yet defined
+      rocks: null,    // not yet defined
+      minables: null, // not yet defined
+    },
+    defaultHills: [],
+    treeVariants: ['dry', 'sparse', 'bare', 'scraggly'],
+    configs: [
+      {
+        id: 'forest_1',
+        // Rectangular hill covering back half, against top/back edge
+        hills: [
+          { x: 0.25, z: 0.15, radius: 0.55, height: 0.25 },
+          { x: 0.50, z: 0.15, radius: 0.55, height: 0.28 },
+          { x: 0.75, z: 0.15, radius: 0.55, height: 0.25 },
+          { x: 0.25, z: 0.35, radius: 0.45, height: 0.20 },
+          { x: 0.50, z: 0.35, radius: 0.45, height: 0.22 },
+          { x: 0.75, z: 0.35, radius: 0.45, height: 0.20 },
+        ],
+        trees: [],
+        rocks: [],
+        minables: [],
+      },
+    ],
+  },
 };
 
-// ============================================================
-// ACTIVE BIOME STATE — populated by loadBiome()
-// ============================================================
-let activeBiome = null;
-let activeConfig = null;
-let HILLS = [];
-let TREES = [];
-let ROCKS = [];
-let MINABLES = [];
+// Active biome reference (used for tree texture loading)
+let activeBiome = BIOMES.rock;
 
-function loadBiomeConfig(biomeName, configIndex) {
-  const biome = BIOMES[biomeName];
-  if (!biome) throw new Error(`Unknown biome: ${biomeName}`);
-  const config = biome.configs[configIndex || 0];
-  if (!config) throw new Error(`Unknown config index ${configIndex} for biome ${biomeName}`);
-  activeBiome = biome;
-  activeConfig = config;
-  HILLS = biome.hills;
-  TREES = config.trees;
-  ROCKS = config.rocks;
-  MINABLES = config.minables;
-}
-
-// Load default biome
-loadBiomeConfig('rock', 0);
-
-function getHillHeight(u, v) {
+function getHillHeightFor(hills, u, v) {
   let h = 0;
-  for (const hill of HILLS) {
+  for (const hill of hills) {
     const dx = u - hill.x;
     const dz = v - hill.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     const t = Math.max(0, 1 - dist / hill.radius);
-    // Smooth cosine falloff for gentle shape
     h += hill.height * (0.5 + 0.5 * Math.cos(Math.PI * (1 - t)));
   }
   return h;
 }
 
-// --- Adaptive Ground Mesh ---
-// Coarse grid everywhere, subdivided near hills for detail
-const S = 5.0;
-const BASE_RES = 8;    // coarse grid
-const FINE_RES = 8;    // subdivisions per coarse cell near hills
-const HILL_PAD = 0.08; // extra UV radius to catch hill edges
+// Get hills for a grid position (clamped to bounds)
+const GRID_SIZE = 3;
+const GRID_HALF = Math.floor(GRID_SIZE / 2);
 
-// Determine which coarse cells need subdivision
-function cellNeedsDetail(ci, cj) {
-  const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
-  const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
-  const cu = (u0 + u1) * 0.5, cv = (v0 + v1) * 0.5;
-  const cellR = Math.sqrt((u1-u0)*(u1-u0) + (v1-v0)*(v1-v0)) * 0.5;
-  for (const hill of HILLS) {
-    const du = cu - hill.cx, dv = cv - hill.cz;
-    const dist = Math.sqrt(du*du + dv*dv);
-    if (dist < hill.radius + cellR + HILL_PAD) return true;
-  }
-  return false;
+function getHillsForRegion(gx, gz) {
+  const cgx = Math.max(-GRID_HALF, Math.min(GRID_HALF, gx));
+  const cgz = Math.max(-GRID_HALF, Math.min(GRID_HALF, gz));
+  const assignment = getRegionAssignment(cgx, cgz);
+  const biome = BIOMES[assignment.biome];
+  const config = biome.configs[assignment.configIdx];
+  return config.hills || biome.defaultHills;
 }
 
-// Build mesh: collect verts and indices
-const terrVerts = [];
-const terrIdx = [];
-const vertMap = new Map(); // "u,v" -> index
-let terrVI = 0;
-
-function addVert(u, v) {
-  const key = u.toFixed(6) + ',' + v.toFixed(6);
-  if (vertMap.has(key)) return vertMap.get(key);
-  const x = -S + u * 2 * S;
-  const z = -S + v * 2 * S;
-  const y = getHillHeight(u, v);
-  terrVerts.push(x, y, z, u, v);
-  const idx = terrVI++;
-  vertMap.set(key, idx);
-  return idx;
-}
-
-function addQuad(u0, v0, u1, v1) {
-  const tl = addVert(u0, v0);
-  const tr = addVert(u1, v0);
-  const bl = addVert(u0, v1);
-  const br = addVert(u1, v1);
-  terrIdx.push(tl, bl, tr, tr, bl, br);
-}
-
-for (let cj = 0; cj < BASE_RES; cj++) {
-  for (let ci = 0; ci < BASE_RES; ci++) {
-    const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
-    const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
-    if (cellNeedsDetail(ci, cj)) {
-      // Subdivide this cell
-      for (let sj = 0; sj < FINE_RES; sj++) {
-        for (let si = 0; si < FINE_RES; si++) {
-          const su0 = u0 + (si / FINE_RES) * (u1 - u0);
-          const su1 = u0 + ((si + 1) / FINE_RES) * (u1 - u0);
-          const sv0 = v0 + (sj / FINE_RES) * (v1 - v0);
-          const sv1 = v0 + ((sj + 1) / FINE_RES) * (v1 - v0);
-          addQuad(su0, sv0, su1, sv1);
-        }
+// Blended height: samples hills from this region AND all 8 neighbors
+// Each neighbor uses its own hill layout for proper cross-boundary blending
+function getBlendedHeight(hills, u, v, regionGx, regionGz) {
+  let h = 0;
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const neighborHills = (dx === 0 && dz === 0) ? hills :
+        (regionGx !== undefined ? getHillsForRegion(regionGx + dx, regionGz + dz) : hills);
+      for (const hill of neighborHills) {
+        const hu = hill.x + dx;
+        const hv = hill.z + dz;
+        const du = u - hu;
+        const dv = v - hv;
+        const dist = Math.sqrt(du * du + dv * dv);
+        const t = Math.max(0, 1 - dist / hill.radius);
+        h += hill.height * (0.5 + 0.5 * Math.cos(Math.PI * (1 - t)));
       }
-    } else {
-      // Single coarse quad
-      addQuad(u0, v0, u1, v1);
     }
   }
+  return h;
 }
 
-const vertData = new Float32Array(terrVerts);
-const idxCount = terrIdx.length;
-const indices = new Uint16Array(terrIdx);
+// --- Adaptive Ground Mesh Builder ---
+const S = 5.0;
+const REGION_SIZE = S * 2; // 10 world units per region
+const BASE_RES = 8;
+const FINE_RES = 8;
+const HILL_PAD = 0.08;
+const EDGE_OVERLAP = 0.15; // 15% overlap into neighbor regions
 
-const vbo = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-gl.bufferData(gl.ARRAY_BUFFER, vertData, gl.STATIC_DRAW);
+function buildTerrainMesh(hills, regionGx, regionGz) {
+  function cellNeedsDetail(ci, cj) {
+    const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
+    const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
+    const cu = (u0 + u1) * 0.5, cv = (v0 + v1) * 0.5;
+    const cellR = Math.sqrt((u1-u0)*(u1-u0) + (v1-v0)*(v1-v0)) * 0.5;
+    // Check all neighbor hills for edge detail
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nHills = (dx === 0 && dz === 0) ? hills :
+          getHillsForRegion(regionGx + dx, regionGz + dz);
+        for (const hill of nHills) {
+          const du = cu - (hill.x + dx), dv = cv - (hill.z + dz);
+          const dist = Math.sqrt(du*du + dv*dv);
+          if (dist < hill.radius + cellR + HILL_PAD) return true;
+        }
+      }
+    }
+    return false;
+  }
 
-const ibo = gl.createBuffer();
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+  const verts = [];
+  const idx = [];
+  const vMap = new Map();
+  let vi = 0;
 
+  function addV(u, v) {
+    const key = u.toFixed(6) + ',' + v.toFixed(6);
+    if (vMap.has(key)) return vMap.get(key);
+    const x = -S + u * 2 * S;
+    const z = -S + v * 2 * S;
+    const y = getBlendedHeight(hills, u, v, regionGx, regionGz);
+    verts.push(x, y, z, u, v);
+    const i = vi++;
+    vMap.set(key, i);
+    return i;
+  }
+
+  function addQ(u0, v0, u1, v1) {
+    const tl = addV(u0, v0), tr = addV(u1, v0);
+    const bl = addV(u0, v1), br = addV(u1, v1);
+    idx.push(tl, bl, tr, tr, bl, br);
+  }
+
+  for (let cj = 0; cj < BASE_RES; cj++) {
+    for (let ci = 0; ci < BASE_RES; ci++) {
+      const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
+      const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
+      if (cellNeedsDetail(ci, cj)) {
+        for (let sj = 0; sj < FINE_RES; sj++) {
+          for (let si = 0; si < FINE_RES; si++) {
+            addQ(
+              u0 + (si / FINE_RES) * (u1 - u0), v0 + (sj / FINE_RES) * (v1 - v0),
+              u0 + ((si+1) / FINE_RES) * (u1 - u0), v0 + ((sj+1) / FINE_RES) * (v1 - v0)
+            );
+          }
+        }
+      } else {
+        addQ(u0, v0, u1, v1);
+      }
+    }
+  }
+
+  // Add overlap border strips extending past 0-1 UV range
+  const OV = EDGE_OVERLAP;
+  // Left border (u: -OV to 0)
+  for (let cj = 0; cj < BASE_RES; cj++) {
+    const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
+    addQ(-OV, v0, 0, v1);
+  }
+  // Right border (u: 1 to 1+OV)
+  for (let cj = 0; cj < BASE_RES; cj++) {
+    const v0 = cj / BASE_RES, v1 = (cj + 1) / BASE_RES;
+    addQ(1, v0, 1 + OV, v1);
+  }
+  // Top border (v: -OV to 0)
+  for (let ci = 0; ci < BASE_RES; ci++) {
+    const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
+    addQ(u0, -OV, u1, 0);
+  }
+  // Bottom border (v: 1 to 1+OV)
+  for (let ci = 0; ci < BASE_RES; ci++) {
+    const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
+    addQ(u0, 1, u1, 1 + OV);
+  }
+  // Four corner overlap quads
+  addQ(-OV, -OV, 0, 0);
+  addQ(1, -OV, 1 + OV, 0);
+  addQ(-OV, 1, 0, 1 + OV);
+  addQ(1, 1, 1 + OV, 1 + OV);
+
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+  const ibo = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+  return { vbo, ibo, idxCount: idx.length };
+}
+
+// Vertex stride: 3 floats pos + 2 floats UV
 const stride = 5 * 4;
-gl.enableVertexAttribArray(aPos);
-gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
-gl.enableVertexAttribArray(aUV);
-gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
 
 // --- Tree Billboard Shader ---
 const treeVS = `
@@ -1176,6 +1630,7 @@ const treeVS = `
   uniform vec3 uTreePos;
   uniform float uTreeScale;
   varying vec2 vUV;
+  varying vec3 vTreeWorldPos;
   void main() {
     vec3 camRight = vec3(uView[0][0], uView[1][0], uView[2][0]);
     vec3 camUp = vec3(uView[0][1], uView[1][1], uView[2][1]);
@@ -1183,6 +1638,7 @@ const treeVS = `
     float h = 0.7 * uTreeScale;
     vec3 worldPos = uTreePos + camRight * aPos.x * w + camUp * aPos.y * h;
     vUV = aUV;
+    vTreeWorldPos = uTreePos;
     gl_Position = uProj * uView * vec4(worldPos, 1.0);
   }
 `;
@@ -1190,10 +1646,17 @@ const treeVS = `
 const treeFS = `
   precision mediump float;
   varying vec2 vUV;
+  varying vec3 vTreeWorldPos;
   uniform sampler2D uTreeTex;
+  uniform vec3 uTreePlayerPos;
   void main() {
     vec4 c = texture2D(uTreeTex, vUV);
     if (c.a < 0.5) discard;
+    float dx = vTreeWorldPos.x - uTreePlayerPos.x;
+    float dz = vTreeWorldPos.z - uTreePlayerPos.z;
+    float dist = sqrt(dx * dx + dz * dz);
+    float shadow = smoothstep(3.0, 12.0, dist);
+    c.rgb *= mix(1.0, 0.55, shadow);
     gl_FragColor = c;
   }
 `;
@@ -1212,6 +1675,7 @@ const tUView = gl.getUniformLocation(treeProg, 'uView');
 const tUTreePos = gl.getUniformLocation(treeProg, 'uTreePos');
 const tUTreeScale = gl.getUniformLocation(treeProg, 'uTreeScale');
 const tUTreeTex = gl.getUniformLocation(treeProg, 'uTreeTex');
+const tUTreePlayerPos = gl.getUniformLocation(treeProg, 'uTreePlayerPos');
 
 // Tree billboard quad: centered horizontally, bottom at y=0
 const treeQuadVerts = new Float32Array([
@@ -1263,7 +1727,7 @@ treeVariants.forEach((v, i) => {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, upscaled);
     gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -1272,12 +1736,6 @@ treeVariants.forEach((v, i) => {
   };
   img.src = TREE_IMAGES[v];
 });
-
-// Assign a deterministic variant to each tree
-let treeVariantIndex = [];
-
-// Precompute tree world positions (on terrain surface)
-let treeWorldPositions = [];
 
 const TREE_COLLISION_RADIUS = 0.055;
 const ROCK_COLLISION_RADIUS_BASE = 0.15;
@@ -1383,6 +1841,7 @@ const cubeFS = `
   uniform vec3 uColor;
   uniform float uEmissive;
   uniform float uIsRock;
+  uniform vec3 uPlayerWorldPos;
   void main() {
     vec3 n = normalize(vNormal);
     // Simple directional light from above-right (two-sided)
@@ -1407,6 +1866,12 @@ const cubeFS = `
     }
     vec3 lit = col * (ambient + diff * 0.7 + fill * 0.25);
     lit += uColor * uEmissive;
+    // Region shadow
+    float rdx = vWorldPos.x - uPlayerWorldPos.x;
+    float rdz = vWorldPos.z - uPlayerWorldPos.z;
+    float rdist = sqrt(rdx * rdx + rdz * rdz);
+    float rshadow = smoothstep(3.0, 12.0, rdist);
+    lit *= mix(1.0, 0.55, rshadow);
     gl_FragColor = vec4(lit, 1.0);
   }
 `;
@@ -1426,6 +1891,7 @@ const cUModel = gl.getUniformLocation(cubeProg, 'uModel');
 const cUColor = gl.getUniformLocation(cubeProg, 'uColor');
 const cUEmissive = gl.getUniformLocation(cubeProg, 'uEmissive');
 const cUIsRock = gl.getUniformLocation(cubeProg, 'uIsRock');
+const cUPlayerWorldPos = gl.getUniformLocation(cubeProg, 'uPlayerWorldPos');
 
 // Unit cube geometry: vertices with normals (centered at origin, size 1)
 const cubeVerts = new Float32Array([
@@ -1692,43 +2158,69 @@ function buildModelMatrix(tx, ty, tz, rotY, rotZ, sx, sy, sz) {
   return _modelMat;
 }
 
-// Precompute rock world data
-let rockWorldData = [];
-let minableWorldData = [];
+// Precompute rock world data — now per-region
 
-function recomputeWorldData() {
-  treeVariantIndex = TREES.map((t, i) => {
-    const h = Math.floor((t.x * 7919 + t.z * 6271) * 1000) % activeBiome.treeVariants.length;
-    return h;
+// Per-region biome and config assignment
+const regionConfigOverrides = new Map(); // "gx,gz" -> { biome, configIdx }
+
+// Default biome/config for each region
+function getRegionAssignment(gx, gz) {
+  const key = gx + ',' + gz;
+  if (regionConfigOverrides.has(key)) return regionConfigOverrides.get(key);
+  // Region [0,0] is forest biome, config 0
+  if (gx === 0 && gz === 0) return { biome: 'forest', configIdx: 0 };
+  // All other regions are rock biome
+  const idx = (gz + 1) * 3 + (gx + 1);
+  return { biome: 'rock', configIdx: idx % BIOMES.rock.configs.length };
+}
+
+
+// Build all world data for a region at grid position (gx, gz)
+function buildRegion(gx, gz) {
+  const assignment = getRegionAssignment(gx, gz);
+  const biome = BIOMES[assignment.biome];
+  const configIdx = assignment.configIdx;
+  const config = biome.configs[configIdx];
+  const hills = config.hills || biome.defaultHills;
+  const ox = gx * REGION_SIZE; // world offset x
+  const oz = gz * REGION_SIZE; // world offset z
+
+  // Terrain mesh
+  const terrain = buildTerrainMesh(hills, gx, gz);
+
+  // Tree data
+  const trees = config.trees;
+  const treeVarIdx = trees.map(t => {
+    return Math.floor((t.x * 7919 + t.z * 6271) * 1000) % biome.treeVariants.length;
   });
-  treeWorldPositions = TREES.map(t => {
-    const wx = -S + t.x * 2 * S;
-    const wz = -S + t.z * 2 * S;
-    const wy = getHillHeight(t.x, t.z);
+  const treePositions = trees.map(t => {
+    const wx = -S + t.x * 2 * S + ox;
+    const wz = -S + t.z * 2 * S + oz;
+    const wy = getBlendedHeight(hills, t.x, t.z, gx, gz);
     return { x: wx, y: wy, z: wz };
   });
-  rockWorldData = ROCKS.map((r, i) => {
-    const wx = -S + r.x * 2 * S;
-    const wz = -S + r.z * 2 * S;
-    const wy = getHillHeight(r.x, r.z);
+
+  // Rock data
+  const rocks = config.rocks.map((r, i) => {
+    const wx = -S + r.x * 2 * S + ox;
+    const wz = -S + r.z * 2 * S + oz;
+    const wy = getBlendedHeight(hills, r.x, r.z, gx, gz);
     const rockH = 0.175 * r.scale;
-    const meshIdx = i % ROCK_MESH_COUNT;
-    return { x: wx, y: wy + rockH * 0.5, z: wz, rotY: r.rotY, scale: r.scale, h: rockH, meshIdx };
+    return { x: wx, y: wy + rockH * 0.5, z: wz, rotY: r.rotY, scale: r.scale, h: rockH, meshIdx: i % ROCK_MESH_COUNT };
   });
-  minableWorldData = MINABLES.map(cluster => {
-    const baseWx = -S + cluster.x * 2 * S;
-    const baseWz = -S + cluster.z * 2 * S;
-    const baseWy = getHillHeight(cluster.x, cluster.z);
+
+  // Minable data
+  const minables = config.minables.map(cluster => {
+    const baseWx = -S + cluster.x * 2 * S + ox;
+    const baseWz = -S + cluster.z * 2 * S + oz;
     return {
-      clusterX: cluster.x, clusterZ: cluster.z,
       cubes: cluster.cubes.map(c => {
         const wx = baseWx + c.dx * 2 * S;
         const wz = baseWz + c.dz * 2 * S;
         const sy = c.sy * 0.7;
-        // Get terrain height at each cube's own position
         const cubeU = cluster.x + c.dx;
         const cubeV = cluster.z + c.dz;
-        const cubeWy = getHillHeight(cubeU, cubeV);
+        const cubeWy = getBlendedHeight(hills, cubeU, cubeV, gx, gz);
         return {
           x: wx, y: cubeWy + sy * 0.5, z: wz,
           rotY: c.rotY, rotZ: c.rotZ,
@@ -1739,11 +2231,287 @@ function recomputeWorldData() {
       }),
     };
   });
-  for (const cluster of minableWorldData) {
+  for (const cluster of minables) {
     cluster.colliders = computeClusterColliders(cluster.cubes, 4);
   }
+
+  // === Bake mineral ground texture (color + holes) per region on CPU ===
+  function fract(v) { return ((v % 1) + 1) % 1; }
+  function glslHash(px, py) {
+    let x = fract(px * 123.34), y = fract(py * 456.21);
+    const dot = x * (x + 45.32) + y * (y + 45.32);
+    x = fract(x + dot); y = fract(y + dot);
+    return fract(x * y);
+  }
+  function glslPixelNoise(ux, uy, scale) {
+    return glslHash(Math.floor(ux * scale), Math.floor(uy * scale));
+  }
+  function bakeMineralColor(wx, wz) {
+    const sx = wx * 0.42, sy = wz * 0.42;
+    const base = glslPixelNoise(sx, sy, 12.0);
+    const mid = glslPixelNoise(sx + 5.5, sy + 5.5, 20.0);
+    let n = Math.floor((base * 0.6 + mid * 0.4) * 5.0) / 5.0;
+    const dB = [0.12, 0.17, 0.32], mB = [0.17, 0.26, 0.46];
+    const bB = [0.12, 0.20, 0.48], gB = [0.14, 0.24, 0.55];
+    let r = dB[0]+(mB[0]-dB[0])*n, g = dB[1]+(mB[1]-dB[1])*n, b = dB[2]+(mB[2]-dB[2])*n;
+    const hl = glslPixelNoise(sx+17.7, sy+17.7, 14.0);
+    if (hl >= 0.72) { const m=0.55; r+=(bB[0]-r)*m; g+=(bB[1]-g)*m; b+=(bB[2]-b)*m; }
+    const fl = glslPixelNoise(sx+44.4, sy+44.4, 22.0);
+    if (fl >= 0.85) { const m=0.6; r+=(gB[0]-r)*m; g+=(gB[1]-g)*m; b+=(gB[2]-b)*m; }
+    return [r, g, b, 0.03 + (fl >= 0.85 ? 0.05 : 0.0)];
+  }
+  function bakeHole(wx, wz, mMask) {
+    const cx = Math.floor(wx * 0.42 * 12.0), cy = Math.floor(wz * 0.42 * 12.0);
+    let hr = glslHash(cx+33.3, cy+33.3);
+    const nL = glslHash(cx-1+33.3,cy+33.3)>=0.68?1:0, nR = glslHash(cx+1+33.3,cy+33.3)>=0.68?1:0;
+    const nU = glslHash(cx+33.3,cy-1+33.3)>=0.68?1:0, nD = glslHash(cx+33.3,cy+1+33.3)>=0.68?1:0;
+    if (nL+nR+nU+nD > 0) return 0;
+    const j = glslHash(cx+88.8, cy+88.8);
+    hr = hr*0.7 + glslHash(cx+(j>0.5?1:0)+33.3, cy+(j>0.7?1:0)+33.3)*0.3;
+    return (hr >= 0.68 && mMask >= 0.35) ? 1 : 0;
+  }
+  function bakeMineralTexture(glCtx, maskData, MASK_RES, regionOx, regionOz, regionS) {
+    const rgba = new Uint8Array(MASK_RES * MASK_RES * 4);
+    for (let py = 0; py < MASK_RES; py++) {
+      for (let px = 0; px < MASK_RES; px++) {
+        const u = (px + 0.5) / MASK_RES, v = (py + 0.5) / MASK_RES;
+        const mMask = maskData[py * MASK_RES + px] / 255.0;
+        const idx = (py * MASK_RES + px) * 4;
+        if (mMask < 0.01 || bakeHole(regionOx+(-regionS+u*2*regionS), regionOz+(-regionS+v*2*regionS), mMask)) {
+          rgba[idx]=rgba[idx+1]=rgba[idx+2]=rgba[idx+3]=0; continue;
+        }
+        const wx = regionOx+(-regionS+u*2*regionS), wz = regionOz+(-regionS+v*2*regionS);
+        let [r,g,b,em] = bakeMineralColor(wx, wz);
+        // Overall desaturation
+        let gr = r*0.3+g*0.3+b*0.4; r+=(gr-r)*0.3; g+=(gr-g)*0.3; b+=(gr-b)*0.3;
+        // Edge desaturation
+        const cd = 1.0-Math.min(1,Math.max(0,(mMask-0.15)/0.7));
+        gr = r*0.3+g*0.3+b*0.4; r+=(gr-r)*cd*0.9; g+=(gr-g)*cd*0.9; b+=(gr-b)*cd*0.9;
+        r*=1-cd*0.25; g*=1-cd*0.25; b*=1-cd*0.25;
+        rgba[idx]=Math.round(Math.min(1,r)*255);
+        rgba[idx+1]=Math.round(Math.min(1,g)*255);
+        rgba[idx+2]=Math.round(Math.min(1,b)*255);
+        rgba[idx+3]=Math.round(Math.min(1,em*4)*255); // emissive scaled up
+      }
+    }
+    const tex = glCtx.createTexture();
+    glCtx.bindTexture(glCtx.TEXTURE_2D, tex);
+    glCtx.texImage2D(glCtx.TEXTURE_2D, 0, glCtx.RGBA, MASK_RES, MASK_RES, 0, glCtx.RGBA, glCtx.UNSIGNED_BYTE, rgba);
+    glCtx.texParameteri(glCtx.TEXTURE_2D, glCtx.TEXTURE_MIN_FILTER, glCtx.NEAREST);
+    glCtx.texParameteri(glCtx.TEXTURE_2D, glCtx.TEXTURE_MAG_FILTER, glCtx.NEAREST);
+    glCtx.texParameteri(glCtx.TEXTURE_2D, glCtx.TEXTURE_WRAP_S, glCtx.CLAMP_TO_EDGE);
+    glCtx.texParameteri(glCtx.TEXTURE_2D, glCtx.TEXTURE_WRAP_T, glCtx.CLAMP_TO_EDGE);
+    return tex;
+  }
+
+  // Bake mineral mask texture from collider circles
+  // 64x64 texture, each pixel stores the mask value (0-255)
+  const MASK_RES = 128;
+  const maskData = new Uint8Array(MASK_RES * MASK_RES);
+  // Collect all circles for this region (in region-local UV 0-1 space)
+  const blueCircles = [];
+  for (const cluster of minables) {
+    for (const col of cluster.colliders) {
+      const mult = col.radius < 0.08 ? 3.0 : col.radius < 0.15 ? 2.2 : 1.5;
+      const u = (col.x - ox + S) / (2 * S);
+      const v = (col.z - oz + S) / (2 * S);
+      const rUV = (col.radius * mult) / (2 * S);
+      blueCircles.push({ u, v, r: rUV });
+
+      // Scatter small satellite squares around edges on all sides
+      // Seeded from collider position for determinism
+      let seed = (col.x * 127.1 + col.z * 311.7) * 43758.5453;
+      const nextRand = () => { seed = (seed * 16807 + 0.5) % 2147483647; return (seed & 0xffff) / 0xffff; };
+      const numSatellites = 5 + Math.floor(nextRand() * 4); // 5-8 per collider
+      for (let s = 0; s < numSatellites; s++) {
+        // Random angle around the square
+        const angle = nextRand() * Math.PI * 2;
+        // Distance: just outside the edge, 1.1-2.2x radius
+        const distMult = 1.1 + nextRand() * 1.1;
+        const dist = rUV * distMult;
+        const su = u + Math.cos(angle) * dist;
+        const sv = v + Math.sin(angle) * dist;
+        // Size: smaller further away (30%-15% of parent radius)
+        const sizeFrac = 0.30 - (distMult - 1.1) * 0.14;
+        const sr = rUV * Math.max(sizeFrac, 0.10);
+        blueCircles.push({ u: su, v: sv, r: sr });
+      }
+    }
+  }
+  for (let py = 0; py < MASK_RES; py++) {
+    for (let px = 0; px < MASK_RES; px++) {
+      const u = (px + 0.5) / MASK_RES;
+      const v = (py + 0.5) / MASK_RES;
+      let mask = 0;
+      for (const c of blueCircles) {
+        const du = u - c.u, dv = v - c.v;
+        // Axis-aligned square: max of absolute deltas
+        const d = Math.max(Math.abs(du), Math.abs(dv));
+        // Hard square edge
+        const t = d < c.r ? 1.0 : 0.0;
+        if (t > mask) mask = t;
+      }
+      maskData[py * MASK_RES + px] = Math.round(mask * 255);
+    }
+  }
+  const mineralMaskTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, mineralMaskTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, MASK_RES, MASK_RES, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, maskData);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  // Bake full RGBA mineral texture (color + holes + desaturation prebaked)
+  const mineralBakedTex = bakeMineralTexture(gl, maskData, MASK_RES, ox, oz, S);
+
+  // Build small mineral overlay mesh: one terrain-hugging quad per cluster
+  // Each cluster's colliders define a bounding box; we subdivide it into a
+  // small grid so it follows terrain height. Much cheaper than full terrain.
+  let mineralMesh = null;
+  if (blueCircles.length > 0) {
+    const mVerts = [];
+    const mIdx = [];
+    let mVi = 0;
+    const SUB = 4; // subdivisions per cluster quad
+
+    for (const cluster of minables) {
+      // Find bounding box of this cluster's collider circles in UV space
+      let uMin = 1, uMax = 0, vMin = 1, vMax = 0;
+      for (const col of cluster.colliders) {
+        const mult = col.radius < 0.08 ? 3.0 : col.radius < 0.15 ? 2.2 : 1.5;
+        const cu = (col.x - ox + S) / (2 * S);
+        const cv = (col.z - oz + S) / (2 * S);
+        const cr = (col.radius * mult) / (2 * S);
+        uMin = Math.min(uMin, cu - cr);
+        uMax = Math.max(uMax, cu + cr);
+        vMin = Math.min(vMin, cv - cr);
+        vMax = Math.max(vMax, cv + cr);
+      }
+      // Clamp to valid range with padding for satellite squares (scatter up to 2.2x radius out)
+      const maxScatter = 0.05; // generous padding for satellites
+      uMin = Math.max(-0.02, uMin - maxScatter);
+      uMax = Math.min(1.02, uMax + maxScatter);
+      vMin = Math.max(-0.02, vMin - maxScatter);
+      vMax = Math.min(1.02, vMax + maxScatter);
+
+      // Build subdivided quad grid
+      const baseVi = mVi;
+      for (let sj = 0; sj <= SUB; sj++) {
+        for (let si = 0; si <= SUB; si++) {
+          const u = uMin + (si / SUB) * (uMax - uMin);
+          const v = vMin + (sj / SUB) * (vMax - vMin);
+          const lx = -S + u * 2 * S;
+          const lz = -S + v * 2 * S;
+          const ly = getBlendedHeight(hills, u, v, gx, gz) + 0.005;
+          mVerts.push(lx, ly, lz, u, v);
+          mVi++;
+        }
+      }
+      for (let sj = 0; sj < SUB; sj++) {
+        for (let si = 0; si < SUB; si++) {
+          const tl = baseVi + sj * (SUB + 1) + si;
+          const tr = tl + 1;
+          const bl = tl + (SUB + 1);
+          const br = bl + 1;
+          mIdx.push(tl, bl, tr, tr, bl, br);
+        }
+      }
+    }
+
+    if (mIdx.length > 0) {
+      const mVbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, mVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mVerts), gl.STATIC_DRAW);
+      const mIbo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mIbo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(mIdx), gl.STATIC_DRAW);
+      mineralMesh = { vbo: mVbo, ibo: mIbo, idxCount: mIdx.length };
+    }
+  }
+
+  return {
+    gx, gz, ox, oz, configIdx, hills, biomeName: assignment.biome,
+    terrain, treeVarIdx, treePositions, rocks, minables, mineralMaskTex, mineralBakedTex, mineralMesh
+  };
 }
-recomputeWorldData();
+
+// Active regions cache: key "gx,gz" -> region data
+const regionCache = new Map();
+
+function getRegion(gx, gz) {
+  const key = gx + ',' + gz;
+  if (!regionCache.has(key)) {
+    regionCache.set(key, buildRegion(gx, gz));
+  }
+  return regionCache.get(key);
+}
+
+// Returns array of regions visible in the current camera view
+function getActiveRegions(playerX, playerZ, proj, view) {
+  // Build combined proj*view matrix for frustum testing
+  const m = new Float32Array(16);
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      m[r * 4 + c] = proj[c] * view[r * 4] + proj[4 + c] * view[r * 4 + 1] + proj[8 + c] * view[r * 4 + 2] + proj[12 + c] * view[r * 4 + 3];
+    }
+  }
+  // Extract frustum planes (left, right, bottom, top)
+  // For ortho, we only need these 4 (near/far are huge)
+  const planes = [
+    [m[3]+m[0], m[7]+m[4], m[11]+m[8], m[15]+m[12]],  // left
+    [m[3]-m[0], m[7]-m[4], m[11]-m[8], m[15]-m[12]],  // right
+    [m[3]+m[1], m[7]+m[5], m[11]+m[9], m[15]+m[13]],  // bottom
+    [m[3]-m[1], m[7]-m[5], m[11]-m[9], m[15]-m[13]],  // top
+  ];
+  // Normalize planes
+  for (const p of planes) {
+    const len = Math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+    if (len > 0) { p[0]/=len; p[1]/=len; p[2]/=len; p[3]/=len; }
+  }
+
+  const regions = [];
+  const hs = S; // half-size of region
+  for (let gz = -GRID_HALF; gz <= GRID_HALF; gz++) {
+    for (let gx = -GRID_HALF; gx <= GRID_HALF; gx++) {
+      const cx = gx * REGION_SIZE;
+      const cz = gz * REGION_SIZE;
+      // Test region AABB against frustum (use generous Y range)
+      let visible = true;
+      for (const p of planes) {
+        // Find the corner most in the direction of the plane normal
+        const px = p[0] > 0 ? cx + hs : cx - hs;
+        const py = p[1] > 0 ? 2.0 : 0;  // generous height range
+        const pz = p[2] > 0 ? cz + hs : cz - hs;
+        if (p[0]*px + p[1]*py + p[2]*pz + p[3] < -1.0) {
+          visible = false;
+          break;
+        }
+      }
+      if (visible) {
+        regions.push(getRegion(gx, gz));
+      }
+    }
+  }
+  return regions;
+}
+
+// Helper: get hill height at an absolute world position (finds correct region)
+function getWorldHeight(wx, wz) {
+  const gx = Math.round(wx / REGION_SIZE);
+  const gz = Math.round(wz / REGION_SIZE);
+  const lx = wx - gx * REGION_SIZE;
+  const lz = wz - gz * REGION_SIZE;
+  const u = (lx + S) / (2 * S);
+  const v = (lz + S) / (2 * S);
+  const cgx = Math.max(-GRID_HALF, Math.min(GRID_HALF, gx));
+  const cgz = Math.max(-GRID_HALF, Math.min(GRID_HALF, gz));
+  const assignment = getRegionAssignment(cgx, cgz);
+  const biome = BIOMES[assignment.biome];
+  const config = biome.configs[assignment.configIdx];
+  const hills = config.hills || biome.defaultHills;
+  return getBlendedHeight(hills, u, v, cgx, cgz);
+}
 
 // --- Character (collision cylinder) ---
 // Cylinder: radius 0.15, height 0.5 (roughly half tree height)
@@ -1843,33 +2611,33 @@ function pollGamepad() {
 }
 
 // Convert world position to UV for terrain height lookup
-function worldToUV(wx, wz) {
-  return { u: (wx + S) / (2 * S), v: (wz + S) / (2 * S) };
-}
-
-function resolveCollisions() {
-  for (const t of treeWorldPositions) {
-    const dx = player.x - t.x, dz = player.z - t.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    const minDist = CHAR_RADIUS + TREE_COLLISION_RADIUS;
-    if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
-  }
-  for (const r of rockWorldData) {
-    const dx = player.x - r.x, dz = player.z - r.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    const minDist = CHAR_RADIUS + ROCK_COLLISION_RADIUS_BASE * r.scale;
-    if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
-  }
-  for (const cluster of minableWorldData) {
-    for (const col of cluster.colliders) {
-      const dx = player.x - col.x, dz = player.z - col.z;
+function resolveCollisions(activeRegions) {
+  for (const reg of activeRegions) {
+    for (const t of reg.treePositions) {
+      const dx = player.x - t.x, dz = player.z - t.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      const minDist = CHAR_RADIUS + col.radius;
+      const minDist = CHAR_RADIUS + TREE_COLLISION_RADIUS;
       if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
     }
+    for (const r of reg.rocks) {
+      const dx = player.x - r.x, dz = player.z - r.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const minDist = CHAR_RADIUS + ROCK_COLLISION_RADIUS_BASE * r.scale;
+      if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
+    }
+    for (const cluster of reg.minables) {
+      for (const col of cluster.colliders) {
+        const dx = player.x - col.x, dz = player.z - col.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        const minDist = CHAR_RADIUS + col.radius;
+        if (dist < minDist && dist > 0.001) { const push = (minDist - dist) / dist; player.x += dx * push; player.z += dz * push; }
+      }
+    }
   }
-  player.x = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.x));
-  player.z = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.z));
+  // Clamp to world grid bounds
+  const worldHalf = (GRID_HALF + 0.5) * REGION_SIZE;
+  player.x = Math.max(-worldHalf + CHAR_RADIUS, Math.min(worldHalf - CHAR_RADIUS, player.x));
+  player.z = Math.max(-worldHalf + CHAR_RADIUS, Math.min(worldHalf - CHAR_RADIUS, player.z));
 }
 
 // --- Matrix helpers ---
@@ -1943,11 +2711,35 @@ window.addEventListener('mousemove', e => {
   camTarget[2] -= (-sinY * dx + cosY * dy) * panSpeed;
 });
 
-// Scroll to zoom
+// Scroll to zoom (step scales with distance)
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  camDist *= 1 + e.deltaY * 0.001;
-  camDist = Math.max(2, Math.min(20, camDist));
+  const step = camDist < 8 ? camDist * 0.13 : camDist * 0.195;
+  if (e.deltaY > 0) camDist = Math.min(20, camDist + step);
+  else camDist = Math.max(2, camDist - step);
+}, { passive: false });
+
+// Touch pinch zoom for tablets
+let touchStartDist = 0;
+let touchStartCamDist = 0;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    touchStartDist = Math.sqrt(dx * dx + dy * dy);
+    touchStartCamDist = camDist;
+  }
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const ratio = touchStartDist / dist;
+    camDist = Math.max(2, Math.min(20, touchStartCamDist * ratio));
+  }
 }, { passive: false });
 
 // --- Fullscreen toggle ---
@@ -1998,35 +2790,46 @@ colBtn.addEventListener('click', () => {
 
 // --- Biome HUD: custom config dropdown ---
 const biomeNameEl = document.getElementById('biomeName');
+const regionCoordsEl = document.getElementById('regionCoords');
 const configDropdown = document.getElementById('configDropdown');
 const configSelected = document.getElementById('configSelected');
 const configOptions = document.getElementById('configOptions');
 
 function populateConfigDropdown() {
+  const pgx = Math.round(player.x / REGION_SIZE);
+  const pgz = Math.round(player.z / REGION_SIZE);
+  const assignment = getRegionAssignment(pgx, pgz);
+  const biome = BIOMES[assignment.biome];
+  const currentConfigIdx = assignment.configIdx;
+  configSelected.textContent = (currentConfigIdx + 1);
   configOptions.innerHTML = '';
-  const configs = activeBiome.configs;
-  const activeIdx = configs.indexOf(activeConfig);
-  configSelected.textContent = activeIdx + 1;
+  const configs = biome.configs;
   for (let i = 0; i < configs.length; i++) {
     const opt = document.createElement('div');
-    opt.className = 'cfg-opt' + (i === activeIdx ? ' active' : '');
+    opt.className = 'cfg-opt' + (i === currentConfigIdx ? ' active' : '');
     opt.textContent = i + 1;
     opt.dataset.idx = i;
     opt.addEventListener('click', (e) => {
       e.stopPropagation();
       const idx = parseInt(opt.dataset.idx);
-      let biomeName = 'rock';
-      for (const [k, v] of Object.entries(BIOMES)) {
-        if (v === activeBiome) { biomeName = k; break; }
+      const pgx = Math.round(player.x / REGION_SIZE);
+      const pgz = Math.round(player.z / REGION_SIZE);
+      const curAssignment = getRegionAssignment(pgx, pgz);
+      regionConfigOverrides.set(pgx + ',' + pgz, { biome: curAssignment.biome, configIdx: idx });
+      // Invalidate this region and all neighbors (they blend hills at edges)
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          regionCache.delete((pgx + dx) + ',' + (pgz + dz));
+        }
       }
-      loadBiomeConfig(biomeName, idx);
-      recomputeWorldData();
-      populateConfigDropdown();
       configOptions.classList.remove('open');
+      populateConfigDropdown();
     });
     configOptions.appendChild(opt);
   }
-  biomeNameEl.textContent = activeBiome.name.replace(' Biome', '');
+  const biomeName = assignment.biome.charAt(0).toUpperCase() + assignment.biome.slice(1);
+  biomeNameEl.textContent = biomeName;
+  regionCoordsEl.textContent = pgx + ', ' + pgz;
 }
 populateConfigDropdown();
 
@@ -2058,6 +2861,7 @@ function draw(mode, count, type, offset) {
 }
 
 function render() {
+  if (render.lastRegX === undefined) { render.lastRegX = -999; render.lastRegZ = -999; }
   const frameStart = performance.now();
   drawCalls = 0;
   tris = 0;
@@ -2104,14 +2908,37 @@ function render() {
   if (mx !== 0 || mz !== 0) {
     player.x += mx * CHAR_SPEED * dt;
     player.z += mz * CHAR_SPEED * dt;
-    // Clamp to terrain bounds
-    player.x = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.x));
-    player.z = Math.max(-S + CHAR_RADIUS, Math.min(S - CHAR_RADIUS, player.z));
   }
-  resolveCollisions();
+
+  // Get nearby regions for collision (3x3 around player - always needed)
+  const pgx = Math.round(player.x / REGION_SIZE);
+  const pgz = Math.round(player.z / REGION_SIZE);
+  const nearbyRegions = [];
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const gx = pgx + dx, gz = pgz + dz;
+      if (gx < -GRID_HALF || gx > GRID_HALF || gz < -GRID_HALF || gz > GRID_HALF) continue;
+      nearbyRegions.push(getRegion(gx, gz));
+    }
+  }
+
+  // Update HUD if region changed
+  const curRegX = pgx;
+  const curRegZ = pgz;
+  if (curRegX !== render.lastRegX || curRegZ !== render.lastRegZ) {
+    render.lastRegX = curRegX;
+    render.lastRegZ = curRegZ;
+    populateConfigDropdown();
+  }
+
+  resolveCollisions(nearbyRegions);
   // Snap to terrain height
-  const pUV = worldToUV(player.x, player.z);
-  player.y = getHillHeight(pUV.u, pUV.v);
+  player.y = getWorldHeight(player.x, player.z);
+
+  // Camera follows player
+  camTarget[0] = player.x;
+  camTarget[1] = player.y;
+  camTarget[2] = player.z;
 
   const aspect = canvas.width / canvas.height;
   const proj = ortho(-camDist * aspect, camDist * aspect, -camDist, camDist, -50, 50);
@@ -2123,52 +2950,102 @@ function render() {
   const cz = camTarget[2] + isoDist * Math.cos(camRotX) * Math.cos(camRotY);
   const view = lookAt([cx, cy, cz], camTarget, [0, 1, 0]);
 
-  // --- Draw ground ---
+  // Pixel-snap the view matrix to eliminate sub-pixel jitter on sprites/textures.
+  // In ortho, world units per pixel = (2 * camDist) / canvas.height
+  // We snap the view's translation so the projected origin lands on exact pixels.
+  const worldPerPixelX = (2 * camDist * aspect) / canvas.width;
+  const worldPerPixelY = (2 * camDist) / canvas.height;
+  // Project the origin through the view matrix to get its screen-space offset
+  // view[12] and view[13] are the translation in view-space (x, y)
+  const viewTx = view[12];
+  const viewTy = view[13];
+  // Snap to pixel grid
+  view[12] = Math.round(viewTx / worldPerPixelX) * worldPerPixelX;
+  view[13] = Math.round(viewTy / worldPerPixelY) * worldPerPixelY;
+
+  // Get visible regions via frustum culling
+  const activeRegions = getActiveRegions(player.x, player.z, proj, view);
+
+  // --- Draw ground for all active regions (with edge blending) ---
   gl.useProgram(prog);
-  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
-  gl.enableVertexAttribArray(aUV);
-  gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.disable(gl.DEPTH_TEST);
   gl.uniformMatrix4fv(uProj, false, proj);
   gl.uniformMatrix4fv(uView, false, view);
-  draw(gl.TRIANGLES, idxCount, gl.UNSIGNED_SHORT, 0);
+  gl.uniform3f(uPlayerPos, player.x, player.y, player.z);
+
+  // Pass 1: Base ground textures
+  gl.uniform1f(uMineralOnly, 0.0);
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aUV);
+  for (const reg of activeRegions) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, reg.terrain.vbo);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, reg.terrain.ibo);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
+    gl.uniform3f(uWorldOffset, reg.ox, 0, reg.oz);
+    gl.uniform1f(uGroundType, reg.biomeName === 'forest' ? 1.0 : 0.0);
+    draw(gl.TRIANGLES, reg.terrain.idxCount, gl.UNSIGNED_SHORT, 0);
+  }
+
+  // Pass 2: Mineral ground overlay — small quads per cluster, not full terrain
+  gl.uniform1f(uMineralOnly, 1.0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(uMineralMask, 0);
+  for (const reg of activeRegions) {
+    if (!reg.mineralMesh) continue;
+    gl.bindTexture(gl.TEXTURE_2D, reg.mineralBakedTex);
+    gl.bindBuffer(gl.ARRAY_BUFFER, reg.mineralMesh.vbo);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, reg.mineralMesh.ibo);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
+    gl.uniform3f(uWorldOffset, reg.ox, 0, reg.oz);
+    draw(gl.TRIANGLES, reg.mineralMesh.idxCount, gl.UNSIGNED_SHORT, 0);
+  }
+
+  gl.disable(gl.BLEND);
+  gl.enable(gl.DEPTH_TEST);
 
   // --- Sort all objects by screen Y (lower on screen = closer to viewer = drawn last) ---
-  // Compute screen Y via view matrix dot product (row 1 of view matrix gives Y contribution)
-  // view is column-major: row1 = view[1], view[5], view[9], view[13]
   const vyX = view[1], vyY = view[5], vyZ = view[9], vyW = view[13];
 
   const sortables = [];
   if (treesLoaded === treeVariants.length) {
-    for (let i = 0; i < treeWorldPositions.length; i++) {
-      const t = treeWorldPositions[i];
-      const screenY = vyX * t.x + vyY * t.y + vyZ * t.z + vyW;
-      sortables.push({ type: 'tree', sortKey: screenY, index: i, x: t.x, y: t.y, z: t.z });
+    for (const reg of activeRegions) {
+      for (let i = 0; i < reg.treePositions.length; i++) {
+        const t = reg.treePositions[i];
+        const screenY = vyX * t.x + vyY * t.y + vyZ * t.z + vyW;
+        sortables.push({ type: 'tree', sortKey: screenY, treeVarIdx: reg.treeVarIdx[i], x: t.x, y: t.y, z: t.z });
+      }
     }
   }
-  // Rocks: sort by center screen Y
-  for (let i = 0; i < rockWorldData.length; i++) {
-    const r = rockWorldData[i];
-    const screenY = vyX * r.x + vyY * r.y + vyZ * r.z + vyW;
-    sortables.push({ type: 'rock', sortKey: screenY, rock: r });
+  // Rocks
+  for (const reg of activeRegions) {
+    for (const r of reg.rocks) {
+      const screenY = vyX * r.x + vyY * r.y + vyZ * r.z + vyW;
+      sortables.push({ type: 'rock', sortKey: screenY, rock: r });
+    }
   }
-  // Minable cubes: sort individually by center screen Y
+  // Minable cubes
   const time = now * 0.001;
-  for (const cluster of minableWorldData) {
-    for (const c of cluster.cubes) {
-      if (c.mined) continue;
-      const screenY = vyX * c.x + vyY * c.y + vyZ * c.z + vyW;
-      sortables.push({ type: 'crystal', sortKey: screenY, cube: c, time });
+  for (const reg of activeRegions) {
+    for (const cluster of reg.minables) {
+      for (const c of cluster.cubes) {
+        if (c.mined) continue;
+        const screenY = vyX * c.x + vyY * c.y + vyZ * c.z + vyW;
+        sortables.push({ type: 'crystal', sortKey: screenY, cube: c, time });
+      }
     }
   }
   // Player
   const pScreenY = vyX * player.x + vyY * player.y + vyZ * player.z + vyW;
   sortables.push({ type: 'player', sortKey: pScreenY });
-  // Sort descending: highest screen Y (top of screen / furthest) drawn first,
-  // lowest screen Y (bottom of screen / closest) drawn last
   sortables.sort((a, b) => b.sortKey - a.sortKey);
+
+  // Pre-set player position for distance shadow in cube shader
+  gl.useProgram(cubeProg);
+  gl.uniform3f(cUPlayerWorldPos, player.x, player.y, player.z);
 
   // Sorted pass: pure painter's algorithm, no depth testing
   // Back-face culling on 3D objects prevents seeing through them
@@ -2176,11 +3053,11 @@ function render() {
   gl.depthMask(false);
 
   let lastType = '';
+  let lastTreeVar = -1;
   for (const obj of sortables) {
     if (obj.type === 'tree') {
       gl.disable(gl.CULL_FACE);
       if (lastType !== 'tree') {
-        gl.depthMask(true);
         gl.useProgram(treeProg);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -2194,20 +3071,31 @@ function render() {
         gl.uniformMatrix4fv(tUView, false, view);
         gl.activeTexture(gl.TEXTURE0);
         gl.uniform1i(tUTreeTex, 0);
+        gl.uniform3f(tUTreePlayerPos, player.x, player.y, player.z);
         lastType = 'tree';
       }
-      gl.bindTexture(gl.TEXTURE_2D, treeTextures[treeVariantIndex[obj.index]]);
+      if (lastTreeVar !== obj.treeVarIdx) {
+        gl.bindTexture(gl.TEXTURE_2D, treeTextures[obj.treeVarIdx]);
+        lastTreeVar = obj.treeVarIdx;
+      }
       gl.uniform3f(tUTreePos, obj.x, obj.y, obj.z);
       gl.uniform1f(tUTreeScale, 1.0);
       draw(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 
     } else if (obj.type === 'rock') {
       if (lastType === 'tree') gl.disable(gl.BLEND);
-      gl.disable(gl.CULL_FACE);
-      gl.enable(gl.DEPTH_TEST);
-      gl.depthMask(true);
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-      gl.useProgram(cubeProg);
+      if (lastType !== 'rock' && lastType !== 'crystal') {
+        gl.enable(gl.CULL_FACE);
+        gl.cullFace(gl.BACK);
+      }
+      if (lastType !== 'rock') {
+        gl.useProgram(cubeProg);
+        gl.uniformMatrix4fv(cUProj, false, proj);
+        gl.uniformMatrix4fv(cUView, false, view);
+        gl.uniform3f(cUColor, 0.28, 0.26, 0.24);
+        gl.uniform1f(cUEmissive, 0.0);
+        gl.uniform1f(cUIsRock, 1.0);
+      }
       const r = obj.rock;
       const rm = rockMeshes[r.meshIdx];
       gl.bindBuffer(gl.ARRAY_BUFFER, rm.vbo);
@@ -2216,24 +3104,17 @@ function render() {
       gl.vertexAttribPointer(cAPos, 3, gl.FLOAT, false, 6 * 4, 0);
       gl.enableVertexAttribArray(cANormal);
       gl.vertexAttribPointer(cANormal, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
-      gl.uniformMatrix4fv(cUProj, false, proj);
-      gl.uniformMatrix4fv(cUView, false, view);
-      gl.uniform3f(cUColor, 0.28, 0.26, 0.24);
-      gl.uniform1f(cUEmissive, 0.0);
-      gl.uniform1f(cUIsRock, 1.0);
       const model = buildModelMatrix(r.x, r.y, r.z, r.rotY, 0.0, r.h);
       gl.uniformMatrix4fv(cUModel, false, model);
       draw(gl.TRIANGLES, rm.triCount, gl.UNSIGNED_SHORT, 0);
-      gl.disable(gl.DEPTH_TEST);
-      gl.depthMask(false);
       lastType = 'rock';
 
     } else if (obj.type === 'crystal') {
       if (lastType === 'tree') gl.disable(gl.BLEND);
-      gl.disable(gl.CULL_FACE);
-      gl.enable(gl.DEPTH_TEST);
-      gl.depthMask(true);
-      gl.clear(gl.DEPTH_BUFFER_BIT);
+      if (lastType !== 'rock' && lastType !== 'crystal') {
+        gl.enable(gl.CULL_FACE);
+        gl.cullFace(gl.BACK);
+      }
       if (lastType !== 'crystal') {
         gl.useProgram(cubeProg);
         gl.bindBuffer(gl.ARRAY_BUFFER, cubeVBO);
@@ -2244,17 +3125,15 @@ function render() {
         gl.vertexAttribPointer(cANormal, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
         gl.uniformMatrix4fv(cUProj, false, proj);
         gl.uniformMatrix4fv(cUView, false, view);
+        gl.uniform3f(cUColor, 0.18, 0.38, 0.65);
+        gl.uniform1f(cUIsRock, 0.0);
       }
       const c = obj.cube;
-      const pulse = 0.15 + 0.08 * Math.sin(obj.time * 1.5 + c.x * 3.0 + c.z * 5.0);
-      gl.uniform3f(cUColor, 0.2, 0.35, 0.65);
+      const pulse = 0.25 + 0.12 * Math.sin(obj.time * 1.5 + c.x * 3.0 + c.z * 5.0);
       gl.uniform1f(cUEmissive, pulse);
-      gl.uniform1f(cUIsRock, 0.0);
       const model = buildModelMatrix(c.x, c.y, c.z, c.rotY, c.rotZ, c.sx, c.sy, c.sz);
       gl.uniformMatrix4fv(cUModel, false, model);
       draw(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
-      gl.disable(gl.DEPTH_TEST);
-      gl.depthMask(false);
       lastType = 'crystal';
 
     } else {
@@ -2304,31 +3183,37 @@ function render() {
 
     // Tree colliders - red
     gl.uniform3f(dbgUColor, 1.0, 0.15, 0.1);
-    for (const t of treeWorldPositions) {
-      gl.uniform3f(dbgUCenter, t.x, t.y, t.z);
-      gl.uniform1f(dbgURadius, TREE_COLLISION_RADIUS);
-      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-      drawCalls++;
+    for (const reg of activeRegions) {
+      for (const t of reg.treePositions) {
+        gl.uniform3f(dbgUCenter, t.x, t.y, t.z);
+        gl.uniform1f(dbgURadius, TREE_COLLISION_RADIUS);
+        gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+        drawCalls++;
+      }
     }
 
     // Rock colliders - yellow
     gl.uniform3f(dbgUColor, 1.0, 0.85, 0.1);
-    for (const r of rockWorldData) {
-      gl.uniform3f(dbgUCenter, r.x, r.y - r.h * 0.5, r.z);
-      gl.uniform1f(dbgURadius, ROCK_COLLISION_RADIUS_BASE * r.scale);
-      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-      drawCalls++;
+    for (const reg of activeRegions) {
+      for (const r of reg.rocks) {
+        gl.uniform3f(dbgUCenter, r.x, r.y - r.h * 0.5, r.z);
+        gl.uniform1f(dbgURadius, ROCK_COLLISION_RADIUS_BASE * r.scale);
+        gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+        drawCalls++;
+      }
     }
 
     // Crystal cluster colliders - purple
     gl.uniform3f(dbgUColor, 0.7, 0.15, 0.9);
-    for (const cluster of minableWorldData) {
-      const baseY = getHillHeight(cluster.clusterX, cluster.clusterZ);
-      for (const col of cluster.colliders) {
-        gl.uniform3f(dbgUCenter, col.x, baseY, col.z);
-        gl.uniform1f(dbgURadius, col.radius);
-        gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-        drawCalls++;
+    for (const reg of activeRegions) {
+      for (const cluster of reg.minables) {
+        for (const col of cluster.colliders) {
+          const colY = getWorldHeight(col.x, col.z);
+          gl.uniform3f(dbgUCenter, col.x, colY, col.z);
+          gl.uniform1f(dbgURadius, col.radius);
+          gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+          drawCalls++;
+        }
       }
     }
 
@@ -2357,14 +3242,23 @@ function render() {
   gl.uniformMatrix4fv(gUView, false, view);
   gl.uniform3f(gUGlowColor, 0.15, 0.25, 0.55);
 
-  for (const cluster of minableWorldData) {
-    for (const c of cluster.cubes) {
-      if (c.mined) continue;
-      const pulse = 0.12 + 0.05 * Math.sin(time * 1.5 + c.x * 3.0 + c.z * 5.0);
-      gl.uniform3f(gUGlowPos, c.x, c.y, c.z);
-      gl.uniform1f(gUGlowSize, c.glowSize);
-      gl.uniform1f(gUGlowAlpha, pulse);
-      draw(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+  for (const reg of activeRegions) {
+    for (const cluster of reg.minables) {
+      for (const c of cluster.cubes) {
+        if (c.mined) continue;
+        // Distance-based fade: full glow within 8 units, fade out by 14
+        const gdx = c.x - player.x;
+        const gdz = c.z - player.z;
+        const gDist = Math.sqrt(gdx * gdx + gdz * gdz);
+        if (gDist > 14.0) continue; // hard skip only when fully faded
+        const distFade = 1.0 - Math.max(0, Math.min(1, (gDist - 8.0) / 6.0));
+        const pulse = (0.12 + 0.05 * Math.sin(time * 1.5 + c.x * 3.0 + c.z * 5.0)) * distFade;
+        if (pulse < 0.005) continue;
+        gl.uniform3f(gUGlowPos, c.x, c.y, c.z);
+        gl.uniform1f(gUGlowSize, c.glowSize);
+        gl.uniform1f(gUGlowAlpha, pulse);
+        draw(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+      }
     }
   }
 
@@ -2375,7 +3269,7 @@ function render() {
   frameMs = performance.now() - frameStart;
   frameMsMin = Math.min(frameMsMin, frameMs);
   frameMsMax = Math.max(frameMsMax, frameMs);
-  statsEl.textContent = statsText + `\n${drawCalls} draws | ${tris.toLocaleString()} tris`;
+  statsEl.textContent = statsText + `\n${drawCalls} draws | ${tris.toLocaleString()} tris\nzoom ${(8 - camDist) > 0 ? '+' : ''}${(8 - camDist).toFixed(0)}`;
 
   requestAnimationFrame(render);
 }
