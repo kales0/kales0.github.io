@@ -10,7 +10,7 @@ body { background: #08080c; overflow: hidden; display: flex; align-items: center
 canvas { display: block; }
 #fsBtn {
   position: fixed; top: 14px; right: 14px; z-index: 10;
-  width: 38px; height: 38px; border: 1px solid #3a3a40; border-radius: 6px;
+  width: 38px; height: 37px; border: 1px solid #3a3a40; border-radius: 6px;
   background: linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   padding: 0; margin: 0; line-height: 0;
@@ -19,7 +19,7 @@ canvas { display: block; }
 #fsBtn svg { width: 18px; height: 18px; stroke: rgba(255,255,255,0.7); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #colBtn {
   position: fixed; top: 14px; right: 58px; z-index: 10;
-  width: 38px; height: 38px; border: 1px solid #3a3a40; border-radius: 6px;
+  width: 38px; height: 37px; border: 1px solid #3a3a40; border-radius: 6px;
   background: linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   padding: 0; margin: 0; line-height: 0;
@@ -44,7 +44,7 @@ canvas { display: block; }
   font: 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: rgba(255,255,255,0.5); transition: background 0.2s, border-color 0.2s;
   user-select: none; min-width: 28px; text-align: center;
-  height: 38px; line-height: 38px;
+  height: 37px; line-height: 37px;
 }
 #configOptions {
   display: none; position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
@@ -63,14 +63,14 @@ canvas { display: block; }
 </head>
 <body>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 2.0ms (0.0-3.0)
-1177 draws | 83,914 tris
-zoom 0</div>
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">165 FPS | 1.0ms (0.0-3.0)
+1177 Draws | 83,914 Tris
+Zoom 0</div>
   <button id="statsToggle" title="Hide stats" style="
-    width:27px;height:38px;border:1px solid #3a3a40;border-radius:6px;
+    width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
     cursor:pointer;display:flex;align-items:center;justify-content:center;
-    transition:background 0.2s,border-color 0.2s;flex-shrink:0;padding:0;margin:0;line-height:0;
+    transition:background 0.2s,border-color 0.2s;flex-shrink:0;padding:0;margin:4px 0 0 0;line-height:0;
   ">
     <svg id="statsArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="15 18 9 12 15 6"></polyline>
@@ -2574,8 +2574,8 @@ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cylIdxData, gl.STATIC_DRAW);
 
 // Character state
 const player = {
-  x: 0,  // world x
-  z: 0,  // world z
+  x: -0.8,  // world x — offset toward top corner for visual centering
+  z: -0.8,  // world z
   y: 0,  // computed from terrain
 };
 
@@ -2707,12 +2707,22 @@ window.addEventListener('mousemove', e => {
   camTarget[2] -= (-sinY * dx + cosY * dy) * panSpeed;
 });
 
-// Scroll to zoom (step scales with distance)
+// Scroll to zoom — use precomputed level table for consistency
+const zoomTable = [8]; // index 0 = default
+// Build zoom-in levels
+let _d = 8;
+while (_d > 2.01) { _d -= _d * 0.13; zoomTable.unshift(Math.max(2, _d)); }
+// Build zoom-out levels
+_d = 8;
+while (_d < 19.9) { _d += _d * 0.195; zoomTable.push(Math.min(20, _d)); }
+const zoomDefaultIdx = zoomTable.indexOf(8);
+let zoomIdx = zoomDefaultIdx;
+
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  const step = camDist < 8 ? camDist * 0.13 : camDist * 0.195;
-  if (e.deltaY > 0) camDist = Math.min(20, camDist + step);
-  else camDist = Math.max(2, camDist - step);
+  if (e.deltaY > 0 && zoomIdx < zoomTable.length - 1) { zoomIdx++; }
+  else if (e.deltaY < 0 && zoomIdx > 0) { zoomIdx--; }
+  camDist = zoomTable[zoomIdx];
 }, { passive: false });
 
 // Touch pinch zoom for tablets
@@ -2940,10 +2950,12 @@ function render() {
   // Snap to terrain height
   player.y = getWorldHeight(player.x, player.z);
 
-  // Camera follows player
-  camTarget[0] = player.x;
-  camTarget[1] = player.y;
-  camTarget[2] = player.z;
+  // Camera follows player (target visual center of character)
+  // Offset along view direction on ground plane to visually center player
+  const viewOffsetZ = -camDist * 0.12; // nudge camera target forward
+  camTarget[0] = player.x + viewOffsetZ * Math.sin(camRotY);
+  camTarget[1] = player.y + CHAR_HEIGHT * 0.5;
+  camTarget[2] = player.z + viewOffsetZ * Math.cos(camRotY);
 
   const aspect = canvas.width / canvas.height;
   const proj = ortho(-camDist * aspect, camDist * aspect, -camDist, camDist, -50, 50);
@@ -3274,7 +3286,8 @@ function render() {
   frameMs = performance.now() - frameStart;
   frameMsMin = Math.min(frameMsMin, frameMs);
   frameMsMax = Math.max(frameMsMax, frameMs);
-  statsEl.textContent = statsText + `\n${drawCalls} draws | ${tris.toLocaleString()} tris\nzoom ${(8 - camDist) > 0 ? '+' : ''}${(8 - camDist).toFixed(0)}`;
+  const zoomDisplay = zoomDefaultIdx - zoomIdx;
+  statsEl.textContent = statsText + `\n${drawCalls} Draws | ${tris.toLocaleString()} Tris\nZoom ${zoomDisplay > 0 ? '+' : ''}${zoomDisplay}`;
 
   requestAnimationFrame(render);
 }
