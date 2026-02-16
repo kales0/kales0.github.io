@@ -132,7 +132,7 @@ canvas { display: block; }
 </head>
 <body>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 1.0ms (0.0-2.0)
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 1.0ms (0.0-2.0)
 639 Draws | 16,312 Tris
 Zoom 0 | 26.2.216</div>
   <button id="statsToggle" title="Hide stats" style="
@@ -243,7 +243,7 @@ const vsSource = `
 `;
 
 const fsSource = `
-  precision mediump float;
+  precision highp float;
   varying vec2 vUV;
   varying vec3 vWorldPos;
   uniform vec3 uPlayerPos;
