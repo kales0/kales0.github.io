@@ -41,8 +41,7 @@ COORDINATE SYSTEM:
 
 EDGE BLENDING:
   - EDGE_OVERLAP (0.15) extends ground mesh beyond UV [0,1]
-  - edgeMask() in fragment shader handles blocky noise blend
-  - blendUV offset in shader compensates for draw-order bias
+  - edgeMask() in fragment shader uses discard for blocky noise blend
 
 ==========================================================================
 -->
@@ -133,9 +132,9 @@ canvas { display: block; }
 </head>
 <body>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 0.0ms (0.0-2.0)
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 1.0ms (0.0-2.0)
 639 Draws | 16,312 Tris
-Zoom 0 | 26.2.215</div>
+Zoom 0 | 26.2.216</div>
   <button id="statsToggle" title="Hide stats" style="
     width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
@@ -210,7 +209,7 @@ Zoom 0 | 26.2.215</div>
 // Rule: Each edit increments the last digit. New month resets
 // edit to 1 and increments month. E.g. 26.2.2 -> 26.3.1
 // ============================================================
-const GAME_VERSION = '26.2.215';
+const GAME_VERSION = '26.2.216';
 
 const canvas = document.getElementById('gl');
 const gl = canvas.getContext('webgl');
@@ -248,59 +247,41 @@ const fsSource = `
   varying vec2 vUV;
   varying vec3 vWorldPos;
   uniform vec3 uPlayerPos;
-  uniform float uMineralOnly; // 0.0 = normal ground, 1.0 = mineral overlay only
-  uniform sampler2D uMineralMask; // per-region mineral mask texture
-  uniform sampler2D uMineralColorTex; // shared mineral color texture (world-space)
-  uniform sampler2D uGroundTex; // pre-baked ground texture (512x512)
+  uniform float uMineralOnly;
+  uniform sampler2D uMineralMask;
+  uniform sampler2D uMineralColorTex;
+  uniform sampler2D uLocalTex;
 
-  // Hash functions for procedural noise
   float hash(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return fract(p.x * p.y);
   }
 
-  // Pixelated value noise
   float pixelNoise(vec2 uv, float scale) {
     vec2 id = floor(uv * scale);
     return hash(id);
   }
 
-  // rockGround, grassGround — GPU-baked at startup (see groundBakeFS)
-
-  // Blue mineral ground texture — larger blocks, brighter, emissive to match crystals
-  // Returns vec4: rgb color + emissive strength in alpha
-  // mineralGround — GPU-baked at startup (see mineralBakeFS)
-  // mineralMask — per-region CPU-baked, sampled via uMineralMask
-
-  // Edge blending: the core region (UV 0-1) is always fully opaque.
-  // The overlap extensions (UV outside 0-1) use a world-space blocky
-  // pattern to interleave with the neighbor's overlap, creating a
-  // ragged pixelated transition.
+  // Edge mask: inside UV 0-1 always solid. In overlap zone (outside 0-1),
+  // use blocky noise to decide if this pixel survives or gets discarded.
   float edgeMask(vec2 uv, vec3 worldPos) {
-    // If fully inside the 0-1 region, always solid
     if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) return 1.0;
 
-    // We're in the overlap zone. Use world-space blocky noise to decide
-    // which region "owns" this pixel.
-    float blockScale = 1.2; // ~12 blocks per 10-unit region
+    float blockScale = 1.2;
     vec2 wc = worldPos.xz * blockScale;
-
-    // For X overlap: are we past the left (uv.x < 0) or right (uv.x > 1) edge?
-    // For Z overlap: are we past the top (uv.y < 0) or bottom (uv.y > 1) edge?
-    float ax = 1.0; // alpha contribution from x-axis
-    float az = 1.0; // alpha contribution from z-axis
-
+    float ax = 1.0;
+    float az = 1.0;
     float overlap = 0.15;
 
     if (uv.x < 0.0) {
-      float t = -uv.x / overlap; // 0 at edge, 1 at max extension
+      float t = -uv.x / overlap;
       float noise = pixelNoise(wc, 1.0);
-      ax = step(t, 1.0 - noise); // fade out further from edge, blocky
+      ax = step(t, 1.0 - noise);
     } else if (uv.x > 1.0) {
       float t = (uv.x - 1.0) / overlap;
       float noise = pixelNoise(wc, 1.0);
-      ax = step(t, noise); // complement of neighbor's left overlap
+      ax = step(t, noise);
     }
 
     if (uv.y < 0.0) {
@@ -320,63 +301,50 @@ const fsSource = `
     vec2 uv = vUV;
 
     if (uMineralOnly > 0.5) {
-      // Per-region mask: R = mask strength (0 = no mineral)
       float mask = texture2D(uMineralMask, vUV).r;
       if (mask < 0.004) discard;
-
-      // Sample shared mineral color using world-space UVs (texture repeats every 30 units)
       vec2 mineralUV = vWorldPos.xz / 30.0;
       vec4 mineralCol = texture2D(uMineralColorTex, mineralUV);
       vec3 color = mineralCol.rgb;
-      float emissive = mineralCol.a * 0.25; // undo the *4 scaling
-
-      // Player proximity shadow
+      float emissive = mineralCol.a * 0.25;
       float dx = vWorldPos.x - uPlayerPos.x;
       float dz = vWorldPos.z - uPlayerPos.z;
       float dist = sqrt(dx * dx + dz * dz);
       float shadow = smoothstep(3.0, 12.0, dist);
       vec3 shadowed = color * mix(1.0, 0.55, shadow);
-
       float worldHalf = 15.0;
       float fadeStart = 3.0;
       float edgeDist = min(min(worldHalf - vWorldPos.x, worldHalf + vWorldPos.x),
                            min(worldHalf - vWorldPos.z, worldHalf + vWorldPos.z));
       float worldEdgeShadow = smoothstep(0.0, fadeStart, edgeDist);
       shadowed *= mix(0.625, 1.0, worldEdgeShadow);
-
-      // Add emissive glow (not affected by shadow)
       color = shadowed + color * emissive;
-
       gl_FragColor = vec4(color, 1.0);
       return;
     }
 
-    // Normal ground pass — sample pre-baked ground texture (NEAREST filtering, 512x512)
-    vec3 color = texture2D(uGroundTex, uv).rgb;
+    // Discard overlap pixels that don't survive the blocky noise mask
+    float mask = edgeMask(uv, vWorldPos);
+    if (mask < 0.5) discard;
 
-    // Region shadow: darken terrain further from player
+    vec3 color = texture2D(uLocalTex, uv).rgb;
+
+    // Region shadow
     float dx = vWorldPos.x - uPlayerPos.x;
     float dz = vWorldPos.z - uPlayerPos.z;
     float dist = sqrt(dx * dx + dz * dz);
     float shadow = smoothstep(3.0, 12.0, dist);
     color *= mix(1.0, 0.55, shadow);
 
-    // Blocky alpha mask at region edges
-    // Offset UV by half the overlap so the blend zone is centered on the
-    // actual region boundary rather than biased by draw order.
-    float halfOV = 0.05;
-    vec2 blendUV = uv - vec2(halfOV, halfOV);
-    float alpha = edgeMask(blendUV, vWorldPos);
-
-    // Darken at world edges (outer boundary of the grid)
-    float worldHalf = 15.0; // (GRID_HALF + 0.5) * REGION_SIZE
-    float fadeStart = 3.0;  // start darkening this far from edge
+    // Darken at world edges
+    float worldHalf = 15.0;
+    float fadeStart = 3.0;
     float edgeDist = min(min(worldHalf - vWorldPos.x, worldHalf + vWorldPos.x),
                          min(worldHalf - vWorldPos.z, worldHalf + vWorldPos.z));
     float worldEdgeShadow = smoothstep(0.0, fadeStart, edgeDist);
     color *= mix(0.625, 1.0, worldEdgeShadow);
 
-    gl_FragColor = vec4(color, alpha);
+    gl_FragColor = vec4(color, 1.0);
   }
 `;
 
@@ -409,7 +377,7 @@ const uPlayerPos = gl.getUniformLocation(prog, 'uPlayerPos');
 const uMineralOnly = gl.getUniformLocation(prog, 'uMineralOnly');
 const uMineralMask = gl.getUniformLocation(prog, 'uMineralMask');
 const uMineralColorTex = gl.getUniformLocation(prog, 'uMineralColorTex');
-const uGroundTex = gl.getUniformLocation(prog, 'uGroundTex');
+const uLocalTex = gl.getUniformLocation(prog, 'uLocalTex');
 
 // --- GPU-baked ground textures (512x512) ---
 const GROUND_TEX_RES = 512;
@@ -3111,7 +3079,6 @@ function buildTerrainMesh(hills, regionGx, regionGz) {
   for (let ci = 0; ci < BASE_RES; ci++) {
     const u0 = ci / BASE_RES, u1 = (ci + 1) / BASE_RES;
     const edgeSub = effectiveSub[0 * BASE_RES + ci];
-    // For top/bottom, edge runs along U so swap axes
     for (let si = 0; si < edgeSub; si++) {
       for (let sj = 0; sj < OV_DEPTH; sj++) {
         addQ(
@@ -3134,7 +3101,7 @@ function buildTerrainMesh(hills, regionGx, regionGz) {
       }
     }
   }
-  // Four corner overlap quads — use max of the two adjacent edge cells
+  // Four corner overlap quads
   const cTL = Math.max(effectiveSub[0], OV_DEPTH);
   const cTR = Math.max(effectiveSub[BASE_RES - 1], OV_DEPTH);
   const cBL = Math.max(effectiveSub[(BASE_RES - 1) * BASE_RES], OV_DEPTH);
@@ -5215,6 +5182,10 @@ function draw(mode, count, type, offset) {
   tris += count / 3;
 }
 
+function biomeGroundTex(name) {
+  return name === 'forest' ? grassGroundTex : name === 'desert' ? desertGroundTex : rockGroundTex;
+}
+
 function render() {
   if (fpsCap > 0) {
     const now = performance.now();
@@ -5332,33 +5303,32 @@ function render() {
   // Get visible regions via frustum culling
   const activeRegions = getActiveRegions(player.x, player.z, proj, view);
 
-  // --- Draw ground for all active regions (with edge blending) ---
+  // --- Draw ground for all active regions (opaque, no alpha blend) ---
   gl.useProgram(prog);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.disable(gl.DEPTH_TEST);
   gl.uniformMatrix4fv(uProj, false, proj);
   gl.uniformMatrix4fv(uView, false, view);
   gl.uniform3f(uPlayerPos, player.x, player.y, player.z);
 
-  // Pass 1: Base ground textures (pre-baked 512x512)
+  // Pass 1: Ground — all regions, full mesh, opaque with discard at edges
   gl.uniform1f(uMineralOnly, 0.0);
   gl.enableVertexAttribArray(aPos);
   gl.enableVertexAttribArray(aUV);
+
   for (const reg of activeRegions) {
-    gl.activeTexture(gl.TEXTURE1);
-    const groundTex = reg.biomeName === 'forest' ? grassGroundTex : reg.biomeName === 'desert' ? desertGroundTex : rockGroundTex;
-    gl.bindTexture(gl.TEXTURE_2D, groundTex);
-    gl.uniform1i(uGroundTex, 1);
+    const localTex = biomeGroundTex(reg.biomeName);
     gl.bindBuffer(gl.ARRAY_BUFFER, reg.terrain.vbo);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, reg.terrain.ibo);
     gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
     gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, stride, 3 * 4);
     gl.uniform3f(uWorldOffset, reg.ox, 0, reg.oz);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, localTex);
+    gl.uniform1i(uLocalTex, 1);
     draw(gl.TRIANGLES, reg.terrain.idxCount, gl.UNSIGNED_SHORT, 0);
   }
 
-  // Pass 2: Mineral ground overlay — small quads per cluster, not full terrain
+  // Pass 2: Mineral ground overlay (uses discard, no blend needed)
   gl.uniform1f(uMineralOnly, 1.0);
   gl.activeTexture(gl.TEXTURE0);
   gl.uniform1i(uMineralMask, 0);
@@ -5377,7 +5347,6 @@ function render() {
     draw(gl.TRIANGLES, reg.mineralMesh.idxCount, gl.UNSIGNED_SHORT, 0);
   }
 
-  gl.disable(gl.BLEND);
   gl.enable(gl.DEPTH_TEST);
 
   // --- Sort all objects by screen Y (lower on screen = closer to viewer = drawn last) ---
