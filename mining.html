@@ -165,9 +165,9 @@ canvas { display: block; }
 </head>
 <body>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">166 FPS | 1.0ms (0.0-2.0)
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 0.0ms (0.0-2.0)
 747 Draws | 16,516 Tris
-Zoom 0 | 26.2.256</div>
+Zoom 0 | 26.2.345</div>
   <button id="statsToggle" title="Hide stats" style="
     width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
@@ -247,7 +247,7 @@ Zoom 0 | 26.2.256</div>
 // Rule: Each edit increments the last digit. New month resets
 // edit to 1 and increments month. E.g. 26.2.2 -> 26.3.1
 // ============================================================
-const GAME_VERSION = '26.2.256';
+const GAME_VERSION = '26.2.345';
 window._debugFlatTerrain = false;
 
 const canvas = document.getElementById('gl');
@@ -6748,30 +6748,35 @@ function getRegion(gx, gz) {
   return regionCache.get(key);
 }
 
+// Preallocated buffers for getActiveRegions (avoids per-frame GC pressure)
+const _frustumMat = new Float32Array(16);
+const _frustumPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+const _activeRegions = [];
+
 // Returns array of regions visible in the current camera view
 function getActiveRegions(playerX, playerZ, proj, view) {
   // Build combined proj*view matrix for frustum testing
-  const m = new Float32Array(16);
+  const m = _frustumMat;
   for (let r = 0; r < 4; r++) {
     for (let c = 0; c < 4; c++) {
       m[r * 4 + c] = proj[c] * view[r * 4] + proj[4 + c] * view[r * 4 + 1] + proj[8 + c] * view[r * 4 + 2] + proj[12 + c] * view[r * 4 + 3];
     }
   }
-  // Extract frustum planes (left, right, bottom, top)
+  // Extract frustum planes (left, right, bottom, top) into preallocated arrays
   // For ortho, we only need these 4 (near/far are huge)
-  const planes = [
-    [m[3]+m[0], m[7]+m[4], m[11]+m[8], m[15]+m[12]],  // left
-    [m[3]-m[0], m[7]-m[4], m[11]-m[8], m[15]-m[12]],  // right
-    [m[3]+m[1], m[7]+m[5], m[11]+m[9], m[15]+m[13]],  // bottom
-    [m[3]-m[1], m[7]-m[5], m[11]-m[9], m[15]-m[13]],  // top
-  ];
+  const p0 = _frustumPlanes[0], p1 = _frustumPlanes[1], p2 = _frustumPlanes[2], p3 = _frustumPlanes[3];
+  p0[0]=m[3]+m[0]; p0[1]=m[7]+m[4]; p0[2]=m[11]+m[8];  p0[3]=m[15]+m[12]; // left
+  p1[0]=m[3]-m[0]; p1[1]=m[7]-m[4]; p1[2]=m[11]-m[8];  p1[3]=m[15]-m[12]; // right
+  p2[0]=m[3]+m[1]; p2[1]=m[7]+m[5]; p2[2]=m[11]+m[9];  p2[3]=m[15]+m[13]; // bottom
+  p3[0]=m[3]-m[1]; p3[1]=m[7]-m[5]; p3[2]=m[11]-m[9];  p3[3]=m[15]-m[13]; // top
   // Normalize planes
-  for (const p of planes) {
+  for (let i = 0; i < 4; i++) {
+    const p = _frustumPlanes[i];
     const len = Math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
     if (len > 0) { p[0]/=len; p[1]/=len; p[2]/=len; p[3]/=len; }
   }
 
-  const regions = [];
+  _activeRegions.length = 0;
   const hs = S; // half-size of region
   for (let gz = -GRID_HALF; gz <= GRID_HALF; gz++) {
     for (let gx = -GRID_HALF; gx <= GRID_HALF; gx++) {
@@ -6779,7 +6784,8 @@ function getActiveRegions(playerX, playerZ, proj, view) {
       const cz = gz * REGION_SIZE;
       // Test region AABB against frustum (use generous Y range)
       let visible = true;
-      for (const p of planes) {
+      for (let i = 0; i < 4; i++) {
+        const p = _frustumPlanes[i];
         // Find the corner most in the direction of the plane normal
         const px = p[0] > 0 ? cx + hs : cx - hs;
         const py = p[1] > 0 ? 2.0 : 0;  // generous height range
@@ -6790,11 +6796,11 @@ function getActiveRegions(playerX, playerZ, proj, view) {
         }
       }
       if (visible) {
-        regions.push(getRegion(gx, gz));
+        _activeRegions.push(getRegion(gx, gz));
       }
     }
   }
-  return regions;
+  return _activeRegions;
 }
 
 // Helper: get hill height at an absolute world position
@@ -6825,6 +6831,9 @@ function getWorldHeight(wx, wz) {
 const CHAR_RADIUS = 0.15;
 const CHAR_HEIGHT = 0.5;
 const CHAR_SPEED = 4.0; // world units per second
+const CAM_DEADZONE = 1.20; // camera deadzone radius in world units
+const STEP_DT = 1 / 120; // fixed physics step (~8.33ms)
+const MAX_STEPS = 8;      // max sub-steps per frame (prevents spiral of death)
 
 // Generate cylinder mesh (reuses cubeProg shader)
 const CYL_SEGS = 12;
@@ -6900,7 +6909,7 @@ const gamepadState = { lx: 0, lz: 0 };
 const DEADZONE = 0.15;
 
 // Touch-to-move: single finger hold moves player toward touch direction
-const touchMoveState = { active: false, screenX: 0, screenY: 0 };
+const touchMoveState = { active: false, screenX: 0, screenY: 0, _startX: 0, _startY: 0, _holdTimer: 0 };
 
 function pollGamepad() {
   try {
@@ -6997,20 +7006,25 @@ function ortho(left, right, bottom, top, near, far) {
 }
 
 const _viewMat = new Float32Array(16);
+const _eyeVec = new Float32Array(3);
+const _upVec = new Float32Array([0, 1, 0]);
 function lookAt(eye, center, up) {
-  const zx = eye[0]-center[0], zy = eye[1]-center[1], zz = eye[2]-center[2];
+  // Forward (z axis)
+  let zx = eye[0]-center[0], zy = eye[1]-center[1], zz = eye[2]-center[2];
   let l = Math.sqrt(zx*zx+zy*zy+zz*zz);
-  const z = [zx/l, zy/l, zz/l];
-  const xx = up[1]*z[2]-up[2]*z[1], xy = up[2]*z[0]-up[0]*z[2], xz = up[0]*z[1]-up[1]*z[0];
+  zx /= l; zy /= l; zz /= l;
+  // Right (x axis) = up cross z
+  let xx = up[1]*zz-up[2]*zy, xy = up[2]*zx-up[0]*zz, xz = up[0]*zy-up[1]*zx;
   l = Math.sqrt(xx*xx+xy*xy+xz*xz);
-  const x = [xx/l, xy/l, xz/l];
-  const y = [z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
-  _viewMat[0] = x[0]; _viewMat[1] = y[0]; _viewMat[2] = z[0]; _viewMat[3] = 0;
-  _viewMat[4] = x[1]; _viewMat[5] = y[1]; _viewMat[6] = z[1]; _viewMat[7] = 0;
-  _viewMat[8] = x[2]; _viewMat[9] = y[2]; _viewMat[10] = z[2]; _viewMat[11] = 0;
-  _viewMat[12] = -(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]);
-  _viewMat[13] = -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]);
-  _viewMat[14] = -(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]);
+  xx /= l; xy /= l; xz /= l;
+  // True up (y axis) = z cross x
+  const yx = zy*xz-zz*xy, yy = zz*xx-zx*xz, yz = zx*xy-zy*xx;
+  _viewMat[0] = xx; _viewMat[1] = yx; _viewMat[2] = zx; _viewMat[3] = 0;
+  _viewMat[4] = xy; _viewMat[5] = yy; _viewMat[6] = zy; _viewMat[7] = 0;
+  _viewMat[8] = xz; _viewMat[9] = yz; _viewMat[10] = zz; _viewMat[11] = 0;
+  _viewMat[12] = -(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+  _viewMat[13] = -(yx*eye[0]+yy*eye[1]+yz*eye[2]);
+  _viewMat[14] = -(zx*eye[0]+zy*eye[1]+zz*eye[2]);
   _viewMat[15] = 1;
   return _viewMat;
 }
@@ -7019,7 +7033,7 @@ function lookAt(eye, center, up) {
 let camRotY = Math.PI / 4;        // horizontal orbit angle
 let camRotX = Math.atan(1 / Math.sqrt(2)); // elevation (~35.26Ã‚Â° isometric)
 let camDist = 8;  // ortho half-size (zoom level)
-let camTarget = [0, 0, 0];        // look-at point
+let camTarget = [-0.4, 0, -0.4];        // look-at point (Y fixed — ortho iso needs only XZ)
 
 // Right-click drag to pan/orbit
 let isDragging = false;
@@ -7030,7 +7044,7 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('mousedown', e => {
   if (e.button === 2) {
     isDragging = true;
-    lastMouse = [e.clientX, e.clientY];
+    lastMouse[0] = e.clientX; lastMouse[1] = e.clientY;
   }
 });
 
@@ -7042,7 +7056,7 @@ window.addEventListener('mousemove', e => {
   if (!isDragging) return;
   const dx = e.clientX - lastMouse[0];
   const dy = e.clientY - lastMouse[1];
-  lastMouse = [e.clientX, e.clientY];
+  lastMouse[0] = e.clientX; lastMouse[1] = e.clientY;
 
   // Pan the target in the ground plane relative to camera orientation
   const panSpeed = 0.02 * (camDist / 8);
@@ -7052,6 +7066,13 @@ window.addEventListener('mousemove', e => {
   // Right vector on ground plane
   camTarget[0] -= (cosY * dx + sinY * dy) * panSpeed;
   camTarget[2] -= (-sinY * dx + cosY * dy) * panSpeed;
+  if (!render._cameraPanned) {
+    // First pan movement — freeze current viz bias offset
+    render._panFrozenBiasX = render._vizBiasX || 0;
+    render._panFrozenBiasZ = render._vizBiasZ || 0;
+  }
+  render._cameraPanned = true;
+  render._camUncapped = false; render._panReturnSpeed = 0;
 });
 
 // Scroll to zoom â€” use precomputed level table for consistency
@@ -7169,50 +7190,13 @@ let statsOpen = true;
 // FPS cap
 let fpsCap = 0; // 0 = uncapped
 let lastFrameTime = 0;
-let deviceFps = 60; // detected device refresh rate
 const fpsCapBtn = document.getElementById('fpsCapBtn');
-
-// Detect device refresh rate
-// Try Screen Details API (Chrome 110+), fall back to RAF measurement
-(async function detectRefreshRate() {
-  try {
-    if (window.screenDetails) {
-      deviceFps = window.screenDetails.currentScreen.refreshRate || deviceFps;
-      updateFpsCapBtn();
-      return;
-    }
-  } catch(e) {}
-
-  // Fallback: measure via RAF timestamps after page settles
-  setTimeout(() => {
-    let startTime = 0;
-    let count = 0;
-    function tick(timestamp) {
-      if (count === 0) { startTime = timestamp; }
-      count++;
-      const elapsed = timestamp - startTime;
-      if (elapsed < 1000) {
-        requestAnimationFrame(tick);
-      } else {
-        const raw = (count - 1) / elapsed * 1000;
-        const common = [30,48,50,60,72,75,90,100,120,144,160,165,170,180,200,240,300,360];
-        let best = Math.round(raw);
-        for (const r of common) {
-          if (Math.abs(raw - r) < 3) { best = r; break; }
-        }
-        deviceFps = best;
-        updateFpsCapBtn();
-      }
-    }
-    requestAnimationFrame(tick);
-  }, 2000);
-})();
 
 function updateFpsCapBtn() {
   if (fpsCap > 0) {
-    fpsCapBtn.innerHTML = '30';
+    fpsCapBtn.innerHTML = '60';
     fpsCapBtn.style.background = 'linear-gradient(180deg, #1a1a3a 0%, #0a0a1f 100%)';
-    fpsCapBtn.title = 'FPS cap: 30';
+    fpsCapBtn.title = 'FPS cap: 60';
   } else {
     fpsCapBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/></svg>';
     fpsCapBtn.style.background = 'linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%)';
@@ -7221,7 +7205,7 @@ function updateFpsCapBtn() {
 }
 
 fpsCapBtn.addEventListener('click', () => {
-  fpsCap = fpsCap > 0 ? 0 : 30;
+  fpsCap = fpsCap > 0 ? 0 : 60;
   updateFpsCapBtn();
 });
 updateFpsCapBtn();
@@ -7381,17 +7365,21 @@ function biomeGroundTex(name) {
   return name === 'forest' ? grassGroundTex : name === 'desert' ? desertGroundTex : rockGroundTex;
 }
 
-function render() {
+const _biomePriority = { desert: 0, rock: 1, forest: 2 };
+function _biomePriorityCmp(a, b) { return (_biomePriority[a.biomeName] || 0) - (_biomePriority[b.biomeName] || 0); }
+
+function render(rafTime) {
   if (fpsCap > 0) {
-    const now = performance.now();
     const minInterval = 1000 / fpsCap;
-    if (now - lastFrameTime < minInterval) {
+    if (rafTime - lastFrameTime < minInterval * 0.75) {
       requestAnimationFrame(render);
       return;
     }
-    lastFrameTime = now;
+    // Advance lastFrameTime by interval (not to rafTime) so timing stays
+    // aligned to the target cadence. Clamp to prevent spiral if we fall behind.
+    lastFrameTime += minInterval;
+    if (rafTime - lastFrameTime > minInterval) lastFrameTime = rafTime;
   }
-  if (render.lastRegX === undefined) { render.lastRegX = -999; render.lastRegZ = -999; }
   const frameStart = performance.now();
   drawCalls = 0;
   tris = 0;
@@ -7399,11 +7387,19 @@ function render() {
   const now = frameStart;
   if (now - lastFpsTime >= 1000) {
     const elapsed = now - lastFpsTime;
-    const fps = Math.ceil(frameCount * 1000 / elapsed);
+    const rawFps = frameCount * 1000 / elapsed;
+    // Rolling average over last 3 samples
+    if (render._fpsHistory === undefined) render._fpsHistory = [];
+    render._fpsHistory.push(rawFps);
+    if (render._fpsHistory.length > 3) render._fpsHistory.shift();
+    const fps = Math.ceil(render._fpsHistory.reduce((a, b) => a + b) / render._fpsHistory.length);
     statsText = `${fps} FPS | ${frameMs.toFixed(1)}ms (${frameMsMin.toFixed(1)}-${frameMsMax.toFixed(1)})`;
     // drawCalls/tris filled from previous frame
     frameCount = 0;
-    lastFpsTime = now;
+    // Advance by 1000ms (not reset to now) to keep windows aligned
+    lastFpsTime += 1000;
+    // Clamp if we fell way behind (e.g. tab was backgrounded)
+    if (now - lastFpsTime > 1000) lastFpsTime = now;
     frameMsMin = Infinity;
     frameMsMax = 0;
   }
@@ -7441,8 +7437,8 @@ function render() {
     // Use the previous frame's proj/view (close enough since camera follows player)
     const pv = render._prevView, pp = render._prevProj;
     if (pv && pp) {
-      // Multiply: clip = proj * view * vec4(player.x, player.y + CHAR_HEIGHT*0.5, player.z, 1)
-      const pwx = player.x, pwy = player.y + CHAR_HEIGHT * 0.5, pwz = player.z;
+      // Multiply: clip = proj * view * vec4(player.x, player.y, player.z, 1)
+      const pwx = player.x, pwy = player.y, pwz = player.z;
       const ex = pv[0]*pwx + pv[4]*pwy + pv[8]*pwz + pv[12];
       const ey = pv[1]*pwx + pv[5]*pwy + pv[9]*pwz + pv[13];
       const ez = pv[2]*pwx + pv[6]*pwy + pv[10]*pwz + pv[14];
@@ -7471,15 +7467,23 @@ function render() {
       }
     }
   }
-  if (mx !== 0 || mz !== 0) {
-    player.x += mx * CHAR_SPEED * dt;
-    player.z += mz * CHAR_SPEED * dt;
-  }
+  // --- Fixed sub-step movement + collision (~120Hz) ---
+  // Accumulate dt and consume in fixed chunks. This gives identical feel
+  // at 30fps and 144fps: per-step displacement is always ~0.032 units,
+  // so collision never misses and movement looks smooth.
+  if (render._dtAccum === undefined) render._dtAccum = 0;
+  render._dtAccum += dt;
+  const steps = Math.min(Math.floor(render._dtAccum / STEP_DT), MAX_STEPS);
+  render._dtAccum -= steps * STEP_DT;
+  // Clamp leftover to prevent accumulation if we consistently hit MAX_STEPS
+  if (render._dtAccum > STEP_DT * 2) render._dtAccum = STEP_DT * 2;
 
-  // Get nearby regions for collision (3x3 around player - always needed)
+  // Gather nearby regions once per frame (player won't cross regions within sub-steps)
   const pgx = Math.round(player.x / REGION_SIZE);
   const pgz = Math.round(player.z / REGION_SIZE);
-  const nearbyRegions = [];
+  if (!render._nearbyRegions) render._nearbyRegions = [];
+  const nearbyRegions = render._nearbyRegions;
+  nearbyRegions.length = 0;
   for (let dz = -1; dz <= 1; dz++) {
     for (let dx = -1; dx <= 1; dx++) {
       const gx = pgx + dx, gz = pgz + dz;
@@ -7487,6 +7491,17 @@ function render() {
       nearbyRegions.push(getRegion(gx, gz));
     }
   }
+
+  for (let step = 0; step < steps; step++) {
+    if (mx !== 0 || mz !== 0) {
+      player.x += mx * CHAR_SPEED * STEP_DT;
+      player.z += mz * CHAR_SPEED * STEP_DT;
+    }
+    resolveCollisions(nearbyRegions);
+  }
+
+  // Snap to terrain height (once per frame, after all sub-steps)
+  player.y = getWorldHeight(player.x, player.z);
 
   // Update HUD if region changed
   const curRegX = pgx;
@@ -7497,26 +7512,197 @@ function render() {
     populateDropdowns();
   }
 
-  resolveCollisions(nearbyRegions);
-  // Snap to terrain height
-  player.y = getWorldHeight(player.x, player.z);
+  // --- Camera deadzone ---
+  // Single deadzone ring. Player inside: camera doesn't move.
+  // Player crosses edge: camera follows (capped to player speed).
+  // Player stops: camera lerps until edge encompasses player collider.
+  // Right-click pan: deadzone suspended. Next movement lerps back (or snaps if off screen).
+  // Settled: skip all processing until player nears edge.
+  const isMoving = mx !== 0 || mz !== 0;
 
-  // Camera follows player (target visual center of character)
-  // Offset along view direction on ground plane to visually center player
-  const viewOffsetZ = -camDist * 0.12; // nudge camera target forward
-  camTarget[0] = player.x + viewOffsetZ * Math.sin(camRotY);
-  camTarget[1] = player.y + CHAR_HEIGHT * 0.5;
-  camTarget[2] = player.z + viewOffsetZ * Math.cos(camRotY);
+  if (render._cameraPanned && isMoving) {
+    // Check if player collider is visible on screen using previous frame's matrices
+    const pv = render._prevView, pp = render._prevProj;
+    let playerOnScreen = false;
+    if (pv && pp) {
+      const pwx = player.x, pwy = player.y, pwz = player.z;
+      const ex = pv[0]*pwx + pv[4]*pwy + pv[8]*pwz + pv[12];
+      const ey = pv[1]*pwx + pv[5]*pwy + pv[9]*pwz + pv[13];
+      const ez = pv[2]*pwx + pv[6]*pwy + pv[10]*pwz + pv[14];
+      const ew = pv[3]*pwx + pv[7]*pwy + pv[11]*pwz + pv[15];
+      const cx2 = pp[0]*ex + pp[4]*ey + pp[8]*ez + pp[12]*ew;
+      const cy2 = pp[1]*ex + pp[5]*ey + pp[9]*ez + pp[13]*ew;
+      const cw = pp[3]*ex + pp[7]*ey + pp[11]*ez + pp[15]*ew;
+      if (cw !== 0) {
+        const ndcX = cx2 / cw, ndcY = cy2 / cw;
+        playerOnScreen = Math.abs(ndcX) < 1.0 && Math.abs(ndcY) < 1.0;
+      }
+    }
+    render._cameraPanned = false;
+    render._camSettled = false;
+    if (playerOnScreen) {
+      // Player on screen — let deadzone follow handle it, uncapped speed
+      render._camUncapped = true;
+    } else {
+      // Player off screen — instant snap
+      camTarget[0] = player.x;
+      camTarget[2] = player.z;
+    }
+  }
+
+  // Wake from settled only if player is near/past the edge.
+  if (isMoving && render._camSettled) {
+    const sdx = player.x - camTarget[0];
+    const sdz = player.z - camTarget[2];
+    const distSq = sdx * sdx + sdz * sdz;
+    const wakeR = CAM_DEADZONE - CHAR_RADIUS;
+    if (distSq > wakeR * wakeR) {
+      render._camSettled = false;
+    }
+  }
+
+  if (!render._cameraPanned && !render._camSettled) {
+  let offX = player.x - camTarget[0];
+  let offZ = player.z - camTarget[2];
+  let offDist = Math.sqrt(offX * offX + offZ * offZ);
+
+  const outsideDeadzone = offDist > CAM_DEADZONE;
+
+  if (isMoving) {
+    if (outsideDeadzone) {
+      const overshoot = offDist - CAM_DEADZONE;
+      if (render._camUncapped) {
+        // Returning from pan: modulate speed by movement direction.
+        // Dot product of movement dir and offset dir: +1 = moving away from camera,
+        // -1 = moving toward camera. Lerp speed between 4 (toward) and 11 (away).
+        // Slightly slower when zoomed in: 85% speed at +8.
+        const offNx = offX / offDist, offNz = offZ / offDist;
+        const dot = mx * offNx + mz * offNz; // -1 to +1
+        const t = dot * 0.5 + 0.5; // 0 (toward) to 1 (away)
+        const zoomInSteps = Math.max(0, zoomDefaultIdx - zoomIdx);
+        const zoomScale = 1 - zoomInSteps * (0.15 / 8); // 1.0 at default, 0.85 at +8
+        const speed = (4 + t * 7) * zoomScale;
+        render._panReturnSpeed = speed; // store for stopped branch continuity
+        const followLerp = 1 - Math.exp(-speed * dt);
+        const move = overshoot * followLerp;
+        camTarget[0] += offNx * move;
+        camTarget[2] += offNz * move;
+      } else {
+        // Normal play: capped to player speed
+        const followLerp = 1 - Math.exp(-15 * dt);
+        const move = Math.min(overshoot * followLerp, CHAR_SPEED * dt);
+        camTarget[0] += (offX / offDist) * move;
+        camTarget[2] += (offZ / offDist) * move;
+      }
+    }
+    // Inside deadzone: camera stays still. Re-settle.
+    if (!outsideDeadzone) {
+      render._camSettled = true;
+      render._camUncapped = false; render._panReturnSpeed = 0;
+    }
+  } else {
+    // Player stopped. If outside deadzone, follow back.
+    if (outsideDeadzone) {
+      const overshoot = offDist - CAM_DEADZONE;
+      if (render._camUncapped) {
+        // Continue at whatever speed the moving branch was using
+        const speed = render._panReturnSpeed || 8;
+        const followLerp = 1 - Math.exp(-speed * dt);
+        const move = overshoot * followLerp;
+        camTarget[0] += (offX / offDist) * move;
+        camTarget[2] += (offZ / offDist) * move;
+      } else {
+        const followLerp = 1 - Math.exp(-15 * dt);
+        const move = Math.min(overshoot * followLerp, CHAR_SPEED * dt);
+        camTarget[0] += (offX / offDist) * move;
+        camTarget[2] += (offZ / offDist) * move;
+      }
+    }
+    // Recompute after potential correction
+    offX = player.x - camTarget[0];
+    offZ = player.z - camTarget[2];
+    offDist = Math.sqrt(offX * offX + offZ * offZ);
+    // Lerp toward player until edge encompasses player collider
+    const targetDist = CAM_DEADZONE - CHAR_RADIUS;
+    const gap = offDist - targetDist;
+    if (gap > 0.002) {
+      let move;
+      if (gap < 0.06) {
+        move = Math.min(gap, 0.48 * dt);
+      } else {
+        move = gap * (1 - Math.exp(-8 * dt));
+      }
+      camTarget[0] += (offX / offDist) * move;
+      camTarget[2] += (offZ / offDist) * move;
+    } else {
+      render._camSettled = true;
+      render._camUncapped = false; render._panReturnSpeed = 0;
+    }
+  }
+  } // end !cameraPanned && !camSettled
+
+  // Store for debug visualization (only when deadzone actively moved)
+  if (!render._cameraPanned && !render._camSettled) {
+    render._camCenterX = camTarget[0];
+    render._camCenterZ = camTarget[2];
+  }
 
   const aspect = canvas.width / canvas.height;
   const proj = ortho(-camDist * aspect, camDist * aspect, -camDist, camDist, -50, 50);
 
+  // When zoomed in past default, bias the visual look-at point toward the player.
+  // This gradually centers the player as the user zooms in closer.
+  // During pan: bias frozen. After pan (uncapped): lerp from frozen to live bias
+  // to avoid visual jump. Normal play: live bias directly.
+  let vizTargetX = camTarget[0], vizTargetZ = camTarget[2];
+  if (render._cameraPanned) {
+    // Use frozen bias from when pan started
+    vizTargetX += render._panFrozenBiasX || 0;
+    vizTargetZ += render._panFrozenBiasZ || 0;
+  } else if (zoomIdx < zoomDefaultIdx) {
+    const zoomT = 1 - (zoomIdx / zoomDefaultIdx); // 0 at default, 1 at max zoom-in
+    const bias = zoomT * 0.80; // max 80% toward player at closest zoom
+    const liveBiasX = (player.x - camTarget[0]) * bias;
+    const liveBiasZ = (player.z - camTarget[2]) * bias;
+    if (render._camUncapped) {
+      // Returning from pan — lerp from frozen bias to live bias
+      if (render._transitionBiasX === undefined) {
+        render._transitionBiasX = render._panFrozenBiasX || 0;
+        render._transitionBiasZ = render._panFrozenBiasZ || 0;
+      }
+      const biasLerp = 1 - Math.exp(-6 * dt);
+      render._transitionBiasX += (liveBiasX - render._transitionBiasX) * biasLerp;
+      render._transitionBiasZ += (liveBiasZ - render._transitionBiasZ) * biasLerp;
+      vizTargetX += render._transitionBiasX;
+      vizTargetZ += render._transitionBiasZ;
+      // Store displayed bias (transition value) for potential pan snapshot
+      render._vizBiasX = render._transitionBiasX;
+      render._vizBiasZ = render._transitionBiasZ;
+    } else {
+      // Normal: use live bias directly
+      vizTargetX += liveBiasX;
+      vizTargetZ += liveBiasZ;
+      render._transitionBiasX = undefined;
+      // Store for potential pan snapshot
+      render._vizBiasX = liveBiasX;
+      render._vizBiasZ = liveBiasZ;
+    }
+  } else {
+    render._vizBiasX = 0;
+    render._vizBiasZ = 0;
+    render._transitionBiasX = undefined;
+  }
+
   // Fixed isometric direction (no distance needed for ortho, just direction)
   const isoDist = 20;
-  const cx = camTarget[0] + isoDist * Math.cos(camRotX) * Math.sin(camRotY);
-  const cy = camTarget[1] + isoDist * Math.sin(camRotX);
-  const cz = camTarget[2] + isoDist * Math.cos(camRotX) * Math.cos(camRotY);
-  const view = lookAt([cx, cy, cz], camTarget, [0, 1, 0]);
+  _eyeVec[0] = vizTargetX + isoDist * Math.cos(camRotX) * Math.sin(camRotY);
+  _eyeVec[1] = camTarget[1] + isoDist * Math.sin(camRotX);
+  _eyeVec[2] = vizTargetZ + isoDist * Math.cos(camRotX) * Math.cos(camRotY);
+  // Reuse camTarget array temporarily for lookAt (restored after)
+  const savedX = camTarget[0], savedZ = camTarget[2];
+  camTarget[0] = vizTargetX; camTarget[2] = vizTargetZ;
+  const view = lookAt(_eyeVec, camTarget, _upVec);
+  camTarget[0] = savedX; camTarget[2] = savedZ;
 
   // Pixel-snap the view matrix to eliminate sub-pixel jitter on sprites/textures.
   // In ortho, world units per pixel = (2 * camDist) / canvas.height
@@ -7555,12 +7741,10 @@ function render() {
   gl.enableVertexAttribArray(aPos);
   gl.enableVertexAttribArray(aUV);
 
-  const biomePriority = { desert: 0, rock: 1, forest: 2 };
-  const sortedRegions = activeRegions.slice().sort((a, b) =>
-    (biomePriority[a.biomeName] || 0) - (biomePriority[b.biomeName] || 0)
-  );
+  // Sort active regions by biome draw priority (in place, no allocation)
+  activeRegions.sort(_biomePriorityCmp);
 
-  for (const reg of sortedRegions) {
+  for (const reg of activeRegions) {
     const localTex = biomeGroundTex(reg.biomeName);
     gl.bindBuffer(gl.ARRAY_BUFFER, reg.terrain.vbo);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, reg.terrain.ibo);
@@ -7678,7 +7862,7 @@ function render() {
   // Pre-set player position for distance shadow in cube shader
   gl.useProgram(cubeProg);
   gl.uniform3f(cUPlayerWorldPos, player.x, player.y, player.z);
-  gl.uniform3f(cUCamPos, cx, cy, cz);
+  gl.uniform3f(cUCamPos, _eyeVec[0], _eyeVec[1], _eyeVec[2]);
 
   // Sorted pass: pure painter's algorithm, no depth testing
   // Back-face culling on 3D objects prevents seeing through them
@@ -7895,6 +8079,19 @@ function render() {
     gl.uniform1f(dbgURadius, CHAR_RADIUS);
     gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
 
+    // Camera deadzone ring — white when active, dark when settled
+    const dzX = render._camCenterX, dzZ = render._camCenterZ;
+    if (dzX !== undefined) {
+      if (render._camSettled) {
+        gl.uniform3f(dbgUColor, 0.15, 0.15, 0.18);
+      } else {
+        gl.uniform3f(dbgUColor, 0.9, 0.9, 1.0);
+      }
+      gl.uniform3f(dbgUCenter, dzX, 0, dzZ);
+      gl.uniform1f(dbgURadius, CAM_DEADZONE);
+      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+    }
+
     gl.enable(gl.DEPTH_TEST);
 
     // Region coordinate labels
@@ -8039,6 +8236,12 @@ function render() {
 
   requestAnimationFrame(render);
 }
+// Initialize camera debug state so deadzone ring draws even before first movement
+render._camCenterX = camTarget[0];
+render._camCenterZ = camTarget[2];
+render._camSettled = true;
+render.lastRegX = -999;
+render.lastRegZ = -999;
 render();
 </script>
 
