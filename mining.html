@@ -165,9 +165,9 @@ canvas { display: block; }
 </head>
 <body>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 0.0ms (0.0-2.0)
-747 Draws | 16,516 Tris
-Zoom 0 | 26.2.345</div>
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 1.0ms (0.0-2.0)
+646 Draws | 9,352 Tris
+Zoom 0 | 26.2.444</div>
   <button id="statsToggle" title="Hide stats" style="
     width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
@@ -247,7 +247,7 @@ Zoom 0 | 26.2.345</div>
 // Rule: Each edit increments the last digit. New month resets
 // edit to 1 and increments month. E.g. 26.2.2 -> 26.3.1
 // ============================================================
-const GAME_VERSION = '26.2.345';
+const GAME_VERSION = '26.2.444';
 window._debugFlatTerrain = false;
 
 const canvas = document.getElementById('gl');
@@ -5032,7 +5032,7 @@ function getBlendedHeight(hills, u, v, regionGx, regionGz) {
 const S = 5.0;
 const REGION_SIZE = S * 2; // 10 world units per region
 const BASE_RES = 6;
-const FINE_RES = 4;
+const FINE_RES = 3;
 const EDGE_OVERLAP = 0.15; // 15% overlap into neighbor regions
 
 function buildTerrainMesh(hills, regionGx, regionGz) {
@@ -5121,7 +5121,7 @@ function buildTerrainMesh(hills, regionGx, regionGz) {
   // The V-axis (for left/right borders) or U-axis (for top/bottom) resolution
   // matches the adjacent edge cell's effective subdivision to prevent T-junctions.
   const OV = EDGE_OVERLAP;
-  const OV_DEPTH = 2; // subdivision depth into the overlap (narrow direction)
+  const OV_DEPTH = 1; // subdivision depth into the overlap (narrow direction)
   function addBorderStrip(u0, v0, u1, v1, edgeSub) {
     // edgeSub = subdivision along the edge (matching the base mesh cell)
     // OV_DEPTH = subdivision perpendicular to the edge
@@ -5213,14 +5213,91 @@ const treeVS = `
   uniform vec3 uTreePos;
   uniform float uTreeScale;
   uniform vec2 uTreeSize; // (width, height) in world units
+  uniform float uTreeShake; // elapsed time since shake start (0 = no shake)
+  uniform float uTreeShakeAmp; // amplitude multiplier (1.0 = full, fades to 0)
+  uniform float uTreeShakePhase; // random start phase per collision (horizontal)
+  uniform float uTreeShakeDir; // vertical impact direction: +1 from below (top pinch), -1 from above (uniform widen), 0 suppressed
+  uniform float uTreeShakeHInt; // horizontal intensity 0-1 (1=full sideways impact, 0=grazing)
+  uniform float uTreeShakeVInt; // vertical intensity 0-1 (1=full vertical impact, 0=grazing)
   varying vec2 vUV;
   varying vec3 vTreeWorldPos;
+  varying float vPushDarken;
+  varying float vPushUp;
   void main() {
     vec3 camRight = vec3(uView[0][0], uView[1][0], uView[2][0]);
     vec3 camUp = vec3(uView[0][1], uView[1][1], uView[2][1]);
     float w = uTreeSize.x * uTreeScale;
     float h = uTreeSize.y * uTreeScale;
     vec3 worldPos = uTreePos + camRight * aPos.x * w + camUp * aPos.y * h;
+    vPushDarken = 0.0;
+    vPushUp = 0.0;
+    // Shake: bend from base, big slow sway like pushing through
+    if (uTreeShake > 0.0) {
+      float bend = aPos.y * aPos.y;
+      float treeVar = fract(uTreePos.x * 3.7 + uTreePos.z * 5.3);
+      float attack = min(uTreeShake * 10.0, 1.0); // 0→1 over 0.1s
+
+      // Horizontal sway — intensity controls amplitude and frequency
+      // Full sideways hit: fast + strong. Grazing vertical hit: slow + gentle.
+      float hAmp = 0.07 + uTreeShakeHInt * 0.08; // 0.07 base, up to 0.15
+      float f1 = mix(2.0, 3.2, uTreeShakeHInt) + treeVar * 0.6;
+      float f2 = mix(3.0, 4.8, uTreeShakeHInt) + treeVar * 0.6;
+      float oscH = sin(uTreeShake * f1 + uTreeShakePhase) * 0.65 + sin(uTreeShake * f2 + uTreeShakePhase) * 0.35;
+      worldPos += camRight * oscH * bend * hAmp * uTreeShakeAmp * attack;
+
+      // Vertical squash — one-shot impact then return
+      // From below (dir>0): size-varying attack, hold at peak, linear return (0.5s total)
+      // From above (dir<0): smoothstep attack + smoothstep decay (1.1s total)
+      float vMag;
+      if (uTreeShakeDir > 0.0) {
+        // Bigger trees: slower attack, shorter hold, same total 0.5s
+        // h ranges ~1.1 (cluster_3) to ~1.64 (cluster_7)
+        float sizeFactor = clamp((h - 1.1) / 0.54, 0.0, 1.0); // 0=small, 1=cluster_7
+        float attackEnd = mix(0.18, 0.30, sizeFactor);
+        float holdEnd = mix(0.36, 0.33, sizeFactor);
+        float vAttack = smoothstep(0.0, attackEnd, uTreeShake);
+        // Hold at peak, then linear return to 0.5s
+        float vDecay = 1.0 - clamp((uTreeShake - holdEnd) / (0.5 - holdEnd), 0.0, 1.0);
+        vMag = vAttack * vDecay * uTreeShakeAmp * uTreeShakeVInt;
+      } else {
+        float vAttack = smoothstep(0.0, 0.2, uTreeShake);
+        float vDecay = 1.0 - smoothstep(0.2, 1.1, uTreeShake);
+        vMag = vAttack * vDecay * uTreeShakeAmp * uTreeShakeVInt;
+      }
+      // Height: squish down — partial normalization so large/small trees
+      // look similar but big trees still move a bit more (feels natural)
+      const float refH = 1.1;
+      const float refW = 0.65;
+      float hNorm = mix(1.0, refH / max(h, 0.01), 0.6);
+      float wNorm = mix(1.0, refW / max(w, 0.01), 0.6);
+      float hScale;
+      if (uTreeShakeDir > 0.0) {
+        hScale = -vMag * 0.20 * hNorm; // from below
+      } else {
+        hScale = -vMag * 0.25 * hNorm; // from above
+      }
+      worldPos += camUp * aPos.y * h * hScale;
+      // Width differs by impact direction:
+      // From below (dir>0): base same, top pinches (perspective squash)
+      // From above (dir<0): uniform widening (pancake squash)
+      float wScale;
+      if (uTreeShakeDir > 0.0) {
+        wScale = vMag * 0.22 * aPos.y * wNorm;
+        worldPos -= camRight * aPos.x * w * wScale;
+        // Lift billboard up (visual only, colliders unaffected)
+        worldPos.y += vMag * 0.12;
+        // Color: use amp-scaled but not intensity-scaled envelope (equal across sizes)
+        float colorEnv = vMag / max(uTreeShakeVInt, 0.01);
+        vPushUp = clamp(colorEnv, 0.0, 1.0);
+      } else {
+        wScale = vMag * 0.08 * wNorm;
+        worldPos += camRight * aPos.x * w * wScale;
+        // Sink billboard down (visual only, colliders unaffected)
+        worldPos.y -= vMag * 0.08;
+        float colorEnv = vMag / max(uTreeShakeVInt, 0.01);
+        vPushDarken = clamp(colorEnv, 0.0, 1.0);
+      }
+    }
     vUV = aUV;
     vTreeWorldPos = uTreePos;
     gl_Position = uProj * uView * vec4(worldPos, 1.0);
@@ -5231,6 +5308,8 @@ const treeFS = `
   precision mediump float;
   varying vec2 vUV;
   varying vec3 vTreeWorldPos;
+  varying float vPushDarken;
+  varying float vPushUp;
   uniform sampler2D uTreeTex;
   uniform vec3 uTreePlayerPos;
   void main() {
@@ -5241,6 +5320,13 @@ const treeFS = `
     float dist = sqrt(dx * dx + dz * dz);
     float darken = smoothstep(3.0, 12.0, dist);
     c.rgb *= mix(1.0, 0.55, darken);
+    // Push-down squish darkening
+    c.rgb *= mix(1.0, 0.83, vPushDarken);
+    // Push-up squish: desaturate toward grey for subtle visual shift
+    if (vPushUp > 0.0) {
+      float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(c.rgb, vec3(lum), vPushUp * 0.35);
+    }
     gl_FragColor = c;
   }
 `;
@@ -5261,6 +5347,12 @@ const tUTreeScale = gl.getUniformLocation(treeProg, 'uTreeScale');
 const tUTreeSize = gl.getUniformLocation(treeProg, 'uTreeSize');
 const tUTreeTex = gl.getUniformLocation(treeProg, 'uTreeTex');
 const tUTreePlayerPos = gl.getUniformLocation(treeProg, 'uTreePlayerPos');
+const tUTreeShake = gl.getUniformLocation(treeProg, 'uTreeShake');
+const tUTreeShakeAmp = gl.getUniformLocation(treeProg, 'uTreeShakeAmp');
+const tUTreeShakePhase = gl.getUniformLocation(treeProg, 'uTreeShakePhase');
+const tUTreeShakeDir = gl.getUniformLocation(treeProg, 'uTreeShakeDir');
+const tUTreeShakeHInt = gl.getUniformLocation(treeProg, 'uTreeShakeHInt');
+const tUTreeShakeVInt = gl.getUniformLocation(treeProg, 'uTreeShakeVInt');
 
 // Tree billboard quad: centered horizontally, bottom at y=0
 const treeQuadVerts = new Float32Array([
@@ -6790,7 +6882,7 @@ function getActiveRegions(playerX, playerZ, proj, view) {
         const px = p[0] > 0 ? cx + hs : cx - hs;
         const py = p[1] > 0 ? 2.0 : 0;  // generous height range
         const pz = p[2] > 0 ? cz + hs : cz - hs;
-        if (p[0]*px + p[1]*py + p[2]*pz + p[3] < -1.0) {
+        if (p[0]*px + p[1]*py + p[2]*pz + p[3] < -0.5) {
           visible = false;
           break;
         }
@@ -6826,14 +6918,622 @@ function getWorldHeight(wx, wz) {
   return getBlendedHeight(hills, u, v, cgx, cgz);
 }
 
-// --- Character (collision cylinder) ---
-// Cylinder: radius 0.15, height 0.5 (roughly half tree height)
-const CHAR_RADIUS = 0.15;
-const CHAR_HEIGHT = 0.5;
-const CHAR_SPEED = 4.0; // world units per second
-const CAM_DEADZONE = 1.20; // camera deadzone radius in world units
-const STEP_DT = 1 / 120; // fixed physics step (~8.33ms)
-const MAX_STEPS = 8;      // max sub-steps per frame (prevents spiral of death)
+// ═══════════════════════════════════════════════════════════════════════════
+// CHARACTER CONTROLLER
+// Owns: player position, input (keyboard/gamepad/touch), movement, collision
+// ═══════════════════════════════════════════════════════════════════════════
+const CharacterController = {
+  // --- Constants ---
+  RADIUS:    0.15,
+  HEIGHT:    0.5,
+  SPEED:     4.0,   // world units per second
+  STEP_DT:   1/120, // fixed physics step (~8.33ms)
+  MAX_STEPS: 8,     // max sub-steps per frame (spiral-of-death cap)
+  GAMEPAD_DEADZONE: 0.15,
+
+  // --- Player state ---
+  x: -0.4,
+  z: -0.4,
+  y: 0,          // computed from terrain each frame
+  mx: 0, mz: 0, // current frame movement direction (normalized)
+  isMoving: false,
+  speedMult: 1.0, // modified by forest tree slowdown
+  _dtAccum: 0,
+
+  // --- Player collider (same structure as all other colliders) ---
+  // NOTE: colR must match RADIUS above
+  collider: { type: 'player', colX: -0.4, colZ: -0.4, colR: 0.15, src: null }, // src set after init
+
+  // --- Input state (private) ---
+  _keys: {},
+  _gamepad: { lx: 0, lz: 0 },
+  _touch: { active: false, screenX: 0, screenY: 0, _startX: 0, _startY: 0, _holdTimer: 0 },
+  _prevView: null,
+  _prevProj: null,
+  _nearbyRegions: [],
+
+  // --- Input: keyboard ---
+  onKeyDown(e) { CharacterController._keys[e.code] = true; },
+  onKeyUp(e)   { CharacterController._keys[e.code] = false; },
+
+  // --- Input: gamepad ---
+  pollGamepad() {
+    const gp = CharacterController._gamepad;
+    const DZ = CharacterController.GAMEPAD_DEADZONE;
+    try {
+      const gamepads = navigator.getGamepads();
+      for (const pad of gamepads) {
+        if (!pad) continue;
+        let lx = pad.axes[0] || 0, ly = pad.axes[1] || 0;
+        if (Math.abs(lx) < DZ) lx = 0;
+        if (Math.abs(ly) < DZ) ly = 0;
+        gp.lx = lx; gp.lz = ly;
+        return;
+      }
+    } catch(e) {}
+    gp.lx = 0; gp.lz = 0;
+  },
+
+  // --- Input: touch-to-move ---
+  onTouchMoveStart(x, y) {
+    const t = CharacterController._touch;
+    t.screenX = x; t.screenY = y;
+    t.active = false;
+    t._startX = x; t._startY = y;
+    clearTimeout(t._holdTimer);
+    t._holdTimer = setTimeout(() => {
+      if (!t.active) t.active = true;
+    }, 150);
+  },
+  onTouchMoveUpdate(x, y) {
+    const t = CharacterController._touch;
+    t.screenX = x; t.screenY = y;
+    if (!t.active) {
+      const ddx = x - t._startX, ddy = y - t._startY;
+      if (ddx * ddx + ddy * ddy > 100) t.active = true;
+    }
+  },
+  onTouchMoveCancel() {
+    const t = CharacterController._touch;
+    clearTimeout(t._holdTimer);
+    t.active = false;
+  },
+
+  // --- Compute movement direction from all input sources ---
+  computeMovement() {
+    const cc = CharacterController;
+    const keys = cc._keys, gp = cc._gamepad, touch = cc._touch;
+    let mx = 0, mz = 0;
+
+    // Keyboard (isometric: W=up-left, S=down-right, A=down-left, D=up-right)
+    if (keys['KeyW']) { mx -= 1; mz -= 1; }
+    if (keys['KeyS']) { mx += 1; mz += 1; }
+    if (keys['KeyA']) { mx -= 1; mz += 1; }
+    if (keys['KeyD']) { mx += 1; mz -= 1; }
+    if (mx !== 0 || mz !== 0) {
+      const len = Math.sqrt(mx * mx + mz * mz);
+      mx /= len; mz /= len;
+    }
+
+    // Gamepad (rotate 45° to match isometric view)
+    if (gp.lx !== 0 || gp.lz !== 0) {
+      mx += gp.lx + gp.lz;
+      mz += -gp.lx + gp.lz;
+      const cLen = Math.sqrt(mx * mx + mz * mz);
+      if (cLen > 1) { mx /= cLen; mz /= cLen; }
+    }
+
+    // Touch-to-move (project player to screen, compute direction)
+    if (touch.active) {
+      const pv = cc._prevView, pp = cc._prevProj;
+      if (pv && pp) {
+        const pwx = cc.x, pwy = cc.y, pwz = cc.z;
+        const ex = pv[0]*pwx + pv[4]*pwy + pv[8]*pwz + pv[12];
+        const ey = pv[1]*pwx + pv[5]*pwy + pv[9]*pwz + pv[13];
+        const ez = pv[2]*pwx + pv[6]*pwy + pv[10]*pwz + pv[14];
+        const ew = pv[3]*pwx + pv[7]*pwy + pv[11]*pwz + pv[15];
+        const cx2 = pp[0]*ex + pp[4]*ey + pp[8]*ez + pp[12]*ew;
+        const cy2 = pp[1]*ex + pp[5]*ey + pp[9]*ez + pp[13]*ew;
+        const cw  = pp[3]*ex + pp[7]*ey + pp[11]*ez + pp[15]*ew;
+        const ndcX = cx2 / cw, ndcY = cy2 / cw;
+        const playerScreenX = (ndcX * 0.5 + 0.5) * window.innerWidth;
+        const playerScreenY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight;
+        let sdx = touch.screenX - playerScreenX;
+        let sdy = touch.screenY - playerScreenY;
+        const sLen = Math.sqrt(sdx * sdx + sdy * sdy);
+        if (sLen > 5) {
+          sdx /= sLen; sdy /= sLen;
+          mx += sdx + sdy;
+          mz += -sdx + sdy;
+          const tLen = Math.sqrt(mx * mx + mz * mz);
+          if (tLen > 1) { mx /= tLen; mz /= tLen; }
+        }
+      }
+    }
+
+    cc.mx = mx; cc.mz = mz;
+    cc.isMoving = (mx !== 0 || mz !== 0);
+  },
+
+  // --- Per-frame update: input → sub-steps → collision → terrain snap ---
+  update(dt, time) {
+    const cc = CharacterController;
+    cc.pollGamepad();
+    cc.computeMovement();
+
+    // Fixed sub-step loop
+    cc._dtAccum += dt;
+    const steps = Math.min(Math.floor(cc._dtAccum / cc.STEP_DT), cc.MAX_STEPS);
+    cc._dtAccum -= steps * cc.STEP_DT;
+    if (cc._dtAccum > cc.STEP_DT * 2) cc._dtAccum = cc.STEP_DT * 2;
+
+    // Gather nearby regions
+    const pgx = Math.round(cc.x / REGION_SIZE);
+    const pgz = Math.round(cc.z / REGION_SIZE);
+    const nearby = cc._nearbyRegions;
+    nearby.length = 0;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const gx = pgx + dx, gz = pgz + dz;
+        if (gx < -GRID_HALF || gx > GRID_HALF || gz < -GRID_HALF || gz > GRID_HALF) continue;
+        nearby.push(getRegion(gx, gz));
+      }
+    }
+
+    // Pre-step: prepare overlap tracking (only when physics actually runs)
+    if (steps > 0) {
+      for (const reg of nearby) {
+        if (!reg.allColliders) continue;
+        for (const col of reg.allColliders) {
+          if (col.src && col.src._overlapping) {
+            col.src._wasOverlapping = true;
+            col.src._overlapping = false;
+          }
+        }
+      }
+    }
+
+    // Sub-steps: move + collide
+    for (let step = 0; step < steps; step++) {
+      if (cc.isMoving) {
+        const sm = cc.speedMult || 1.0;
+        cc.x += cc.mx * cc.SPEED * sm * cc.STEP_DT;
+        cc.z += cc.mz * cc.SPEED * sm * cc.STEP_DT;
+      }
+      cc.resolveCollisions(nearby);
+    }
+
+    // Snap to terrain
+    cc.y = getWorldHeight(cc.x, cc.z);
+
+    // Sync player collider
+    cc.collider.colX = cc.x;
+    cc.collider.colZ = cc.z;
+
+    // Post-step: fire collide events
+    if (steps > 0) {
+      for (const reg of nearby) {
+        if (!reg.allColliders) continue;
+        for (const col of reg.allColliders) {
+          if (!col.src) continue;
+          if (col.src._wasOverlapping && !col.src._overlapping) {
+            // Left the collider this frame
+            col.src._collideActive = false;
+            onCollideEnd(cc.collider, col);
+          } else if (col.src._collideActive && col.src._overlapping) {
+            // Still overlapping — per-frame overlap callback
+            onColliding(cc.collider, col);
+          }
+          col.src._wasOverlapping = false;
+        }
+      }
+    }
+
+    // Region change check
+    if (pgx !== cc._lastRegX || pgz !== cc._lastRegZ) {
+      cc._lastRegX = pgx; cc._lastRegZ = pgz;
+      populateDropdowns();
+    }
+  },
+
+  // --- Collision resolution ---
+  resolveCollisions(regions) {
+    const cc = CharacterController;
+    cc.speedMult = 1.0;
+    for (const reg of regions) {
+      if (!reg.allColliders) buildRegionColliders(reg);
+      for (const col of reg.allColliders) {
+        const ct = COLLIDER_TYPES[col.type];
+        if (!ct) continue;
+        const minDist = cc.RADIUS + col.colR;
+        const dx = cc.x - col.colX, dz = cc.z - col.colZ;
+        const distSq = dx * dx + dz * dz;
+        if (distSq < minDist * minDist && distSq > 0.000001) {
+          if (ct.blocksPlayer) {
+            const dist = Math.sqrt(distSq);
+            const push = (minDist - dist) / dist;
+            cc.x += dx * push;
+            cc.z += dz * push;
+          } else if (ct.slowsPlayer && col.src) {
+            cc.speedMult = Math.min(cc.speedMult, ct.slowsPlayer);
+            if (!col.src._collideActive) {
+              col.src._collideActive = true;
+              getShake(col.src).wasMoving = cc.isMoving;
+              if (cc.isMoving) {
+                onCollideStart(cc.collider, col);
+              }
+            }
+            col.src._overlapping = true;
+          }
+        }
+      }
+    }
+    const worldHalf = (GRID_HALF + 0.5) * REGION_SIZE;
+    cc.x = Math.max(-worldHalf + cc.RADIUS, Math.min(worldHalf - cc.RADIUS, cc.x));
+    cc.z = Math.max(-worldHalf + cc.RADIUS, Math.min(worldHalf - cc.RADIUS, cc.z));
+  },
+
+  // Store matrices for touch-to-move projection (called after camera builds them)
+  storeMatrices(view, proj) {
+    const cc = CharacterController;
+    if (!cc._prevView) cc._prevView = new Float32Array(16);
+    if (!cc._prevProj) cc._prevProj = new Float32Array(16);
+    cc._prevView.set(view);
+    cc._prevProj.set(proj);
+  },
+};
+
+// Register keyboard listeners
+CharacterController.collider.src = CharacterController;
+window.addEventListener('keydown', CharacterController.onKeyDown);
+window.addEventListener('keyup', CharacterController.onKeyUp);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAMERA CONTROLLER
+// Owns: camera target, zoom, rotation, pan, deadzone, visual bias, matrices
+// ═══════════════════════════════════════════════════════════════════════════
+const CameraController = {
+  // --- Constants ---
+  DEADZONE:     1.20,   // camera deadzone radius in world units
+  ISO_DIST:     20,     // virtual distance for ortho direction
+  ROT_Y:        Math.PI / 4,
+  ROT_X:        Math.atan(1 / Math.sqrt(2)), // ~35.26° isometric elevation
+
+  // --- Camera state ---
+  target: [-0.4, 0, -0.4], // look-at point (XZ plane)
+  dist:   8,                // ortho half-size (zoom level)
+
+  // --- Zoom table ---
+  _zoomTable: null,
+  _zoomDefaultIdx: 0,
+  _zoomIdx: 0,
+
+  // --- Pan state ---
+  _isPanning:      false,  // right-click drag active
+  _lastMouse:      [0, 0],
+  _cameraPanned:   false,  // pan happened, not yet resolved
+  _camUncapped:    false,  // returning from pan (uncapped speed)
+  _panReturnSpeed: 0,
+
+  // --- Deadzone state ---
+  _camSettled:  false,
+  _camCenterX:  0,
+  _camCenterZ:  0,
+
+  // --- Visual bias state ---
+  _vizBiasX:         0,
+  _vizBiasZ:         0,
+  _panFrozenBiasX:   0,
+  _panFrozenBiasZ:   0,
+  _transitionBiasX:  undefined,
+  _transitionBiasZ:  undefined,
+
+  // --- Preallocated matrix helpers ---
+  _eyeVec: new Float32Array(3),
+  _upVec:  new Float32Array([0, 1, 0]),
+  _result: { proj: null, view: null }, // reused return object
+
+  // --- Build zoom table on init ---
+  init() {
+    const table = [8];
+    let d = 8;
+    while (d > 2.01) { d -= d * 0.13; table.unshift(Math.max(2, d)); }
+    d = 8;
+    while (d < 19.9) { d += d * 0.195; table.push(Math.min(20, d)); }
+    CameraController._zoomTable = table;
+    CameraController._zoomDefaultIdx = table.indexOf(8);
+    CameraController._zoomIdx = CameraController._zoomDefaultIdx;
+  },
+
+  // --- Input events ---
+  onPanStart(clientX, clientY) {
+    const cam = CameraController;
+    cam._isPanning = true;
+    cam._lastMouse[0] = clientX;
+    cam._lastMouse[1] = clientY;
+  },
+
+  onPanEnd() {
+    CameraController._isPanning = false;
+  },
+
+  onPanMove(clientX, clientY) {
+    const cam = CameraController;
+    if (!cam._isPanning) return;
+    const dx = clientX - cam._lastMouse[0];
+    const dy = clientY - cam._lastMouse[1];
+    cam._lastMouse[0] = clientX;
+    cam._lastMouse[1] = clientY;
+
+    const panSpeed = 0.02 * (cam.dist / 8);
+    const sinY = Math.sin(cam.ROT_Y);
+    const cosY = Math.cos(cam.ROT_Y);
+    cam.target[0] -= (cosY * dx + sinY * dy) * panSpeed;
+    cam.target[2] -= (-sinY * dx + cosY * dy) * panSpeed;
+
+    if (!cam._cameraPanned) {
+      cam._panFrozenBiasX = cam._vizBiasX || 0;
+      cam._panFrozenBiasZ = cam._vizBiasZ || 0;
+    }
+    cam._cameraPanned = true;
+    cam._camUncapped = false;
+    cam._panReturnSpeed = 0;
+  },
+
+  onZoomWheel(deltaY) {
+    const cam = CameraController;
+    if (deltaY > 0 && cam._zoomIdx < cam._zoomTable.length - 1) cam._zoomIdx++;
+    else if (deltaY < 0 && cam._zoomIdx > 0) cam._zoomIdx--;
+    cam.dist = cam._zoomTable[cam._zoomIdx];
+  },
+
+  onZoomPinch(ratio, startDist) {
+    CameraController.dist = Math.max(2, Math.min(20, startDist * ratio));
+  },
+
+  // --- Per-frame update: deadzone, pan return, visual bias → proj/view ---
+  update(dt, playerX, playerY, playerZ, isMoving) {
+    const cam = CameraController;
+    const cc = CharacterController;
+
+    // --- Pan return on first movement after pan ---
+    if (cam._cameraPanned && isMoving) {
+      let playerOnScreen = false;
+      const pv = cc._prevView, pp = cc._prevProj;
+      if (pv && pp) {
+        const ex = pv[0]*playerX + pv[4]*playerY + pv[8]*playerZ + pv[12];
+        const ey = pv[1]*playerX + pv[5]*playerY + pv[9]*playerZ + pv[13];
+        const ez = pv[2]*playerX + pv[6]*playerY + pv[10]*playerZ + pv[14];
+        const ew = pv[3]*playerX + pv[7]*playerY + pv[11]*playerZ + pv[15];
+        const cx2 = pp[0]*ex + pp[4]*ey + pp[8]*ez + pp[12]*ew;
+        const cy2 = pp[1]*ex + pp[5]*ey + pp[9]*ez + pp[13]*ew;
+        const cw  = pp[3]*ex + pp[7]*ey + pp[11]*ez + pp[15]*ew;
+        if (cw !== 0) {
+          const ndcX = cx2 / cw, ndcY = cy2 / cw;
+          playerOnScreen = Math.abs(ndcX) < 1.0 && Math.abs(ndcY) < 1.0;
+        }
+      }
+      cam._cameraPanned = false;
+      cam._camSettled = false;
+      if (playerOnScreen) {
+        cam._camUncapped = true;
+      } else {
+        cam.target[0] = playerX;
+        cam.target[2] = playerZ;
+      }
+    }
+
+    // --- Wake from settled when player nears edge ---
+    if (isMoving && cam._camSettled) {
+      const sdx = playerX - cam.target[0];
+      const sdz = playerZ - cam.target[2];
+      const distSq = sdx * sdx + sdz * sdz;
+      const wakeR = cam.DEADZONE - cc.RADIUS;
+      if (distSq > wakeR * wakeR) cam._camSettled = false;
+    }
+
+    // --- Deadzone follow ---
+    if (!cam._cameraPanned && !cam._camSettled) {
+      let offX = playerX - cam.target[0];
+      let offZ = playerZ - cam.target[2];
+      let offDist = Math.sqrt(offX * offX + offZ * offZ);
+      const outsideDeadzone = offDist > cam.DEADZONE;
+
+      if (isMoving) {
+        if (outsideDeadzone) {
+          const overshoot = offDist - cam.DEADZONE;
+          if (cam._camUncapped) {
+            // Pan return: speed modulated by movement direction
+            const offNx = offX / offDist, offNz = offZ / offDist;
+            const dot = cc.mx * offNx + cc.mz * offNz;
+            const t = dot * 0.5 + 0.5;
+            const zoomInSteps = Math.max(0, cam._zoomDefaultIdx - cam._zoomIdx);
+            const zoomScale = 1 - zoomInSteps * (0.15 / 8);
+            const speed = (4 + t * 7) * zoomScale;
+            cam._panReturnSpeed = speed;
+            const move = overshoot * (1 - Math.exp(-speed * dt));
+            cam.target[0] += offNx * move;
+            cam.target[2] += offNz * move;
+          } else {
+            // Normal: capped to player speed
+            const move = Math.min(overshoot * (1 - Math.exp(-15 * dt)), cc.SPEED * dt);
+            cam.target[0] += (offX / offDist) * move;
+            cam.target[2] += (offZ / offDist) * move;
+          }
+        }
+        if (!outsideDeadzone) {
+          cam._camSettled = true;
+          cam._camUncapped = false;
+          cam._panReturnSpeed = 0;
+        }
+      } else {
+        // Player stopped — follow back
+        if (outsideDeadzone) {
+          const overshoot = offDist - cam.DEADZONE;
+          if (cam._camUncapped) {
+            const speed = cam._panReturnSpeed || 8;
+            const move = overshoot * (1 - Math.exp(-speed * dt));
+            cam.target[0] += (offX / offDist) * move;
+            cam.target[2] += (offZ / offDist) * move;
+          } else {
+            const move = Math.min(overshoot * (1 - Math.exp(-15 * dt)), cc.SPEED * dt);
+            cam.target[0] += (offX / offDist) * move;
+            cam.target[2] += (offZ / offDist) * move;
+          }
+        }
+        // Settle toward player
+        offX = playerX - cam.target[0];
+        offZ = playerZ - cam.target[2];
+        offDist = Math.sqrt(offX * offX + offZ * offZ);
+        const targetDist = cam.DEADZONE - cc.RADIUS;
+        const gap = offDist - targetDist;
+        if (gap > 0.002) {
+          const move = gap < 0.06
+            ? Math.min(gap, 0.48 * dt)
+            : gap * (1 - Math.exp(-8 * dt));
+          cam.target[0] += (offX / offDist) * move;
+          cam.target[2] += (offZ / offDist) * move;
+        } else {
+          cam._camSettled = true;
+          cam._camUncapped = false;
+          cam._panReturnSpeed = 0;
+        }
+      }
+    }
+
+    // Debug center
+    if (!cam._cameraPanned && !cam._camSettled) {
+      cam._camCenterX = cam.target[0];
+      cam._camCenterZ = cam.target[2];
+    }
+  },
+
+  // --- Build projection and view matrices ---
+  buildMatrices(canvasWidth, canvasHeight) {
+    const cam = CameraController;
+    const cc = CharacterController;
+    const aspect = canvasWidth / canvasHeight;
+    const proj = ortho(-cam.dist * aspect, cam.dist * aspect, -cam.dist, cam.dist, -50, 50);
+
+    // --- Visual bias (centers player when zoomed in) ---
+    let vizTargetX = cam.target[0], vizTargetZ = cam.target[2];
+    if (cam._cameraPanned) {
+      vizTargetX += cam._panFrozenBiasX || 0;
+      vizTargetZ += cam._panFrozenBiasZ || 0;
+    } else if (cam._zoomIdx < cam._zoomDefaultIdx) {
+      const zoomT = 1 - (cam._zoomIdx / cam._zoomDefaultIdx);
+      const bias = zoomT * 0.80;
+      const liveBiasX = (cc.x - cam.target[0]) * bias;
+      const liveBiasZ = (cc.z - cam.target[2]) * bias;
+      const dt = cam._lastDt || 0.016;
+      if (cam._camUncapped) {
+        if (cam._transitionBiasX === undefined) {
+          cam._transitionBiasX = cam._panFrozenBiasX || 0;
+          cam._transitionBiasZ = cam._panFrozenBiasZ || 0;
+        }
+        const biasLerp = 1 - Math.exp(-6 * dt);
+        cam._transitionBiasX += (liveBiasX - cam._transitionBiasX) * biasLerp;
+        cam._transitionBiasZ += (liveBiasZ - cam._transitionBiasZ) * biasLerp;
+        vizTargetX += cam._transitionBiasX;
+        vizTargetZ += cam._transitionBiasZ;
+        cam._vizBiasX = cam._transitionBiasX;
+        cam._vizBiasZ = cam._transitionBiasZ;
+      } else {
+        vizTargetX += liveBiasX;
+        vizTargetZ += liveBiasZ;
+        cam._transitionBiasX = undefined;
+        cam._vizBiasX = liveBiasX;
+        cam._vizBiasZ = liveBiasZ;
+      }
+    } else {
+      cam._vizBiasX = 0;
+      cam._vizBiasZ = 0;
+      cam._transitionBiasX = undefined;
+    }
+
+    // --- View matrix ---
+    const eye = cam._eyeVec;
+    eye[0] = vizTargetX + cam.ISO_DIST * Math.cos(cam.ROT_X) * Math.sin(cam.ROT_Y);
+    eye[1] = cam.target[1] + cam.ISO_DIST * Math.sin(cam.ROT_X);
+    eye[2] = vizTargetZ + cam.ISO_DIST * Math.cos(cam.ROT_X) * Math.cos(cam.ROT_Y);
+    const savedX = cam.target[0], savedZ = cam.target[2];
+    cam.target[0] = vizTargetX; cam.target[2] = vizTargetZ;
+    const view = lookAt(eye, cam.target, cam._upVec);
+    cam.target[0] = savedX; cam.target[2] = savedZ;
+
+    // --- Pixel snap (eliminates sub-pixel jitter) ---
+    const worldPerPixelX = (2 * cam.dist * aspect) / canvasWidth;
+    const worldPerPixelY = (2 * cam.dist) / canvasHeight;
+    view[12] = Math.round(view[12] / worldPerPixelX) * worldPerPixelX;
+    view[13] = Math.round(view[13] / worldPerPixelY) * worldPerPixelY;
+
+    cam._result.proj = proj;
+    cam._result.view = view;
+    return cam._result; // reuses static buffers; callers must not store across frames
+  },
+};
+
+// Initialize zoom table
+CameraController.init();
+
+// --- Camera input listeners ---
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 2) CameraController.onPanStart(e.clientX, e.clientY);
+});
+window.addEventListener('mouseup', e => {
+  if (e.button === 2) CameraController.onPanEnd();
+});
+window.addEventListener('mousemove', e => {
+  CameraController.onPanMove(e.clientX, e.clientY);
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  CameraController.onZoomWheel(e.deltaY);
+}, { passive: false });
+
+// --- Touch input listeners (pinch zoom + single-touch move) ---
+let _touchStartDist = 0, _touchStartCamDist = 0, _touchIsPinching = false;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    _touchIsPinching = true;
+    CharacterController.onTouchMoveCancel();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    _touchStartDist = Math.sqrt(dx * dx + dy * dy);
+    _touchStartCamDist = CameraController.dist;
+  } else if (e.touches.length === 1) {
+    _touchIsPinching = false;
+    CharacterController.onTouchMoveStart(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    _touchIsPinching = true;
+    CharacterController.onTouchMoveCancel();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    CameraController.onZoomPinch(_touchStartDist / dist, _touchStartCamDist);
+  } else if (e.touches.length === 1 && !_touchIsPinching) {
+    e.preventDefault();
+    CharacterController.onTouchMoveUpdate(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+  CharacterController.onTouchMoveCancel();
+  if (e.touches.length === 0) _touchIsPinching = false;
+  else if (e.touches.length === 1 && _touchIsPinching) {
+    _touchIsPinching = false;
+    CharacterController.onTouchMoveCancel();
+  }
+});
+canvas.addEventListener('touchcancel', () => {
+  CharacterController.onTouchMoveCancel();
+  _touchIsPinching = false;
+});
 
 // Generate cylinder mesh (reuses cubeProg shader)
 const CYL_SEGS = 12;
@@ -6892,45 +7592,53 @@ const cylIBO = gl.createBuffer();
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cylIBO);
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cylIdxData, gl.STATIC_DRAW);
 
-// Character state
-const player = {
-  x: -0.4,
-  z: -0.4,
-  y: 0,  // computed from terrain
-};
+// (Player state, input, gamepad, touch-to-move now in CharacterController above)
 
-// WASD input tracking (use KeyCode for reliable multi-key)
-const keys = {};
-window.addEventListener('keydown', e => { keys[e.code] = true; });
-window.addEventListener('keyup', e => { keys[e.code] = false; });
+// ═══════════════════════════════════════════════════════════════════════════
+// ISOMETRIC SCREEN PROJECTION HELPERS
+// Camera is fixed at rotY=PI/4. These project world-space XZ vectors
+// onto screen-horizontal (camRight) and screen-vertical (camUp ground component).
+// ═══════════════════════════════════════════════════════════════════════════
+const ISO_COS = 0.7071; // cos(PI/4)
+const ISO_SIN = 0.7071; // sin(PI/4)
+// camRight in world XZ: (cos, 0, -sin) = (0.7071, 0, -0.7071)
+// camUp ground component in world XZ: (-sin, 0, -cos) = (-0.7071, 0, -0.7071)
+function screenH(dx, dz) { return dx * ISO_COS + dz * -ISO_SIN; }
+function screenV(dx, dz) { return dx * -ISO_SIN + dz * -ISO_COS; }
 
-// Gamepad input
-const gamepadState = { lx: 0, lz: 0 };
-const DEADZONE = 0.15;
-
-// Touch-to-move: single finger hold moves player toward touch direction
-const touchMoveState = { active: false, screenX: 0, screenY: 0, _startX: 0, _startY: 0, _holdTimer: 0 };
-
-function pollGamepad() {
-  try {
-    const gamepads = navigator.getGamepads();
-    for (const gp of gamepads) {
-      if (!gp) continue;
-      let lx = gp.axes[0] || 0;
-      let ly = gp.axes[1] || 0;
-      if (Math.abs(lx) < DEADZONE) lx = 0;
-      if (Math.abs(ly) < DEADZONE) ly = 0;
-      gamepadState.lx = lx;
-      gamepadState.lz = ly;
-      return;
-    }
-  } catch(e) {}
-  gamepadState.lx = 0;
-  gamepadState.lz = 0;
+// ═══════════════════════════════════════════════════════════════════════════
+// TREE SHAKE STATE
+// Groups all per-tree animation state into a single object.
+// Created on first collision, reused across subsequent collisions.
+// ═══════════════════════════════════════════════════════════════════════════
+function getShake(src) {
+  if (!src._shake) {
+    src._shake = {
+      active: false,    // currently animating
+      start: 0,         // render._time when shake began
+      end: 0,           // render._time when player left (0 = still overlapping)
+      dir: 0,           // vertical: +1 from below, -1 from above, 0 suppressed
+      phase: 0,         // horizontal oscillation start phase
+      hInt: 1.0,        // horizontal intensity 0-1
+      vInt: 1.0,        // vertical intensity 0-1
+      wasMoving: false,  // was player moving last frame (for stop/start detection)
+    };
+  }
+  return src._shake;
 }
 
-// Convert world position to UV for terrain height lookup
 // --- Collision interaction table ---
+// ═══════════════════════════════════════════════════════════════════════════
+// COLLIDER SYSTEM
+// A collider is a uniform circle: { type, colX, colZ, colR, src }
+//   type  — key into COLLIDER_TYPES (defines behavior & debug viz)
+//   colX  — world-space X of circle center
+//   colZ  — world-space Z of circle center
+//   colR  — circle radius
+//   src   — reference to owning game object (tree data, rock data, player, etc.)
+// All collision checks, proximity tests, and debug rings use this shape.
+// ═══════════════════════════════════════════════════════════════════════════
+
 // RULE: "collision with a tree" always means the tree's collider circle (colX, colZ, colR),
 // never the billboard anchor or billboard bounding box. The collider represents the visible
 // trunk/canopy mass and is the only geometry used for proximity checks, spawn clearance,
@@ -6938,20 +7646,26 @@ function pollGamepad() {
 // Each object type has: blocksPlayer (pushes player out), debug viz style.
 // Future: add blocksNPC, blocksProjectile, etc.
 const COLLIDER_TYPES = {
-  tree:    { blocksPlayer: true,  debugColor: [1.0, 0.15, 0.1],  debugStyle: 'solid'  },
-  rock:    { blocksPlayer: true,  debugColor: [1.0, 0.85, 0.1],  debugStyle: 'solid'  },
-  minable: { blocksPlayer: true,  debugColor: [0.7, 0.15, 0.9],  debugStyle: 'solid'  },
-  stick:   { blocksPlayer: false, debugColor: [0.2, 0.85, 0.85], debugStyle: 'dotted' },
+  player:      { blocksPlayer: false, debugColor: [0.3, 1.0, 0.1],  debugStyle: 'solid'  },
+  tree:        { blocksPlayer: true,  debugColor: [1.0, 0.15, 0.1],  debugStyle: 'solid'  },
+  tree_forest: { blocksPlayer: false, slowsPlayer: 0.60, debugColor: [0.1, 0.7, 0.2], debugStyle: 'solid' },
+  rock:        { blocksPlayer: true,  debugColor: [1.0, 0.85, 0.1],  debugStyle: 'solid'  },
+  minable:     { blocksPlayer: true,  debugColor: [0.7, 0.15, 0.9],  debugStyle: 'solid'  },
+  stick:       { blocksPlayer: false, debugColor: [0.2, 0.85, 0.85], debugStyle: 'dotted' },
 };
 
 // Build unified collider list per region (called once at region init, no per-frame alloc)
 function buildRegionColliders(reg) {
   const colliders = [];
-  for (const t of reg.treePositions) {
-    colliders.push({ type: 'tree', colX: t.colX, colZ: t.colZ, colR: t.colR, src: t });
+  for (let i = 0; i < reg.treePositions.length; i++) {
+    const t = reg.treePositions[i];
+    const varName = reg.treeVarIdx[i];
+    const isForest = typeof varName === 'string' && varName.startsWith('fir_');
+    const colType = isForest ? 'tree_forest' : 'tree';
+    colliders.push({ type: colType, colX: t.colX, colZ: t.colZ, colR: t.colR, src: t });
     if (t.extraCols) {
       for (const ec of t.extraCols) {
-        colliders.push({ type: 'tree', colX: ec.colX, colZ: ec.colZ, colR: ec.colR, src: t });
+        colliders.push({ type: colType, colX: ec.colX, colZ: ec.colZ, colR: ec.colR, src: t });
       }
     }
   }
@@ -6969,28 +7683,91 @@ function buildRegionColliders(reg) {
   reg.allColliders = colliders;
 }
 
-function resolveCollisions(activeRegions) {
-  for (const reg of activeRegions) {
-    if (!reg.allColliders) buildRegionColliders(reg);
-    for (const col of reg.allColliders) {
-      const ct = COLLIDER_TYPES[col.type];
-      if (!ct || !ct.blocksPlayer) continue;
-      const minDist = CHAR_RADIUS + col.colR;
-      const dx = player.x - col.colX, dz = player.z - col.colZ;
-      const distSq = dx * dx + dz * dz;
-      if (distSq < minDist * minDist && distSq > 0.000001) {
-        const dist = Math.sqrt(distSq);
-        const push = (minDist - dist) / dist;
-        player.x += dx * push;
-        player.z += dz * push;
+// --- Collision event callbacks ---
+// Fired when two colliders begin/end overlapping.
+// colA and colB are collider objects: { type, colX, colZ, colR, src }
+// Currently fired by CharacterController for player vs non-blocking items.
+// Future: item-vs-item, NPC-vs-item, etc.
+
+// Trees with active "from below" squish, for sort bias (avoids scanning all trees per frame)
+const _pushedTrees = [];
+
+function onCollideStart(colA, colB) {
+  if (colB.type === 'tree_forest') {
+    const cc = CharacterController;
+    // Only animate if player is moving (caller checks too, but defensive)
+    if (!cc.isMoving) return;
+    const src = colB.src;
+    const sh = getShake(src);
+    if (!sh.active) sh.start = render._time;
+    sh.active = true;
+    sh.end = 0;
+
+    // Collision direction: colA → colB
+    const dx = colB.colX - colA.colX;
+    const dz = colB.colZ - colA.colZ;
+
+    // Horizontal phase: lean away from impact side
+    const dotH = screenH(dx, dz);
+    const basePhaseH = dotH >= 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+    sh.phase = basePhaseH + (Math.random() - 0.5) * 0.8;
+
+    // Vertical direction
+    const dotV = screenV(dx, dz);
+    sh.dir = dotV >= 0 ? 1.0 : -1.0;
+
+    // Track "from below" pushes for sort bias
+    if (sh.dir > 0 && _pushedTrees.indexOf(src) === -1) {
+      _pushedTrees.push(src);
+    }
+
+    // Horizontal intensity from movement direction
+    sh.hInt = Math.max(0.15, Math.abs(screenH(cc.mx, cc.mz)));
+
+    // Vertical intensity from movement direction
+    sh.vInt = Math.max(0.10, Math.abs(screenV(cc.mx, cc.mz)));
+  }
+}
+
+function onColliding(colA, colB) {
+  if (colB.type === 'tree_forest') {
+    const cc = CharacterController;
+    const sh = getShake(colB.src);
+    if (sh.wasMoving && !cc.isMoving) {
+      // Player stopped moving on tree — begin settle
+      sh.wasMoving = false;
+      if (sh.active && !sh.end) {
+        sh.end = render._time;
       }
+    } else if (!sh.wasMoving && cc.isMoving) {
+      // Player started moving again while still on tree — restart horizontal only
+      sh.wasMoving = true;
+      sh.start = render._time;
+      sh.active = true;
+      sh.end = 0;
+      sh.dir = 0; // suppress vertical
+      sh.vInt = 0;
+      // Recompute horizontal phase and intensity from current movement
+      const dx = colB.colX - colA.colX;
+      const dz = colB.colZ - colA.colZ;
+      const dotH = screenH(dx, dz);
+      const basePhase = dotH >= 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+      sh.phase = basePhase + (Math.random() - 0.5) * 0.8;
+      sh.hInt = Math.max(0.15, Math.abs(screenH(cc.mx, cc.mz)));
     }
   }
-  // Clamp to world grid bounds
-  const worldHalf = (GRID_HALF + 0.5) * REGION_SIZE;
-  player.x = Math.max(-worldHalf + CHAR_RADIUS, Math.min(worldHalf - CHAR_RADIUS, player.x));
-  player.z = Math.max(-worldHalf + CHAR_RADIUS, Math.min(worldHalf - CHAR_RADIUS, player.z));
 }
+
+function onCollideEnd(colA, colB) {
+  if (colB.type === 'tree_forest') {
+    const sh = getShake(colB.src);
+    sh.end = render._time;
+    sh.wasMoving = false;
+    // active stays true — draw code handles the settle-back
+  }
+}
+
+// (resolveCollisions now in CharacterController.resolveCollisions)
 
 // --- Matrix helpers ---
 const _orthoMat = new Float32Array(16);
@@ -7006,8 +7783,6 @@ function ortho(left, right, bottom, top, near, far) {
 }
 
 const _viewMat = new Float32Array(16);
-const _eyeVec = new Float32Array(3);
-const _upVec = new Float32Array([0, 1, 0]);
 function lookAt(eye, center, up) {
   // Forward (z axis)
   let zx = eye[0]-center[0], zy = eye[1]-center[1], zz = eye[2]-center[2];
@@ -7029,137 +7804,7 @@ function lookAt(eye, center, up) {
   return _viewMat;
 }
 
-// --- Interactive Camera ---
-let camRotY = Math.PI / 4;        // horizontal orbit angle
-let camRotX = Math.atan(1 / Math.sqrt(2)); // elevation (~35.26Ã‚Â° isometric)
-let camDist = 8;  // ortho half-size (zoom level)
-let camTarget = [-0.4, 0, -0.4];        // look-at point (Y fixed — ortho iso needs only XZ)
-
-// Right-click drag to pan/orbit
-let isDragging = false;
-let lastMouse = [0, 0];
-
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-canvas.addEventListener('mousedown', e => {
-  if (e.button === 2) {
-    isDragging = true;
-    lastMouse[0] = e.clientX; lastMouse[1] = e.clientY;
-  }
-});
-
-window.addEventListener('mouseup', e => {
-  if (e.button === 2) isDragging = false;
-});
-
-window.addEventListener('mousemove', e => {
-  if (!isDragging) return;
-  const dx = e.clientX - lastMouse[0];
-  const dy = e.clientY - lastMouse[1];
-  lastMouse[0] = e.clientX; lastMouse[1] = e.clientY;
-
-  // Pan the target in the ground plane relative to camera orientation
-  const panSpeed = 0.02 * (camDist / 8);
-  const sinY = Math.sin(camRotY);
-  const cosY = Math.cos(camRotY);
-
-  // Right vector on ground plane
-  camTarget[0] -= (cosY * dx + sinY * dy) * panSpeed;
-  camTarget[2] -= (-sinY * dx + cosY * dy) * panSpeed;
-  if (!render._cameraPanned) {
-    // First pan movement — freeze current viz bias offset
-    render._panFrozenBiasX = render._vizBiasX || 0;
-    render._panFrozenBiasZ = render._vizBiasZ || 0;
-  }
-  render._cameraPanned = true;
-  render._camUncapped = false; render._panReturnSpeed = 0;
-});
-
-// Scroll to zoom â€” use precomputed level table for consistency
-const zoomTable = [8]; // index 0 = default
-// Build zoom-in levels
-let _d = 8;
-while (_d > 2.01) { _d -= _d * 0.13; zoomTable.unshift(Math.max(2, _d)); }
-// Build zoom-out levels
-_d = 8;
-while (_d < 19.9) { _d += _d * 0.195; zoomTable.push(Math.min(20, _d)); }
-const zoomDefaultIdx = zoomTable.indexOf(8);
-let zoomIdx = zoomDefaultIdx;
-
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  if (e.deltaY > 0 && zoomIdx < zoomTable.length - 1) { zoomIdx++; }
-  else if (e.deltaY < 0 && zoomIdx > 0) { zoomIdx--; }
-  camDist = zoomTable[zoomIdx];
-}, { passive: false });
-
-// Touch pinch zoom for tablets + single-touch movement
-let touchStartDist = 0;
-let touchStartCamDist = 0;
-let touchIsPinching = false;
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 2) {
-    e.preventDefault();
-    touchIsPinching = true;
-    touchMoveState.active = false; // cancel move during pinch
-    clearTimeout(touchMoveState._holdTimer);
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    touchStartDist = Math.sqrt(dx * dx + dy * dy);
-    touchStartCamDist = camDist;
-  } else if (e.touches.length === 1) {
-    // Single touch: activate movement after small drag or short hold
-    touchIsPinching = false;
-    touchMoveState.screenX = e.touches[0].clientX;
-    touchMoveState.screenY = e.touches[0].clientY;
-    touchMoveState.active = false;
-    touchMoveState._startX = e.touches[0].clientX;
-    touchMoveState._startY = e.touches[0].clientY;
-    // Activate after 150ms hold even without drag
-    clearTimeout(touchMoveState._holdTimer);
-    touchMoveState._holdTimer = setTimeout(() => {
-      if (!touchIsPinching && !touchMoveState.active) touchMoveState.active = true;
-    }, 150);
-  }
-}, { passive: false });
-canvas.addEventListener('touchmove', e => {
-  if (e.touches.length === 2) {
-    e.preventDefault();
-    touchIsPinching = true;
-    touchMoveState.active = false;
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const ratio = touchStartDist / dist;
-    camDist = Math.max(2, Math.min(20, touchStartCamDist * ratio));
-  } else if (e.touches.length === 1 && !touchIsPinching) {
-    e.preventDefault();
-    touchMoveState.screenX = e.touches[0].clientX;
-    touchMoveState.screenY = e.touches[0].clientY;
-    // Activate after moving a small distance from start (deadzone to avoid accidental taps)
-    if (!touchMoveState.active) {
-      const ddx = touchMoveState.screenX - touchMoveState._startX;
-      const ddy = touchMoveState.screenY - touchMoveState._startY;
-      if (ddx * ddx + ddy * ddy > 10 * 10) touchMoveState.active = true;
-    }
-  }
-}, { passive: false });
-canvas.addEventListener('touchend', e => {
-  clearTimeout(touchMoveState._holdTimer);
-  if (e.touches.length === 0) {
-    touchMoveState.active = false;
-    touchIsPinching = false;
-  } else if (e.touches.length === 1 && touchIsPinching) {
-    // Went from 2 fingers to 1 — don't start moving, wait for fresh single touch
-    touchIsPinching = false;
-    touchMoveState.active = false;
-  }
-});
-canvas.addEventListener('touchcancel', () => {
-  clearTimeout(touchMoveState._holdTimer);
-  touchMoveState.active = false;
-  touchIsPinching = false;
-});
+// (Camera state and input handlers now in CameraController above)
 
 // --- Fullscreen toggle ---
 const fsBtn = document.getElementById('fsBtn');
@@ -7237,11 +7882,138 @@ statsToggle.addEventListener('click', () => {
   }
 });
 
-let showColliders = false;
+// ═══════════════════════════════════════════════════════════════════════════
+// DEBUG VISUALIZATION
+// Centralized debug rendering. Toggle with colBtn. Two hook points:
+//   drawItems()    — collider rings, player ring, deadzone, labels (post-sort)
+//   drawOverlays() — region edges, border margins, future paths (end of frame)
+// Add future viz with: DebugVis.addOverlay((gl, proj, view, regions) => { ... })
+// ═══════════════════════════════════════════════════════════════════════════
+const DebugVis = {
+  active: false,
+
+  // --- Overlay registry (region edges, future paths, spawn zones, etc.) ---
+  _overlays: [],
+  addOverlay(fn) { this._overlays.push(fn); },
+
+  // --- Per-item collider rings + player + deadzone + labels ---
+  drawItems(gl, proj, view, activeRegions, cc, cam) {
+    if (!this.active) return;
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(dbgProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, dbgRingVBO);
+    gl.enableVertexAttribArray(dbgAPos);
+    gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(dbgUProj, false, proj);
+    gl.uniformMatrix4fv(dbgUView, false, view);
+
+    // All colliders — drawn from unified allColliders list using COLLIDER_TYPES config
+    for (const reg of activeRegions) {
+      if (!reg.allColliders) buildRegionColliders(reg);
+      for (const col of reg.allColliders) {
+        const ct = COLLIDER_TYPES[col.type];
+        if (!ct) continue;
+        const isDotted = ct.debugStyle === 'dotted';
+        if (isDotted) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, dbgDottedVBO);
+          gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
+        }
+        gl.uniform3f(dbgUColor, ct.debugColor[0], ct.debugColor[1], ct.debugColor[2]);
+        const cy = getWorldHeight(col.colX, col.colZ);
+        gl.uniform3f(dbgUCenter, col.colX, cy, col.colZ);
+        gl.uniform1f(dbgURadius, col.colR);
+        if (isDotted) {
+          gl.drawArrays(gl.LINES, 0, DBG_DOTTED_SEGS * 2);
+          gl.bindBuffer(gl.ARRAY_BUFFER, dbgRingVBO);
+          gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
+        } else {
+          gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+        }
+      }
+    }
+
+    // Player collider
+    const pct = COLLIDER_TYPES[cc.collider.type];
+    gl.uniform3f(dbgUColor, pct.debugColor[0], pct.debugColor[1], pct.debugColor[2]);
+    gl.uniform3f(dbgUCenter, cc.collider.colX, cc.y, cc.collider.colZ);
+    gl.uniform1f(dbgURadius, cc.collider.colR);
+    gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+
+    // Camera deadzone ring — white when active, dark when settled
+    const dzX = cam._camCenterX, dzZ = cam._camCenterZ;
+    if (dzX !== undefined) {
+      if (cam._camSettled) {
+        gl.uniform3f(dbgUColor, 0.15, 0.15, 0.18);
+      } else {
+        gl.uniform3f(dbgUColor, 0.9, 0.9, 1.0);
+      }
+      gl.uniform3f(dbgUCenter, dzX, 0, dzZ);
+      gl.uniform1f(dbgURadius, cam.DEADZONE);
+      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
+    }
+
+    gl.enable(gl.DEPTH_TEST);
+
+    // Region coordinate labels
+    textBegin(proj, view);
+    for (const reg of activeRegions) {
+      const wcx = reg.gx * REGION_SIZE;
+      const wcz = reg.gz * REGION_SIZE;
+      const wcy = getWorldHeight(wcx, wcz) + 0.1;
+      textWorld('[' + reg.gx + ',' + reg.gz + ']', wcx, wcy, wcz, { scale: 12, r: 1, g: 1, b: 1, a: 0.9 });
+    }
+    textEnd();
+  },
+
+  // --- Post-pass overlays (region edges, border margins, future: paths, spawn zones) ---
+  drawOverlays(gl, proj, view, activeRegions) {
+    if (!this.active) return;
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(lineProg);
+    gl.uniformMatrix4fv(lineUProj, false, proj);
+    gl.uniformMatrix4fv(lineUView, false, view);
+    const LIFT = 0.08;
+
+    for (const reg of activeRegions) {
+      const ox = reg.gx * REGION_SIZE;
+      const oz = reg.gz * REGION_SIZE;
+
+      // Red: region boundary
+      gl.uniform3f(lineUColor, 1.0, 0.2, 0.2);
+      drawRect(0, 0, 1, 1, ox, oz, S, LIFT);
+
+      // Yellow: border margin — only on edges where neighbor is a different biome
+      const bName = reg.biomeName;
+      const regBiome = BIOMES[bName];
+      const baseM = regBiome.borderMargin || 0.03;
+      const nLA = getRegionAssignment(reg.gx - 1, reg.gz);
+      const nRA = getRegionAssignment(reg.gx + 1, reg.gz);
+      const nTA = getRegionAssignment(reg.gx, reg.gz - 1);
+      const nBA = getRegionAssignment(reg.gx, reg.gz + 1);
+      const isTopLeftEdge  = (reg.gx === -GRID_HALF);
+      const isTopRightEdge = (reg.gz === -GRID_HALF);
+      const nL = nLA && nLA.biome === bName ? 0 : (!nLA && isTopLeftEdge)  ? 0 : baseM;
+      const nR = nRA && nRA.biome === bName ? 0 : baseM;
+      const nT = nTA && nTA.biome === bName ? 0 : (!nTA && isTopRightEdge) ? 0 : baseM;
+      const nB = nBA && nBA.biome === bName ? 0 : baseM;
+      gl.uniform3f(lineUColor, 1.0, 1.0, 0.0);
+      drawEdge(nL, nT, 1 - nR, nT, ox, oz, S, LIFT);
+      drawEdge(1 - nR, nT, 1 - nR, 1 - nB, ox, oz, S, LIFT);
+      drawEdge(1 - nR, 1 - nB, nL, 1 - nB, ox, oz, S, LIFT);
+      drawEdge(nL, 1 - nB, nL, nT, ox, oz, S, LIFT);
+    }
+
+    // Run registered overlays (future: paths, spawn zones, etc.)
+    for (const fn of this._overlays) fn(gl, proj, view, activeRegions);
+
+    gl.enable(gl.DEPTH_TEST);
+  }
+};
+
 const colBtn = document.getElementById('colBtn');
 colBtn.addEventListener('click', () => {
-  showColliders = !showColliders;
-  colBtn.classList.toggle('active', showColliders);
+  DebugVis.active = !DebugVis.active;
+  colBtn.classList.toggle('active', DebugVis.active);
 });
 
 const hillBtn = document.getElementById('hillBtn');
@@ -7273,8 +8045,8 @@ function populateBiomeDropdown(currentBiome) {
     opt.addEventListener('click', (e) => {
       e.stopPropagation();
       const newBiome = opt.dataset.biome;
-      const pgx = Math.round(player.x / REGION_SIZE);
-      const pgz = Math.round(player.z / REGION_SIZE);
+      const pgx = Math.round(CharacterController.x / REGION_SIZE);
+      const pgz = Math.round(CharacterController.z / REGION_SIZE);
       // Switch biome, default to first config
       regionBiomeMap.set(pgx * 1000 + pgz, { biome: newBiome, configIdx: 0 });
       for (let dz = -1; dz <= 1; dz++) {
@@ -7301,8 +8073,8 @@ function populateConfigDropdown(currentBiome, currentConfigIdx) {
     opt.addEventListener('click', (e) => {
       e.stopPropagation();
       const idx = parseInt(opt.dataset.idx);
-      const pgx = Math.round(player.x / REGION_SIZE);
-      const pgz = Math.round(player.z / REGION_SIZE);
+      const pgx = Math.round(CharacterController.x / REGION_SIZE);
+      const pgz = Math.round(CharacterController.z / REGION_SIZE);
       const curAssignment = getRegionAssignment(pgx, pgz);
       regionBiomeMap.set(pgx * 1000 + pgz, { biome: curAssignment.biome, configIdx: idx });
       for (let dz = -1; dz <= 1; dz++) {
@@ -7318,8 +8090,8 @@ function populateConfigDropdown(currentBiome, currentConfigIdx) {
 }
 
 function populateDropdowns() {
-  const pgx = Math.round(player.x / REGION_SIZE);
-  const pgz = Math.round(player.z / REGION_SIZE);
+  const pgx = Math.round(CharacterController.x / REGION_SIZE);
+  const pgz = Math.round(CharacterController.z / REGION_SIZE);
   const assignment = getRegionAssignment(pgx, pgz);
   populateBiomeDropdown(assignment.biome);
   populateConfigDropdown(assignment.biome, assignment.configIdx);
@@ -7368,6 +8140,48 @@ function biomeGroundTex(name) {
 const _biomePriority = { desert: 0, rock: 1, forest: 2 };
 function _biomePriorityCmp(a, b) { return (_biomePriority[a.biomeName] || 0) - (_biomePriority[b.biomeName] || 0); }
 
+// Per-item frustum cull: skip items outside camera view (uses planes from getActiveRegions)
+// margin accounts for billboard/mesh radius so partially visible items still draw
+function isVisible(wx, wy, wz, margin) {
+  for (let i = 0; i < 4; i++) {
+    const p = _frustumPlanes[i];
+    if (p[0] * wx + p[1] * wy + p[2] * wz + p[3] < -margin) return false;
+  }
+  return true;
+}
+
+// Sort pool helper — hoisted out of render() to avoid per-frame closure allocation
+function pushSortable(pool, sortCount, type, sortKey, data) {
+  if (sortCount >= pool.length) pool.push({ type: '', sortKey: 0, data: null });
+  const s = pool[sortCount];
+  s.type = type; s.sortKey = sortKey; s.data = data;
+  return sortCount + 1;
+}
+
+// Debug draw helpers — preallocated buffer for edge lines
+const _edgeVerts = new Float32Array(6);
+let _edgeBuf = null;
+function drawEdge(u0, v0, u1, v1, regOx, regOz, S, LIFT) {
+  _edgeVerts[0] = -S + u0 * 2 * S + regOx;
+  _edgeVerts[1] = LIFT;
+  _edgeVerts[2] = -S + v0 * 2 * S + regOz;
+  _edgeVerts[3] = -S + u1 * 2 * S + regOx;
+  _edgeVerts[4] = LIFT;
+  _edgeVerts[5] = -S + v1 * 2 * S + regOz;
+  if (!_edgeBuf) _edgeBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, _edgeBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, _edgeVerts, gl.STREAM_DRAW);
+  gl.enableVertexAttribArray(lineAPos);
+  gl.vertexAttribPointer(lineAPos, 3, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.LINES, 0, 2);
+}
+function drawRect(u0, v0, u1, v1, regOx, regOz, S, LIFT) {
+  drawEdge(u0, v0, u1, v0, regOx, regOz, S, LIFT);
+  drawEdge(u1, v0, u1, v1, regOx, regOz, S, LIFT);
+  drawEdge(u1, v1, u0, v1, regOx, regOz, S, LIFT);
+  drawEdge(u0, v1, u0, v0, regOx, regOz, S, LIFT);
+}
+
 function render(rafTime) {
   if (fpsCap > 0) {
     const minInterval = 1000 / fpsCap;
@@ -7409,322 +8223,20 @@ function render(rafTime) {
   // --- Delta time ---
   const dt = Math.min((now - (render.lastTime || now)) / 1000, 0.05); // cap at 50ms
   render.lastTime = now;
+  render._time = now / 1000; // seconds, for shake effects
 
-  // --- Update character (WASD + gamepad movement) ---
-  pollGamepad();
-  // Screen-aligned: W=up, S=down, A=left, D=right
-  // Isometric: screen-up=(-x,-z), screen-right=(+x,-z)
-  let mx = 0, mz = 0;
-  if (keys['KeyW']) { mx -= 1; mz -= 1; }
-  if (keys['KeyS']) { mx += 1; mz += 1; }
-  if (keys['KeyA']) { mx -= 1; mz += 1; }
-  if (keys['KeyD']) { mx += 1; mz -= 1; }
-  if (mx !== 0 || mz !== 0) {
-    const len = Math.sqrt(mx * mx + mz * mz);
-    mx /= len; mz /= len;
-  }
-  // Gamepad: rotate stick input by 45Ã‚Â° to match isometric view
-  if (gamepadState.lx !== 0 || gamepadState.lz !== 0) {
-    const slx = gamepadState.lx, sly = gamepadState.lz;
-    mx += slx + sly;   // screen-right + screen-down -> world +x
-    mz += -slx + sly;  // screen-down - screen-right -> world +z
-    const cLen = Math.sqrt(mx * mx + mz * mz);
-    if (cLen > 1) { mx /= cLen; mz /= cLen; }
-  }
-  // Touch-to-move: compute screen direction from player to touch, convert to iso world axes
-  if (touchMoveState.active) {
-    // Project player world pos to screen (CSS pixels)
-    // Use the previous frame's proj/view (close enough since camera follows player)
-    const pv = render._prevView, pp = render._prevProj;
-    if (pv && pp) {
-      // Multiply: clip = proj * view * vec4(player.x, player.y, player.z, 1)
-      const pwx = player.x, pwy = player.y, pwz = player.z;
-      const ex = pv[0]*pwx + pv[4]*pwy + pv[8]*pwz + pv[12];
-      const ey = pv[1]*pwx + pv[5]*pwy + pv[9]*pwz + pv[13];
-      const ez = pv[2]*pwx + pv[6]*pwy + pv[10]*pwz + pv[14];
-      const ew = pv[3]*pwx + pv[7]*pwy + pv[11]*pwz + pv[15];
-      const cx2 = pp[0]*ex + pp[4]*ey + pp[8]*ez + pp[12]*ew;
-      const cy2 = pp[1]*ex + pp[5]*ey + pp[9]*ez + pp[13]*ew;
-      const cw = pp[3]*ex + pp[7]*ey + pp[11]*ez + pp[15]*ew;
-      // NDC
-      const ndcX = cx2 / cw, ndcY = cy2 / cw;
-      // CSS pixel position of player on screen
-      const playerScreenX = (ndcX * 0.5 + 0.5) * window.innerWidth;
-      const playerScreenY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight;
-      // Screen direction from player to touch
-      let sdx = touchMoveState.screenX - playerScreenX;
-      let sdy = touchMoveState.screenY - playerScreenY;
-      const sLen = Math.sqrt(sdx * sdx + sdy * sdy);
-      if (sLen > 5) { // small deadzone
-        sdx /= sLen; sdy /= sLen;
-        // Convert screen direction to isometric world axes (same as WASD/gamepad)
-        // Screen right = (+sdx, 0): world (+x, -z) = iso right
-        // Screen down  = (0, +sdy): world (+x, +z) = iso down
-        mx += sdx + sdy;   // world +x
-        mz += -sdx + sdy;  // world +z
-        const tLen = Math.sqrt(mx * mx + mz * mz);
-        if (tLen > 1) { mx /= tLen; mz /= tLen; }
-      }
-    }
-  }
-  // --- Fixed sub-step movement + collision (~120Hz) ---
-  // Accumulate dt and consume in fixed chunks. This gives identical feel
-  // at 30fps and 144fps: per-step displacement is always ~0.032 units,
-  // so collision never misses and movement looks smooth.
-  if (render._dtAccum === undefined) render._dtAccum = 0;
-  render._dtAccum += dt;
-  const steps = Math.min(Math.floor(render._dtAccum / STEP_DT), MAX_STEPS);
-  render._dtAccum -= steps * STEP_DT;
-  // Clamp leftover to prevent accumulation if we consistently hit MAX_STEPS
-  if (render._dtAccum > STEP_DT * 2) render._dtAccum = STEP_DT * 2;
+  // --- Update controllers ---
+  const cc = CharacterController;
+  const cam = CameraController;
+  cam._lastDt = dt; // store for bias lerp inside buildMatrices
 
-  // Gather nearby regions once per frame (player won't cross regions within sub-steps)
-  const pgx = Math.round(player.x / REGION_SIZE);
-  const pgz = Math.round(player.z / REGION_SIZE);
-  if (!render._nearbyRegions) render._nearbyRegions = [];
-  const nearbyRegions = render._nearbyRegions;
-  nearbyRegions.length = 0;
-  for (let dz = -1; dz <= 1; dz++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const gx = pgx + dx, gz = pgz + dz;
-      if (gx < -GRID_HALF || gx > GRID_HALF || gz < -GRID_HALF || gz > GRID_HALF) continue;
-      nearbyRegions.push(getRegion(gx, gz));
-    }
-  }
-
-  for (let step = 0; step < steps; step++) {
-    if (mx !== 0 || mz !== 0) {
-      player.x += mx * CHAR_SPEED * STEP_DT;
-      player.z += mz * CHAR_SPEED * STEP_DT;
-    }
-    resolveCollisions(nearbyRegions);
-  }
-
-  // Snap to terrain height (once per frame, after all sub-steps)
-  player.y = getWorldHeight(player.x, player.z);
-
-  // Update HUD if region changed
-  const curRegX = pgx;
-  const curRegZ = pgz;
-  if (curRegX !== render.lastRegX || curRegZ !== render.lastRegZ) {
-    render.lastRegX = curRegX;
-    render.lastRegZ = curRegZ;
-    populateDropdowns();
-  }
-
-  // --- Camera deadzone ---
-  // Single deadzone ring. Player inside: camera doesn't move.
-  // Player crosses edge: camera follows (capped to player speed).
-  // Player stops: camera lerps until edge encompasses player collider.
-  // Right-click pan: deadzone suspended. Next movement lerps back (or snaps if off screen).
-  // Settled: skip all processing until player nears edge.
-  const isMoving = mx !== 0 || mz !== 0;
-
-  if (render._cameraPanned && isMoving) {
-    // Check if player collider is visible on screen using previous frame's matrices
-    const pv = render._prevView, pp = render._prevProj;
-    let playerOnScreen = false;
-    if (pv && pp) {
-      const pwx = player.x, pwy = player.y, pwz = player.z;
-      const ex = pv[0]*pwx + pv[4]*pwy + pv[8]*pwz + pv[12];
-      const ey = pv[1]*pwx + pv[5]*pwy + pv[9]*pwz + pv[13];
-      const ez = pv[2]*pwx + pv[6]*pwy + pv[10]*pwz + pv[14];
-      const ew = pv[3]*pwx + pv[7]*pwy + pv[11]*pwz + pv[15];
-      const cx2 = pp[0]*ex + pp[4]*ey + pp[8]*ez + pp[12]*ew;
-      const cy2 = pp[1]*ex + pp[5]*ey + pp[9]*ez + pp[13]*ew;
-      const cw = pp[3]*ex + pp[7]*ey + pp[11]*ez + pp[15]*ew;
-      if (cw !== 0) {
-        const ndcX = cx2 / cw, ndcY = cy2 / cw;
-        playerOnScreen = Math.abs(ndcX) < 1.0 && Math.abs(ndcY) < 1.0;
-      }
-    }
-    render._cameraPanned = false;
-    render._camSettled = false;
-    if (playerOnScreen) {
-      // Player on screen — let deadzone follow handle it, uncapped speed
-      render._camUncapped = true;
-    } else {
-      // Player off screen — instant snap
-      camTarget[0] = player.x;
-      camTarget[2] = player.z;
-    }
-  }
-
-  // Wake from settled only if player is near/past the edge.
-  if (isMoving && render._camSettled) {
-    const sdx = player.x - camTarget[0];
-    const sdz = player.z - camTarget[2];
-    const distSq = sdx * sdx + sdz * sdz;
-    const wakeR = CAM_DEADZONE - CHAR_RADIUS;
-    if (distSq > wakeR * wakeR) {
-      render._camSettled = false;
-    }
-  }
-
-  if (!render._cameraPanned && !render._camSettled) {
-  let offX = player.x - camTarget[0];
-  let offZ = player.z - camTarget[2];
-  let offDist = Math.sqrt(offX * offX + offZ * offZ);
-
-  const outsideDeadzone = offDist > CAM_DEADZONE;
-
-  if (isMoving) {
-    if (outsideDeadzone) {
-      const overshoot = offDist - CAM_DEADZONE;
-      if (render._camUncapped) {
-        // Returning from pan: modulate speed by movement direction.
-        // Dot product of movement dir and offset dir: +1 = moving away from camera,
-        // -1 = moving toward camera. Lerp speed between 4 (toward) and 11 (away).
-        // Slightly slower when zoomed in: 85% speed at +8.
-        const offNx = offX / offDist, offNz = offZ / offDist;
-        const dot = mx * offNx + mz * offNz; // -1 to +1
-        const t = dot * 0.5 + 0.5; // 0 (toward) to 1 (away)
-        const zoomInSteps = Math.max(0, zoomDefaultIdx - zoomIdx);
-        const zoomScale = 1 - zoomInSteps * (0.15 / 8); // 1.0 at default, 0.85 at +8
-        const speed = (4 + t * 7) * zoomScale;
-        render._panReturnSpeed = speed; // store for stopped branch continuity
-        const followLerp = 1 - Math.exp(-speed * dt);
-        const move = overshoot * followLerp;
-        camTarget[0] += offNx * move;
-        camTarget[2] += offNz * move;
-      } else {
-        // Normal play: capped to player speed
-        const followLerp = 1 - Math.exp(-15 * dt);
-        const move = Math.min(overshoot * followLerp, CHAR_SPEED * dt);
-        camTarget[0] += (offX / offDist) * move;
-        camTarget[2] += (offZ / offDist) * move;
-      }
-    }
-    // Inside deadzone: camera stays still. Re-settle.
-    if (!outsideDeadzone) {
-      render._camSettled = true;
-      render._camUncapped = false; render._panReturnSpeed = 0;
-    }
-  } else {
-    // Player stopped. If outside deadzone, follow back.
-    if (outsideDeadzone) {
-      const overshoot = offDist - CAM_DEADZONE;
-      if (render._camUncapped) {
-        // Continue at whatever speed the moving branch was using
-        const speed = render._panReturnSpeed || 8;
-        const followLerp = 1 - Math.exp(-speed * dt);
-        const move = overshoot * followLerp;
-        camTarget[0] += (offX / offDist) * move;
-        camTarget[2] += (offZ / offDist) * move;
-      } else {
-        const followLerp = 1 - Math.exp(-15 * dt);
-        const move = Math.min(overshoot * followLerp, CHAR_SPEED * dt);
-        camTarget[0] += (offX / offDist) * move;
-        camTarget[2] += (offZ / offDist) * move;
-      }
-    }
-    // Recompute after potential correction
-    offX = player.x - camTarget[0];
-    offZ = player.z - camTarget[2];
-    offDist = Math.sqrt(offX * offX + offZ * offZ);
-    // Lerp toward player until edge encompasses player collider
-    const targetDist = CAM_DEADZONE - CHAR_RADIUS;
-    const gap = offDist - targetDist;
-    if (gap > 0.002) {
-      let move;
-      if (gap < 0.06) {
-        move = Math.min(gap, 0.48 * dt);
-      } else {
-        move = gap * (1 - Math.exp(-8 * dt));
-      }
-      camTarget[0] += (offX / offDist) * move;
-      camTarget[2] += (offZ / offDist) * move;
-    } else {
-      render._camSettled = true;
-      render._camUncapped = false; render._panReturnSpeed = 0;
-    }
-  }
-  } // end !cameraPanned && !camSettled
-
-  // Store for debug visualization (only when deadzone actively moved)
-  if (!render._cameraPanned && !render._camSettled) {
-    render._camCenterX = camTarget[0];
-    render._camCenterZ = camTarget[2];
-  }
-
-  const aspect = canvas.width / canvas.height;
-  const proj = ortho(-camDist * aspect, camDist * aspect, -camDist, camDist, -50, 50);
-
-  // When zoomed in past default, bias the visual look-at point toward the player.
-  // This gradually centers the player as the user zooms in closer.
-  // During pan: bias frozen. After pan (uncapped): lerp from frozen to live bias
-  // to avoid visual jump. Normal play: live bias directly.
-  let vizTargetX = camTarget[0], vizTargetZ = camTarget[2];
-  if (render._cameraPanned) {
-    // Use frozen bias from when pan started
-    vizTargetX += render._panFrozenBiasX || 0;
-    vizTargetZ += render._panFrozenBiasZ || 0;
-  } else if (zoomIdx < zoomDefaultIdx) {
-    const zoomT = 1 - (zoomIdx / zoomDefaultIdx); // 0 at default, 1 at max zoom-in
-    const bias = zoomT * 0.80; // max 80% toward player at closest zoom
-    const liveBiasX = (player.x - camTarget[0]) * bias;
-    const liveBiasZ = (player.z - camTarget[2]) * bias;
-    if (render._camUncapped) {
-      // Returning from pan — lerp from frozen bias to live bias
-      if (render._transitionBiasX === undefined) {
-        render._transitionBiasX = render._panFrozenBiasX || 0;
-        render._transitionBiasZ = render._panFrozenBiasZ || 0;
-      }
-      const biasLerp = 1 - Math.exp(-6 * dt);
-      render._transitionBiasX += (liveBiasX - render._transitionBiasX) * biasLerp;
-      render._transitionBiasZ += (liveBiasZ - render._transitionBiasZ) * biasLerp;
-      vizTargetX += render._transitionBiasX;
-      vizTargetZ += render._transitionBiasZ;
-      // Store displayed bias (transition value) for potential pan snapshot
-      render._vizBiasX = render._transitionBiasX;
-      render._vizBiasZ = render._transitionBiasZ;
-    } else {
-      // Normal: use live bias directly
-      vizTargetX += liveBiasX;
-      vizTargetZ += liveBiasZ;
-      render._transitionBiasX = undefined;
-      // Store for potential pan snapshot
-      render._vizBiasX = liveBiasX;
-      render._vizBiasZ = liveBiasZ;
-    }
-  } else {
-    render._vizBiasX = 0;
-    render._vizBiasZ = 0;
-    render._transitionBiasX = undefined;
-  }
-
-  // Fixed isometric direction (no distance needed for ortho, just direction)
-  const isoDist = 20;
-  _eyeVec[0] = vizTargetX + isoDist * Math.cos(camRotX) * Math.sin(camRotY);
-  _eyeVec[1] = camTarget[1] + isoDist * Math.sin(camRotX);
-  _eyeVec[2] = vizTargetZ + isoDist * Math.cos(camRotX) * Math.cos(camRotY);
-  // Reuse camTarget array temporarily for lookAt (restored after)
-  const savedX = camTarget[0], savedZ = camTarget[2];
-  camTarget[0] = vizTargetX; camTarget[2] = vizTargetZ;
-  const view = lookAt(_eyeVec, camTarget, _upVec);
-  camTarget[0] = savedX; camTarget[2] = savedZ;
-
-  // Pixel-snap the view matrix to eliminate sub-pixel jitter on sprites/textures.
-  // In ortho, world units per pixel = (2 * camDist) / canvas.height
-  // We snap the view's translation so the projected origin lands on exact pixels.
-  const worldPerPixelX = (2 * camDist * aspect) / canvas.width;
-  const worldPerPixelY = (2 * camDist) / canvas.height;
-  // Project the origin through the view matrix to get its screen-space offset
-  // view[12] and view[13] are the translation in view-space (x, y)
-  const viewTx = view[12];
-  const viewTy = view[13];
-  // Snap to pixel grid
-  view[12] = Math.round(viewTx / worldPerPixelX) * worldPerPixelX;
-  view[13] = Math.round(viewTy / worldPerPixelY) * worldPerPixelY;
-
-  // Store proj/view for touch-to-move player projection (used next frame)
-  if (!render._prevView) render._prevView = new Float32Array(16);
-  if (!render._prevProj) render._prevProj = new Float32Array(16);
-  render._prevView.set(view);
-  render._prevProj.set(proj);
+  cc.update(dt, render._time);
+  cam.update(dt, cc.x, cc.y, cc.z, cc.isMoving);
+  const { proj, view } = cam.buildMatrices(canvas.width, canvas.height);
+  cc.storeMatrices(view, proj);
 
   // Get visible regions via frustum culling
-  const activeRegions = getActiveRegions(player.x, player.z, proj, view);
+  const activeRegions = getActiveRegions(cc.x, cc.z, proj, view);
 
   // --- Draw ground for all active regions (opaque, no alpha blend) ---
   // Priority draw order: desert (lowest) â†’ rock â†’ forest (highest).
@@ -7735,7 +8247,7 @@ function render(rafTime) {
   gl.disable(gl.DEPTH_TEST);
   gl.uniformMatrix4fv(uProj, false, proj);
   gl.uniformMatrix4fv(uView, false, view);
-  gl.uniform3f(uPlayerPos, player.x, player.y, player.z);
+  gl.uniform3f(uPlayerPos, cc.x, cc.y, cc.z);
 
   gl.uniform1f(uMineralOnly, 0.0);
   gl.enableVertexAttribArray(aPos);
@@ -7785,34 +8297,32 @@ function render(rafTime) {
   if (!render._sortPool) render._sortPool = [];
   const pool = render._sortPool;
   let sortCount = 0;
-  function pushSortable(type, sortKey, data) {
-    if (sortCount >= pool.length) pool.push({ type: '', sortKey: 0, data: null });
-    const s = pool[sortCount++];
-    s.type = type; s.sortKey = sortKey; s.data = data;
-  }
 
   if (treesLoaded === treesToLoad) {
     for (const reg of activeRegions) {
       for (let i = 0; i < reg.treePositions.length; i++) {
         const t = reg.treePositions[i];
+        if (!isVisible(t.billX, t.billY, t.billZ, 1.5)) continue;
         const screenY = vyX * t.billX + vyY * t.billY + vyZ * t.billZ + vyW;
         t._treeVarIdx = reg.treeVarIdx[i];
-        pushSortable('tree', screenY, t);
+        sortCount = pushSortable(pool, sortCount, 'tree', screenY, t);
       }
     }
   }
   // Rocks
   for (const reg of activeRegions) {
     for (const r of reg.rocks) {
+      if (!isVisible(r.x, r.visY, r.z, 1.0)) continue;
       const screenY = vyX * r.x + vyY * r.visY + vyZ * r.z + vyW;
-      pushSortable('rock', screenY, r);
+      sortCount = pushSortable(pool, sortCount, 'rock', screenY, r);
     }
   }
   // Sticks (forest decoration)
   for (const reg of activeRegions) {
     for (const st of reg.sticks) {
+      if (!isVisible(st.visX, st.visY, st.visZ, 0.5)) continue;
       const screenY = vyX * st.visX + vyY * st.visY + vyZ * st.visZ + vyW;
-      pushSortable('stick', screenY, st);
+      sortCount = pushSortable(pool, sortCount, 'stick', screenY, st);
     }
   }
   // Minable cubes
@@ -7833,17 +8343,38 @@ function render(rafTime) {
       for (let ci = 0; ci < n; ci++) {
         const c = cubes[ci];
         if (c.mined) continue;
+        if (!isVisible(c.x, c.y, c.z, 0.5)) continue;
         const rank = cluster._rank[ci] / (n - 1 || 1);
         c._waveProx = 1.0 - Math.min(1.0, Math.abs(rank - pos) * 3.0);
         c._material = cluster.material;
         const screenY = vyX * c.x + vyY * c.y + vyZ * c.z + vyW;
-        pushSortable('minable', screenY, c);
+        sortCount = pushSortable(pool, sortCount, 'minable', screenY, c);
       }
     }
   }
   // Player
-  const pScreenY = vyX * player.x + vyY * player.y + vyZ * player.z + vyW;
-  pushSortable('player', pScreenY, player);
+  // Check if any tree has an active "from below" squish — if so, sort player in front of it
+  // Uses _pushedTrees set maintained by collision callbacks to avoid scanning all trees
+  let playerSortBias = 0;
+  for (let i = _pushedTrees.length - 1; i >= 0; i--) {
+    const t = _pushedTrees[i];
+    const sh = t._shake;
+    const elapsed = render._time - (sh ? sh.start : 0);
+    // Squish peaks ~0.2-0.3s, holds to ~0.4s, returns to 0.5s; sort bias ends early in return
+    if (elapsed < 0.43 && sh && sh.active) {
+      const treeScreenY = vyX * t.billX + vyY * t.billY + vyZ * t.billZ + vyW;
+      const needed = treeScreenY - 0.01;
+      if (playerSortBias === 0 || needed < playerSortBias) {
+        playerSortBias = needed;
+      }
+    } else {
+      // Animation done, remove from tracking
+      _pushedTrees[i] = _pushedTrees[_pushedTrees.length - 1];
+      _pushedTrees.length--;
+    }
+  }
+  const pScreenY = vyX * cc.x + vyY * cc.y + vyZ * cc.z + vyW;
+  sortCount = pushSortable(pool, sortCount, 'player', playerSortBias !== 0 ? Math.min(pScreenY, playerSortBias) : pScreenY, cc);
   // Sort only the active entries (0..sortCount-1) in descending sortKey order
   // We sort a view of the pool without modifying array length
   const sortEnd = sortCount;
@@ -7861,8 +8392,8 @@ function render(rafTime) {
 
   // Pre-set player position for distance shadow in cube shader
   gl.useProgram(cubeProg);
-  gl.uniform3f(cUPlayerWorldPos, player.x, player.y, player.z);
-  gl.uniform3f(cUCamPos, _eyeVec[0], _eyeVec[1], _eyeVec[2]);
+  gl.uniform3f(cUPlayerWorldPos, cc.x, cc.y, cc.z);
+  gl.uniform3f(cUCamPos, CameraController._eyeVec[0], CameraController._eyeVec[1], CameraController._eyeVec[2]);
 
   // Sorted pass: pure painter's algorithm, no depth testing
   // Back-face culling on 3D objects prevents seeing through them
@@ -7890,7 +8421,7 @@ function render(rafTime) {
         gl.uniformMatrix4fv(tUView, false, view);
         gl.activeTexture(gl.TEXTURE0);
         gl.uniform1i(tUTreeTex, 0);
-        gl.uniform3f(tUTreePlayerPos, player.x, player.y, player.z);
+        gl.uniform3f(tUTreePlayerPos, cc.x, cc.y, cc.z);
         lastType = 'tree';
       }
       if (lastTreeVar !== obj.data._treeVarIdx) {
@@ -7901,6 +8432,30 @@ function render(rafTime) {
       }
       gl.uniform3f(tUTreePos, obj.data.billX, obj.data.billY, obj.data.billZ);
       gl.uniform1f(tUTreeScale, 1.0);
+      // Shake while player overlaps this tree
+      // Shake: elapsed time for phase, amplitude fades after leaving
+      let shakeElapsed = 0.0, shakeAmp = 0.0;
+      const sh = obj.data._shake;
+      if (sh && sh.active) {
+        shakeElapsed = render._time - sh.start;
+        if (sh.end) {
+          const settle = render._time - sh.end;
+          if (settle < 0.5) {
+            shakeAmp = 1.0 - settle / 0.5;
+          } else {
+            sh.active = false;
+            sh.end = 0;
+          }
+        } else {
+          shakeAmp = 1.0;
+        }
+      }
+      gl.uniform1f(tUTreeShake, shakeElapsed);
+      gl.uniform1f(tUTreeShakeAmp, shakeAmp);
+      gl.uniform1f(tUTreeShakePhase, sh ? sh.phase : 0);
+      gl.uniform1f(tUTreeShakeDir, sh ? sh.dir : 0);
+      gl.uniform1f(tUTreeShakeHInt, sh ? sh.hInt : 1.0);
+      gl.uniform1f(tUTreeShakeVInt, sh ? sh.vInt : 1.0);
       draw(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 
     } else if (obj.type === 'rock') {
@@ -8021,8 +8576,8 @@ function render(rafTime) {
       gl.uniform1f(cUIsRock, 0.0);
       gl.uniform1f(cUShininess, 0.0);
       const charModel = buildModelMatrix(
-        player.x, player.y + CHAR_HEIGHT * 0.5, player.z, 0, 0,
-        CHAR_RADIUS * 2, CHAR_HEIGHT, CHAR_RADIUS * 2
+        cc.x, cc.y + CharacterController.HEIGHT * 0.5, cc.z, 0, 0,
+        CharacterController.RADIUS * 2, CharacterController.HEIGHT, CharacterController.RADIUS * 2
       );
       gl.uniformMatrix4fv(cUModel, false, charModel);
       draw(gl.TRIANGLES, cylIdxCount, gl.UNSIGNED_SHORT, 0);
@@ -8037,73 +8592,7 @@ function render(rafTime) {
   gl.depthMask(true);
 
   // --- DEBUG: Draw collider outlines when toggled (on top of everything) ---
-  if (showColliders) {
-    gl.disable(gl.DEPTH_TEST);
-    gl.useProgram(dbgProg);
-    gl.bindBuffer(gl.ARRAY_BUFFER, dbgRingVBO);
-    gl.enableVertexAttribArray(dbgAPos);
-    gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
-    gl.uniformMatrix4fv(dbgUProj, false, proj);
-    gl.uniformMatrix4fv(dbgUView, false, view);
-
-    // All colliders - drawn from unified allColliders list using COLLIDER_TYPES config
-    for (const reg of activeRegions) {
-      if (!reg.allColliders) buildRegionColliders(reg);
-      for (const col of reg.allColliders) {
-        const ct = COLLIDER_TYPES[col.type];
-        if (!ct) continue;
-        const isDotted = ct.debugStyle === 'dotted';
-        if (isDotted) {
-          gl.bindBuffer(gl.ARRAY_BUFFER, dbgDottedVBO);
-          gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
-        }
-        gl.uniform3f(dbgUColor, ct.debugColor[0], ct.debugColor[1], ct.debugColor[2]);
-        // Collider ring Y: always sample ground height at the collider's XZ position
-        // This ensures the ring sits on the terrain directly under the 2D collision circle
-        const cy = getWorldHeight(col.colX, col.colZ);
-        gl.uniform3f(dbgUCenter, col.colX, cy, col.colZ);
-        gl.uniform1f(dbgURadius, col.colR);
-        if (isDotted) {
-          gl.drawArrays(gl.LINES, 0, DBG_DOTTED_SEGS * 2);
-          gl.bindBuffer(gl.ARRAY_BUFFER, dbgRingVBO);
-          gl.vertexAttribPointer(dbgAPos, 3, gl.FLOAT, false, 0, 0);
-        } else {
-          gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-        }
-      }
-    }
-
-    // Player collider - lime green
-    gl.uniform3f(dbgUColor, 0.3, 1.0, 0.1);
-    gl.uniform3f(dbgUCenter, player.x, player.y, player.z);
-    gl.uniform1f(dbgURadius, CHAR_RADIUS);
-    gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-
-    // Camera deadzone ring — white when active, dark when settled
-    const dzX = render._camCenterX, dzZ = render._camCenterZ;
-    if (dzX !== undefined) {
-      if (render._camSettled) {
-        gl.uniform3f(dbgUColor, 0.15, 0.15, 0.18);
-      } else {
-        gl.uniform3f(dbgUColor, 0.9, 0.9, 1.0);
-      }
-      gl.uniform3f(dbgUCenter, dzX, 0, dzZ);
-      gl.uniform1f(dbgURadius, CAM_DEADZONE);
-      gl.drawArrays(gl.LINE_LOOP, 0, DBG_RING_SEGS);
-    }
-
-    gl.enable(gl.DEPTH_TEST);
-
-    // Region coordinate labels
-    textBegin(proj, view);
-    for (const reg of activeRegions) {
-      const wcx = reg.gx * REGION_SIZE;
-      const wcz = reg.gz * REGION_SIZE;
-      const wcy = getWorldHeight(wcx, wcz) + 0.1;
-      textWorld('[' + reg.gx + ',' + reg.gz + ']', wcx, wcy, wcz, { scale: 12, r: 1, g: 1, b: 1, a: 0.9 });
-    }
-    textEnd();
-  }
+  DebugVis.drawItems(gl, proj, view, activeRegions, cc, cam);
 
   // --- Draw glow billboards for minable materials that have glow enabled ---
   gl.useProgram(glowProg);
@@ -8126,8 +8615,9 @@ function render(rafTime) {
       gl.uniform3f(gUGlowColor, mat.glow.color[0], mat.glow.color[1], mat.glow.color[2]);
       for (const c of cluster.cubes) {
         if (c.mined) continue;
-        const gdx = c.x - player.x;
-        const gdz = c.z - player.z;
+        if (!isVisible(c.x, c.y, c.z, 0.5)) continue;
+        const gdx = c.x - cc.x;
+        const gdz = c.z - cc.z;
         const gDist = Math.sqrt(gdx * gdx + gdz * gdz);
         if (gDist > 14.0) continue;
         const distFade = 1.0 - Math.max(0, Math.min(1, (gDist - 8.0) / 6.0));
@@ -8143,72 +8633,14 @@ function render(rafTime) {
   gl.depthMask(true);
   gl.disable(gl.BLEND);
 
-  // --- DEBUG: Region boundaries & border margins (shown with collider toggle) ---
-  if (showColliders) {
-    gl.disable(gl.DEPTH_TEST);
-    gl.useProgram(lineProg);
-    gl.uniformMatrix4fv(lineUProj, false, proj);
-    gl.uniformMatrix4fv(lineUView, false, view);
-    const LIFT = 0.08;
-
-    function drawEdge(u0, v0, u1, v1, regOx, regOz) {
-      const wx0 = -S + u0 * 2 * S + regOx;
-      const wz0 = -S + v0 * 2 * S + regOz;
-      const wx1 = -S + u1 * 2 * S + regOx;
-      const wz1 = -S + v1 * 2 * S + regOz;
-      const verts = new Float32Array([wx0, LIFT, wz0, wx1, LIFT, wz1]);
-      if (!drawEdge._buf) drawEdge._buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, drawEdge._buf);
-      gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STREAM_DRAW);
-      gl.enableVertexAttribArray(lineAPos);
-      gl.vertexAttribPointer(lineAPos, 3, gl.FLOAT, false, 0, 0);
-      gl.drawArrays(gl.LINES, 0, 2);
-    }
-
-    function drawRect(u0, v0, u1, v1, regOx, regOz) {
-      drawEdge(u0, v0, u1, v0, regOx, regOz);
-      drawEdge(u1, v0, u1, v1, regOx, regOz);
-      drawEdge(u1, v1, u0, v1, regOx, regOz);
-      drawEdge(u0, v1, u0, v0, regOx, regOz);
-    }
-
-    for (const reg of activeRegions) {
-      const ox = reg.gx * REGION_SIZE;
-      const oz = reg.gz * REGION_SIZE;
-
-      // Red: region boundary
-      gl.uniform3f(lineUColor, 1.0, 0.2, 0.2);
-      drawRect(0, 0, 1, 1, ox, oz);
-
-      // Yellow: border margin â€” only on edges where neighbor is a different biome
-      const bName = reg.biomeName;
-      const regBiome = BIOMES[bName];
-      const baseM = regBiome.borderMargin || 0.03;
-      const nLA = getRegionAssignment(reg.gx - 1, reg.gz);
-      const nRA = getRegionAssignment(reg.gx + 1, reg.gz);
-      const nTA = getRegionAssignment(reg.gx, reg.gz - 1);
-      const nBA = getRegionAssignment(reg.gx, reg.gz + 1);
-      // Match buildRegion logic: only zero margin at top-left (-X) and top-right (-Z) world edges
-      const isTopLeftEdge  = (reg.gx === -GRID_HALF);
-      const isTopRightEdge = (reg.gz === -GRID_HALF);
-      const nL = nLA && nLA.biome === bName ? 0 : (!nLA && isTopLeftEdge)  ? 0 : baseM;
-      const nR = nRA && nRA.biome === bName ? 0 : baseM;
-      const nT = nTA && nTA.biome === bName ? 0 : (!nTA && isTopRightEdge) ? 0 : baseM;
-      const nB = nBA && nBA.biome === bName ? 0 : baseM;
-      gl.uniform3f(lineUColor, 1.0, 1.0, 0.0);
-      drawEdge(nL, nT, 1 - nR, nT, ox, oz);       // top
-      drawEdge(1 - nR, nT, 1 - nR, 1 - nB, ox, oz); // right
-      drawEdge(1 - nR, 1 - nB, nL, 1 - nB, ox, oz); // bottom
-      drawEdge(nL, 1 - nB, nL, nT, ox, oz);         // left
-    }
-    gl.enable(gl.DEPTH_TEST);
-  }
+  // --- DEBUG: Region boundaries & border margins ---
+  DebugVis.drawOverlays(gl, proj, view, activeRegions);
 
   // --- Update stats ---
   frameMs = performance.now() - frameStart;
   frameMsMin = Math.min(frameMsMin, frameMs);
   frameMsMax = Math.max(frameMsMax, frameMs);
-  const zoomDisplay = zoomDefaultIdx - zoomIdx;
+  const zoomDisplay = CameraController._zoomDefaultIdx - CameraController._zoomIdx;
   statsEl.textContent = statsText + `\n${drawCalls} Draws | ${tris.toLocaleString()} Tris\nZoom ${zoomDisplay > 0 ? '+' : ''}${zoomDisplay} | ${GAME_VERSION}`;
 
   // Dismiss loader: pause â†’ fade crystal/dots â†’ fade black overlay
@@ -8237,11 +8669,11 @@ function render(rafTime) {
   requestAnimationFrame(render);
 }
 // Initialize camera debug state so deadzone ring draws even before first movement
-render._camCenterX = camTarget[0];
-render._camCenterZ = camTarget[2];
-render._camSettled = true;
-render.lastRegX = -999;
-render.lastRegZ = -999;
+CameraController._camCenterX = CameraController.target[0];
+CameraController._camCenterZ = CameraController.target[2];
+CameraController._camSettled = true;
+CharacterController._lastRegX = -999;
+CharacterController._lastRegZ = -999;
 render();
 </script>
 
