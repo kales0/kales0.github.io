@@ -220,9 +220,9 @@ canvas { display: block; }
 })();
 </script>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">164 FPS | 0.0ms (0.0-2.0)
-5,622 Tris | 26 Draws (680)
-Zoom 0 | 26.2.515</div>
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">165 FPS | 1.0ms (0.0-2.0)
+5,666 Tris | 27 Draws (702)
+Zoom 0 | 26.2.569</div>
   <button id="statsToggle" title="Hide stats" style="
     width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
@@ -309,7 +309,7 @@ Zoom 0 | 26.2.515</div>
 // Rule: Each edit increments the last digit. New month resets
 // edit to 1 and increments month. E.g. 26.2.2 -> 26.3.1
 // ============================================================
-const GAME_VERSION = '26.2.515';
+const GAME_VERSION = '26.2.569';
 window._debugFlatTerrain = false;
 
 const canvas = document.getElementById('gl');
@@ -20918,6 +20918,165 @@ gl.vertexAttribDivisor(gIGlowAlpha, 1);
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, glowIBO);
 gl.bindVertexArray(null);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CREATURE SHADER
+// Textured instanced quad with model matrix transform (Y-rotation for facing).
+// Alpha-tested texture, flat depth, distance fog.
+// Per-instance: model matrix (16) + flatDepth (1) = 17 floats.
+// ═══════════════════════════════════════════════════════════════════════════
+const creatureVS = `#version 300 es
+  in vec3 aPos;
+  in vec2 aUV;
+  in vec4 iModelC0;
+  in vec4 iModelC1;
+  in vec4 iModelC2;
+  in vec4 iModelC3;
+  in float iFlatDepth;
+  in float iFrame;   // atlas column index (0, 1, 2, ...)
+  in float iFlipU;   // 1.0 = flip horizontally, 0.0 = normal
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  uniform float uAtlasFrames; // number of frames in atlas (e.g. 3)
+  out vec2 vUV;
+  out vec3 vWorldPos;
+  out highp float vFlatDepth;
+  void main() {
+    mat4 model = mat4(iModelC0, iModelC1, iModelC2, iModelC3);
+    vec4 world = model * vec4(aPos, 1.0);
+    vWorldPos = world.xyz;
+    // Remap UV into atlas frame
+    float frameW = 1.0 / uAtlasFrames;
+    float u = aUV.x;
+    if (iFlipU > 0.5) u = 1.0 - u;
+    vUV = vec2(iFrame * frameW + u * frameW, aUV.y);
+    vFlatDepth = iFlatDepth;
+    gl_Position = uProj * uView * world;
+  }
+`;
+const creatureFS = `#version 300 es
+  precision mediump float;
+  in vec2 vUV;
+  in vec3 vWorldPos;
+  in highp float vFlatDepth;
+  out vec4 fragColor;
+  uniform sampler2D uTex;
+  uniform vec3 uPlayerWorldPos;
+  void main() {
+    vec4 c = texture(uTex, vUV);
+    if (c.a < 0.5) discard;
+    float rdx = vWorldPos.x - uPlayerWorldPos.x;
+    float rdz = vWorldPos.z - uPlayerWorldPos.z;
+    float rdist = sqrt(rdx * rdx + rdz * rdz);
+    float rshadow = smoothstep(3.0, 12.0, rdist);
+    c.rgb *= mix(1.0, 0.55, rshadow);
+    gl_FragDepth = vFlatDepth;
+    fragColor = c;
+  }
+`;
+const creatureProg = gl.createProgram();
+{
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, creatureVS); gl.compileShader(vs);
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, creatureFS); gl.compileShader(fs);
+  gl.attachShader(creatureProg, vs);
+  gl.attachShader(creatureProg, fs);
+  gl.linkProgram(creatureProg);
+}
+const crAPos = gl.getAttribLocation(creatureProg, 'aPos');
+const crAUV = gl.getAttribLocation(creatureProg, 'aUV');
+const crIMC0 = gl.getAttribLocation(creatureProg, 'iModelC0');
+const crIMC1 = gl.getAttribLocation(creatureProg, 'iModelC1');
+const crIMC2 = gl.getAttribLocation(creatureProg, 'iModelC2');
+const crIMC3 = gl.getAttribLocation(creatureProg, 'iModelC3');
+const crIDepth = gl.getAttribLocation(creatureProg, 'iFlatDepth');
+const crIFrame = gl.getAttribLocation(creatureProg, 'iFrame');
+const crIFlipU = gl.getAttribLocation(creatureProg, 'iFlipU');
+const crUProj = gl.getUniformLocation(creatureProg, 'uProj');
+const crUView = gl.getUniformLocation(creatureProg, 'uView');
+const crUTex = gl.getUniformLocation(creatureProg, 'uTex');
+const crUPlayerPos = gl.getUniformLocation(creatureProg, 'uPlayerWorldPos');
+const crUAtlasFrames = gl.getUniformLocation(creatureProg, 'uAtlasFrames');
+
+// Per-instance: model matrix (16) + flatDepth (1) + frame (1) + flipU (1) = 19 floats
+const CR_INST_FLOATS = 19;
+const CR_INST_STRIDE = CR_INST_FLOATS * 4;
+const creatureBatch = new InstanceBatch(CR_INST_FLOATS, 32);
+
+function packCreatureInst(idx, tx, ty, tz, rotY, rotZ, sx, sy, sz, flatDepth, frame, flipU) {
+  const d = creatureBatch.data;
+  const off = idx * CR_INST_FLOATS;
+  writeModelMatrix(d, off, tx, ty, tz, rotY, rotZ, sx, sy, sz);
+  d[off + 16] = flatDepth;
+  d[off + 17] = frame;
+  d[off + 18] = flipU;
+}
+
+// Creature quad geometry: centered XY plane, pos(3) + uv(2), 5 floats/vert
+// X: -0.5 to 0.5 (width), Y: -0.5 to 0.5 (height), Z: 0
+// UV: (0,1) at bottom-left, (1,0) at top-right
+const creatureQuadVerts = new Float32Array([
+  // x,    y,    z,   u, v
+  -0.5, -0.5,  0,   0, 1,  // bottom-left
+   0.5, -0.5,  0,   1, 1,  // bottom-right
+   0.5,  0.5,  0,   1, 0,  // top-right
+  -0.5,  0.5,  0,   0, 0,  // top-left
+]);
+const creatureQuadIdx = new Uint16Array([0, 1, 2, 0, 2, 3]);
+const CREATURE_VERT_STRIDE = 5 * 4; // 20 bytes
+
+const creatureQuadVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, creatureQuadVBO);
+gl.bufferData(gl.ARRAY_BUFFER, creatureQuadVerts, gl.STATIC_DRAW);
+const creatureQuadIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, creatureQuadIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, creatureQuadIdx, gl.STATIC_DRAW);
+
+// VAO
+const creatureVAO = gl.createVertexArray();
+gl.bindVertexArray(creatureVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, creatureQuadVBO);
+gl.enableVertexAttribArray(crAPos);
+gl.vertexAttribPointer(crAPos, 3, gl.FLOAT, false, CREATURE_VERT_STRIDE, 0);
+gl.enableVertexAttribArray(crAUV);
+gl.vertexAttribPointer(crAUV, 2, gl.FLOAT, false, CREATURE_VERT_STRIDE, 3 * 4);
+// Instance attribs
+gl.bindBuffer(gl.ARRAY_BUFFER, creatureBatch.buf);
+const _cia = (loc, size, off) => {
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, size, gl.FLOAT, false, CR_INST_STRIDE, off * 4);
+  gl.vertexAttribDivisor(loc, 1);
+};
+_cia(crIMC0, 4, 0);
+_cia(crIMC1, 4, 4);
+_cia(crIMC2, 4, 8);
+_cia(crIMC3, 4, 12);
+_cia(crIDepth, 1, 16);
+_cia(crIFrame, 1, 17);
+_cia(crIFlipU, 1, 18);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, creatureQuadIBO);
+gl.bindVertexArray(null);
+
+// --- Creature texture loading ---
+const creatureTextures = {};
+function loadCreatureTexture(id, dataUrl) {
+  const tex = gl.createTexture();
+  const img = new Image();
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  img.src = dataUrl;
+  creatureTextures[id] = tex;
+}
+
+// Rabbit texture: 96x32 atlas (3 color variants, each 32x32, facing right)
+loadCreatureTexture('rabbit', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAAgCAYAAADtwH1UAAAB40lEQVR4nO2aMU8CQRCF3xkb6S1tbGgMFLY0JNYmNpeLhYbYUPljrLAgBApDaEysTWj8AxIbGhtLeyzPgoyRg7udvezsUMxXAcUOuZn3ZnYgwfkjDD0OQx+4HCD//77ZRxI6RhXT1mwjfrZIo8bvNkYb8eerXmX8A9mvY7gIrgDi+PUNALAcdHIgvhJO388AANP2WhGxlXB9c7d+MRnmQLkSTAHKWAKUsQQok0iNoTQNUS/4vugAiNcLaBqiXvDZ/gAQrxfQNES94GkyBLDdC0wBylgClBFLQOyxs0jssbOI6wJGiN0DCPJ+Lcj7tSDvL8MsSBmRKai4D9qFpEUV90G7kLSo4j5oF2RRpgBlnD2AU81EVVVfXd4DAJ5fHrjHAeBVM1FV1dkipfO84nOqmahqvLdfPwCA8cnRxuemAGVKe4BP5dfB1QN8Kr8Orh7gU/l1sB6wJ2z1AKv8OJVPmAKU+VOAdOW7kK58F9KVX4YpQJmtKUhKCdybr5QSuDdfKSXYb8J7iiVAGe91NNdKpKyMayVSVsbd83OtzJmAUFtLSojveaG2lpQQ3/O4D9wFJcTuAXuGMwHLAfI6dtLsIwmhnmlrltexk2yRJiHU022M8jqT0XzVSzjqMQUoI/a/IIPHL52ds827qc2AAAAAAElFTkSuQmCC');
+
 // --- Debug shaders and geometry (lazily initialized on first toggle) ---
 // Instanced circle shader: per-instance center, radius, color
 const dbgCircleVS_Src = `#version 300 es
@@ -21802,6 +21961,8 @@ function getRegion(gx, gz) {
 }
 
 // Preallocated buffers for getActiveRegions (avoids per-frame GC pressure)
+const _creaturesSpawned = new Set(); // track regions that have had creatures spawned
+const _creatureGroups = {}; // reused per-frame for creature render grouping
 const _frustumMat = new Float32Array(16);
 const _frustumPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 const _activeRegions = [];
@@ -22733,6 +22894,7 @@ const COLLIDER_TYPES = {
   rock:        { blocksPlayer: true,  debugColor: [1.0, 0.85, 0.1],  debugStyle: 'solid'  },
   minable:     { blocksPlayer: true,  debugColor: [0.7, 0.15, 0.9],  debugStyle: 'solid'  },
   stick:       { blocksPlayer: false, debugColor: [0.2, 0.85, 0.85], debugStyle: 'dotted' },
+  creature:    { blocksPlayer: false, debugColor: [1.0, 0.6, 0.9],  debugStyle: 'solid'  },
 };
 
 // Build unified collider list per region (called once at region init, no per-frame alloc)
@@ -22849,6 +23011,281 @@ function onCollideEnd(colA, colB) {
 }
 
 // (resolveCollisions now in CharacterController.resolveCollisions)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CREATURE CONTROLLER
+// Manages ambient creatures (rabbits, deer, etc.) with per-type behaviors.
+// Each creature has a state machine driven by its type's tick function.
+// AI ticks at a reduced rate (per-type); visual interpolation runs every frame.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// --- Creature type registry ---
+// Each type defines species behavior, rendering config, and tick rate.
+// Behavior is fully defined by onSpawn/onTick/onFrame callbacks.
+const CreatureTypes = {};
+
+function registerCreatureType(def) {
+  CreatureTypes[def.id] = def;
+}
+
+// --- Creature instance factory ---
+function createCreature(typeId, wx, wz, regionGx, regionGz) {
+  const type = CreatureTypes[typeId];
+  if (!type) throw new Error('Unknown creature type: ' + typeId);
+  const c = {
+    type,
+    // World position (ground truth)
+    x: wx, z: wz,
+    y: 0, // snapped to terrain each tick
+    // Visual offset (for hop/bounce animation — not applied to collider)
+    visualYOffset: 0,
+    // Direction facing (radians, 0 = +X world axis)
+    facing: Math.random() * Math.PI * 2,
+    // State machine
+    state: 'idle',
+    stateTime: 0,
+    // Home region
+    regionGx, regionGz,
+    // Freeform per-behavior state
+    custom: {},
+    // Collider (updated each tick)
+    collider: {
+      type: type.colliderType || 'creature',
+      colX: wx, colZ: wz, colR: type.colR || 0.1,
+      colY: 0, src: null,
+    },
+    // AI tick tracking
+    _tickAccum: Math.random() * (1 / (type.tickRate || 4)), // stagger initial ticks
+    // Active flag (for despawn)
+    alive: true,
+  };
+  c.collider.src = c;
+  c.y = getWorldHeight(wx, wz);
+  c.collider.colY = c.y;
+  if (type.onSpawn) type.onSpawn(c);
+  return c;
+}
+
+// --- Creature Controller (system) ---
+const CreatureController = {
+  creatures: [],
+
+  spawn(typeId, wx, wz, regionGx, regionGz) {
+    const c = createCreature(typeId, wx, wz, regionGx, regionGz);
+    this.creatures.push(c);
+    return c;
+  },
+
+  despawn(creature) {
+    creature.alive = false;
+  },
+
+  // Called once per frame from main loop
+  _tickCtx: {
+    dt: 0, playerX: 0, playerZ: 0, playerY: 0, playerDist: 0,
+    getHeight: null, getRegionColliders: null,
+  },
+  update(dt) {
+    const cc = CharacterController;
+    const creatures = this.creatures;
+    // Remove dead creatures (swap-and-pop to avoid splice shifting)
+    let len = creatures.length;
+    for (let i = len - 1; i >= 0; i--) {
+      if (!creatures[i].alive) {
+        creatures[i] = creatures[--len];
+      }
+    }
+    creatures.length = len;
+    const ctx = this._tickCtx;
+    ctx.getHeight = getWorldHeight;
+    ctx.getRegionColliders = _getCreatureRegionColliders;
+    ctx.playerX = cc.x; ctx.playerZ = cc.z; ctx.playerY = cc.y;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      const type = c.type;
+      // AI tick at type-specific rate
+      const tickInterval = 1 / (type.tickRate || 4);
+      c._tickAccum += dt;
+      if (c._tickAccum >= tickInterval) {
+        c._tickAccum -= tickInterval;
+        ctx.dt = tickInterval;
+        ctx.playerDist = Math.sqrt((c.x - cc.x) * (c.x - cc.x) + (c.z - cc.z) * (c.z - cc.z));
+        if (type.onTick) type.onTick(c, ctx);
+        // Snap to terrain
+        c.y = getWorldHeight(c.x, c.z);
+        c.collider.colX = c.x;
+        c.collider.colZ = c.z;
+        c.collider.colY = c.y;
+      }
+      // Visual interpolation every frame
+      c.stateTime += dt;
+      if (type.onFrame) type.onFrame(c, dt);
+    }
+  },
+
+};
+
+// Helper: get colliders for a creature's region (for avoidance/pathfinding)
+function _getCreatureRegionColliders(gx, gz) {
+  const key = gx * 1000 + gz;
+  const reg = regionCache.get(key);
+  if (reg) {
+    if (!reg.allColliders) buildRegionColliders(reg);
+    return reg.allColliders;
+  }
+  return [];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CREATURE TYPE: RABBIT
+// Small forest creature. Hops in a random direction, pauses, repeats.
+// Textured quad, Y-rotated to show facing direction.
+// ═══════════════════════════════════════════════════════════════════════════
+registerCreatureType({
+  id: 'rabbit',
+  tickRate: 6, // AI ticks per second
+  colR: 0.08,
+  colliderType: 'creature', // non-blocking
+  // Rendering: vertical flat quad, Y-rotated to show facing
+  textureId: 'rabbit',
+  atlasFrames: 3, // 3 color variants
+  meshSize: [0.18, 0.18, 1.0], // width, height (Z unused for quad but must be nonzero)
+
+  onSpawn(c) {
+    c.custom = {
+      hopCount: 0,        // hops remaining in current burst
+      hopTotal: 0,        // total hops planned
+      hopDir: 0,          // direction of current hop burst (radians)
+      hopPhase: 0,        // 0..1 within a single hop
+      hopSpeed: 1.8,      // world units/sec during hop
+      idleDuration: 0,    // how long to idle
+      displayRotY: 3 * Math.PI / 4, // locked camera-facing angle
+      variant: Math.floor(Math.random() * 3), // random color variant (0-2)
+      flipU: 0,           // 1=flip horizontally
+      scale: 0.85 + Math.random() * 0.3, // 0.85-1.15 size variation
+    };
+    c.state = 'idle';
+    c.stateTime = 0;
+    // c.facing already randomized in createCreature
+    c.custom.idleDuration = 2.0 + Math.random() * 4.0;
+  },
+
+  onTick(c, ctx) {
+    const cu = c.custom;
+    switch (c.state) {
+      case 'idle':
+        if (c.stateTime >= cu.idleDuration) {
+          if (Math.random() < 0.4) {
+            // Turn in place
+            c.state = 'turning';
+            c.stateTime = 0;
+            cu.turnFrom = c.facing;
+            cu.turnTo = Math.random() * Math.PI * 2;
+            cu.turnDuration = 0.2 + Math.random() * 0.2;
+          } else {
+            // Hop
+            c.state = 'hopping';
+            c.stateTime = 0;
+            cu.hopDir = Math.random() * Math.PI * 2;
+            cu.hopCount = 1 + Math.floor(Math.random() * 6);
+            cu.hopTotal = cu.hopCount;
+            cu.hopPhase = 0;
+            c.facing = cu.hopDir;
+          }
+        }
+        break;
+      case 'turning': {
+        const t = Math.min(1, c.stateTime / cu.turnDuration);
+        let delta = cu.turnTo - cu.turnFrom;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        c.facing = cu.turnFrom + delta * t;
+        if (t >= 1) {
+          c.facing = cu.turnTo;
+          c.state = 'idle';
+          c.stateTime = 0;
+          cu.idleDuration = 1.5 + Math.random() * 3.0;
+        }
+        break;
+      }
+      case 'hopping':
+        if (cu.hopCount <= 0) {
+          c.state = 'idle';
+          c.stateTime = 0;
+          cu.idleDuration = 2.0 + Math.random() * 5.0;
+          cu.hopPhase = 0;
+          c.visualYOffset = 0;
+        } else {
+          const hopDt = ctx.dt;
+          const dist = cu.hopSpeed * hopDt;
+          const nx = c.x + Math.cos(cu.hopDir) * dist;
+          const nz = c.z + Math.sin(cu.hopDir) * dist;
+          const ox = c.regionGx * REGION_SIZE;
+          const oz = c.regionGz * REGION_SIZE;
+          const margin = 0.3;
+          const clampedX = Math.max(ox - S + margin, Math.min(ox + S - margin, nx));
+          const clampedZ = Math.max(oz - S + margin, Math.min(oz + S - margin, nz));
+          if (clampedX !== nx || clampedZ !== nz) {
+            cu.hopDir = Math.random() * Math.PI * 2;
+            c.facing = cu.hopDir;
+          }
+          c.x = clampedX;
+          c.z = clampedZ;
+        }
+        break;
+    }
+  },
+
+  onFrame(c, dt) {
+    const cu = c.custom;
+    // Hop animation
+    if (c.state === 'hopping' && cu.hopCount > 0) {
+      const hopDuration = 0.25;
+      cu.hopPhase += dt / hopDuration;
+      if (cu.hopPhase >= 1.0) {
+        cu.hopPhase -= 1.0;
+        cu.hopCount--;
+        if (cu.hopCount <= 0) {
+          c.visualYOffset = 0;
+          return;
+        }
+      }
+      c.visualYOffset = Math.sin(cu.hopPhase * Math.PI) * 0.12;
+    } else {
+      c.visualYOffset *= 0.85;
+      if (Math.abs(c.visualYOffset) < 0.001) c.visualYOffset = 0;
+    }
+
+    // Y rotation: quad faces toward camera.
+    // rotY = 3PI/4 → straight toward camera (default)
+    // Range: [PI/2, PI], centered at 3PI/4, offset ±35°.
+    const CENTER_ROT = 3 * Math.PI / 4;
+    const MAX_OFFSET = 35 * Math.PI / 180; // 35 degrees each direction
+    const dx = Math.cos(c.facing);
+    const dz = Math.sin(c.facing);
+    const sh = screenH(dx, dz);
+    const sv = screenV(dx, dz);
+    const len = Math.sqrt(sh * sh + sv * sv);
+    const shNorm = len > 0.001 ? sh / len : 0;
+    const svNorm = len > 0.001 ? sv / len : 0;
+    // When moving toward camera (svNorm < 0), flip rotation so texture faces correctly
+    const rotSign = svNorm < 0 ? -1 : 1;
+    // Scale offset by how much vertical movement there is — horizontal movement stays centered
+    const vertScale = Math.abs(svNorm);
+    let targetRotY = CENTER_ROT - shNorm * MAX_OFFSET * rotSign * vertScale;
+    if (targetRotY < Math.PI / 2) targetRotY = Math.PI / 2;
+    if (targetRotY > Math.PI) targetRotY = Math.PI;
+    const diff = targetRotY - cu.displayRotY;
+    cu.displayRotY += diff * Math.min(1, 12.0 * dt);
+    if (cu.displayRotY < Math.PI / 2) cu.displayRotY = Math.PI / 2;
+    if (cu.displayRotY > Math.PI) cu.displayRotY = Math.PI;
+
+    // Pick flip based on screen-horizontal direction
+    if (len > 0.001) {
+      cu.flipU = shNorm > 0 ? 1 : 0;
+    }
+  },
+});
 
 // --- Matrix helpers ---
 const _orthoMat = new Float32Array(16);
@@ -23220,7 +23657,8 @@ const DebugVis = {
     gl.disable(gl.DEPTH_TEST);
 
     // Pre-count to ensure buffer capacity in one shot
-    let totalSolid = 2, totalDotted = 0; // +2 for player + deadzone
+    const creatures = CreatureController.creatures;
+    let totalSolid = 2 + creatures.length, totalDotted = 0; // +2 for player + deadzone, +creatures
     for (const reg of activeRegions) {
       if (!reg.allColliders) buildRegionColliders(reg);
       for (const col of reg.allColliders) {
@@ -23248,6 +23686,18 @@ const DebugVis = {
         buf[off+3] = col.colR;
         buf[off+4] = ct.debugColor[0]; buf[off+5] = ct.debugColor[1]; buf[off+6] = ct.debugColor[2];
       }
+    }
+
+    // Creature colliders (dynamic, not in region collider lists)
+    for (const c of creatures) {
+      if (!c.alive) continue;
+      const ct = COLLIDER_TYPES[c.collider.type];
+      if (!ct) continue;
+      const off = solidCount * DBG_CIRCLE_FLOATS;
+      sd[off] = c.collider.colX; sd[off+1] = c.collider.colY; sd[off+2] = c.collider.colZ;
+      sd[off+3] = c.collider.colR;
+      sd[off+4] = ct.debugColor[0]; sd[off+5] = ct.debugColor[1]; sd[off+6] = ct.debugColor[2];
+      solidCount++;
     }
 
     // Player collider
@@ -23607,12 +24057,27 @@ function render(rafTime) {
   const cam = CameraController;
 
   cc.update(dt, _renderTime);
+  CreatureController.update(dt);
   cam.update(dt, cc.x, cc.y, cc.z, cc.isMoving);
   const { proj, view } = cam.buildMatrices(canvas.width, canvas.height);
   cc.storeMatrices(view, proj);
 
   // Get visible regions via frustum culling
   const activeRegions = getActiveRegions(cc.x, cc.z, proj, view);
+
+  // Spawn creatures in newly-active forest regions
+  for (const reg of activeRegions) {
+    const rkey = reg.gx * 1000 + reg.gz;
+    if (!_creaturesSpawned.has(rkey) && reg.biomeName === 'forest') {
+      _creaturesSpawned.add(rkey);
+      const count = 2 + Math.floor(Math.random() * 4); // 2-5 rabbits
+      for (let i = 0; i < count; i++) {
+        const rx = (Math.random() - 0.5) * REGION_SIZE * 0.7;
+        const rz = (Math.random() - 0.5) * REGION_SIZE * 0.7;
+        CreatureController.spawn('rabbit', reg.gx * REGION_SIZE + rx, reg.gz * REGION_SIZE + rz, reg.gx, reg.gz);
+      }
+    }
+  }
 
   // --- Draw ground for all active regions (opaque, no alpha blend) ---
   // Priority draw order: desert (lowest) â†’ rock â†’ forest (highest).
@@ -23918,6 +24383,59 @@ function render(rafTime) {
     for (const k in tbv) {
       const b = tbv[k];
       for (let i = 0; i < b.count; i++) b.trees[i] = null;
+    }
+  }
+
+  // --- Creature rendering (instanced via mesh or billboard shader) ---
+  {
+    const creatures = CreatureController.creatures;
+    if (creatures.length > 0) {
+      // Group all visible creatures by type for batched drawing (reuse object, reset counts)
+      for (const gk in _creatureGroups) _creatureGroups[gk].count = 0;
+      for (let i = 0; i < creatures.length; i++) {
+        const c = creatures[i];
+        if (!c.alive) continue;
+        if (!isVisible(c.x, c.y + c.visualYOffset, c.z, 0.5)) continue;
+        const gk = c.type.id;
+        if (!_creatureGroups[gk]) _creatureGroups[gk] = { type: c.type, creatures: [], count: 0 };
+        const g = _creatureGroups[gk];
+        if (g.count >= g.creatures.length) g.creatures.push(null);
+        g.creatures[g.count++] = c;
+      }
+      for (const gk in _creatureGroups) {
+        const g = _creatureGroups[gk];
+        if (g.count === 0) continue;
+        const type = g.type;
+        // Textured creature rendering (mesh, quad, etc.)
+        creatureBatch.ensure(g.count);
+        for (let i = 0; i < g.count; i++) {
+          const c = g.creatures[i];
+          const sz = type.meshSize;
+          const sc = c.custom.scale || 1;
+          packCreatureInst(i,
+            c.x, c.y + sz[1] * sc * 0.5 + c.visualYOffset, c.z,
+            c.custom.displayRotY || 0, 0,
+            sz[0] * sc, sz[1] * sc, sz[2],
+            computeFlatDepth(proj, view, c.x, c.y, c.z),
+            c.custom.variant || 0, c.custom.flipU || 0
+          );
+        }
+        gl.useProgram(creatureProg);
+        gl.uniformMatrix4fv(crUProj, false, proj);
+        gl.uniformMatrix4fv(crUView, false, view);
+        gl.uniform3f(crUPlayerPos, cc.x, cc.y, cc.z);
+        gl.uniform1f(crUAtlasFrames, type.atlasFrames || 1);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(crUTex, 0);
+        const tex = creatureTextures[type.textureId || type.id];
+        if (tex) gl.bindTexture(gl.TEXTURE_2D, tex);
+        creatureBatch.upload(g.count);
+        gl.bindVertexArray(creatureVAO);
+        gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0, g.count);
+        drawCalls++; tris += g.count * 2; items += g.count;
+        gl.bindVertexArray(null);
+        for (let i = 0; i < g.count; i++) g.creatures[i] = null;
+      }
     }
   }
 
