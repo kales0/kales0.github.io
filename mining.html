@@ -220,9 +220,9 @@ canvas { display: block; }
 })();
 </script>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">165 FPS | 1.0ms (0.0-1.0)
-5,814 Tris | 27 Draws (700)
-Zoom 0 | 26.2.696</div>
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">165 FPS | 1.0ms (0.0-2.0)
+5,792 Tris | 27 Draws (689)
+Zoom 0 | 26.2.704</div>
   <button id="statsToggle" title="Hide stats" style="
     width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
@@ -309,7 +309,7 @@ Zoom 0 | 26.2.696</div>
 // Rule: Each edit increments the last digit. New month resets
 // edit to 1 and increments month. E.g. 26.2.2 -> 26.3.1
 // ============================================================
-const GAME_VERSION = '26.2.696';
+const GAME_VERSION = '26.2.704';
 window._debugFlatTerrain = false;
 
 const canvas = document.getElementById('gl');
@@ -23965,8 +23965,9 @@ function createCreature(typeId, wx, wz, regionGx, regionGz) {
     // State machine
     state: 'idle',
     stateTime: 0,
-    // Home region
+    // Home region + biome
     regionGx, regionGz,
+    homeBiome: null, // set after creation from region assignment
     // Freeform per-behavior state
     custom: {},
     // Movement pattern state (managed by MovementPatterns)
@@ -23994,6 +23995,7 @@ function createCreature(typeId, wx, wz, regionGx, regionGz) {
   if (c.nearCollider) c.nearCollider.src = c;
   c.y = getWorldHeight(wx, wz);
   c.collider.colY = c.y;
+  c.homeBiome = getRegionBiome(regionGx, regionGz);
   if (type.onSpawn) type.onSpawn(c);
   return c;
 }
@@ -24081,6 +24083,20 @@ function clampToRegion(gx, gz, x, z, margin) {
     Math.max(ox - S + m, Math.min(ox + S - m, x)),
     Math.max(oz - S + m, Math.min(oz + S - m, z)),
   ];
+}
+
+// Get biome name at a world position (returns string or null if unassigned)
+function getBiomeAt(x, z) {
+  const gx = Math.round(x / REGION_SIZE);
+  const gz = Math.round(z / REGION_SIZE);
+  const entry = regionBiomeMap.get(gx * 1000 + gz);
+  return entry ? entry.biome : null;
+}
+
+// Get biome name for a region grid coord
+function getRegionBiome(gx, gz) {
+  const entry = regionBiomeMap.get(gx * 1000 + gz);
+  return entry ? entry.biome : null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -24394,17 +24410,71 @@ const RabbitDef = {
   FLEE_DISTANCE: 2.0,  // how far to run when scared
   nearRadius:    1.2,  // player proximity detection radius (15x colR)
 
+  // --- Pick a wander target, biasing toward forest if currently outside ---
+  _pickWanderTarget(c, dist) {
+    let angle = c.facing;
+    if (getBiomeAt(c.x, c.z) !== 'forest') {
+      // Find nearest forest region center
+      const gx = Math.round(c.x / REGION_SIZE);
+      const gz = Math.round(c.z / REGION_SIZE);
+      let bestDSq = Infinity;
+      let bestX = c.regionGx * REGION_SIZE;
+      let bestZ = c.regionGz * REGION_SIZE;
+      for (let dz = -2; dz <= 2; dz++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (getRegionBiome(gx + dx, gz + dz) === 'forest') {
+            const rx = (gx + dx) * REGION_SIZE, rz = (gz + dz) * REGION_SIZE;
+            const ddx = rx - c.x, ddz = rz - c.z;
+            const dSq = ddx * ddx + ddz * ddz;
+            if (dSq < bestDSq) { bestDSq = dSq; bestX = rx; bestZ = rz; }
+          }
+        }
+      }
+      angle = Math.atan2(bestZ - c.z, bestX - c.x);
+      angle += (Math.random() - 0.5) * 1.0;
+    }
+    const tx = c.x + Math.cos(angle) * dist;
+    const tz = c.z + Math.sin(angle) * dist;
+    if (getBiomeAt(tx, tz) === 'forest') return [tx, tz, angle];
+    return clampToRegion(c.regionGx, c.regionGz, tx, tz, 0);
+  },
+
   // --- Compute flee direction from current position and start moving ---
   _startFlee(c) {
     const px = CharacterController.x, pz = CharacterController.z;
-    let fleeAngle = Math.atan2(c.z - pz, c.x - px);
-    fleeAngle += (Math.random() - 0.5) * 0.6;
-    c.facing = fleeAngle;
+    const fleeBase = Math.atan2(c.z - pz, c.x - px);
+    const dist = this.FLEE_DISTANCE;
 
-    const [tx, tz] = clampToRegion(c.regionGx, c.regionGz,
-      c.x + Math.cos(fleeAngle) * this.FLEE_DISTANCE,
-      c.z + Math.sin(fleeAngle) * this.FLEE_DISTANCE);
-    MovementPatterns.start(c, c.custom.movePattern, tx, tz, { hopDuration: 0.3 });
+    // Try flee directions: away, sides, through player
+    const angles = [
+      fleeBase + (Math.random() - 0.5) * 0.6,
+      fleeBase + Math.PI * 0.5 + (Math.random() - 0.5) * 0.4,
+      fleeBase - Math.PI * 0.5 + (Math.random() - 0.5) * 0.4,
+      fleeBase + Math.PI + (Math.random() - 0.5) * 0.4,
+    ];
+
+    const minFleeSq = (dist * 0.6) * (dist * 0.6);
+    let bestTx, bestTz, bestScore = -1, bestAngle = fleeBase;
+
+    for (let i = 0; i < angles.length; i++) {
+      const a = angles[i];
+      const tx = c.x + Math.cos(a) * dist;
+      const tz = c.z + Math.sin(a) * dist;
+      const dpx = tx - px, dpz = tz - pz;
+      const playerDistSq = dpx * dpx + dpz * dpz;
+      // Primary: distance from player. Tiebreaker: prefer forest
+      const inForest = getBiomeAt(tx, tz) === 'forest';
+      const score = playerDistSq + (inForest ? 0.1 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestTx = tx; bestTz = tz;
+        bestAngle = a;
+        if (playerDistSq >= minFleeSq) break; // far enough, done
+      }
+    }
+
+    c.facing = bestAngle;
+    MovementPatterns.start(c, c.custom.movePattern, bestTx, bestTz, { hopDuration: 0.3 });
   },
 
   // --- Spawn: randomize initial state ---
@@ -24527,9 +24597,8 @@ CreatureState.define(RabbitDef, {
     tick(c, cu, ctx) {
       if (c.stateTime >= cu.preMovePause) {
         const dist = 1.5 + Math.random() * 3.0;
-        const [tx, tz] = clampToRegion(c.regionGx, c.regionGz,
-          c.x + Math.cos(c.facing) * dist,
-          c.z + Math.sin(c.facing) * dist);
+        const [tx, tz, angle] = R._pickWanderTarget(c, dist);
+        c.facing = angle;
         MovementPatterns.start(c, cu.movePattern, tx, tz);
         CreatureState.transition(c, 'moving');
       }
@@ -24581,15 +24650,15 @@ CreatureState.define(RabbitDef, {
       } else {
         MovementPatterns.update(c, dt);
         if (c._move && c._move.done) {
-          cu.poseFrame = R.POSE_STANDING;
-          cu.idleDuration = 1.0 + Math.random() * 3.0;
-          CreatureState.transition(c, 'idle');
+          // Still being chased? Re-flee instead of going idle
+          if (c.playerNear && CharacterController.isMoving) {
+            R._startFlee(c);
+          } else {
+            cu.poseFrame = R.POSE_STANDING;
+            cu.idleDuration = 1.0 + Math.random() * 3.0;
+            CreatureState.transition(c, 'idle');
+          }
         }
-      }
-      // Check for near interaction trigger
-      if (c.playerNear && CharacterController.isMoving) {
-        // Already fleeing, but recalc direction if hop finished
-        // (handled above naturally — next flee starts from landed pos)
       }
     },
   },
@@ -24613,7 +24682,7 @@ registerCreatureType(RabbitDef);
 RegionManager.onLoad((reg) => {
   // Spawn creatures appropriate to this biome
   if (reg.biomeName === 'forest') {
-    const count = 2 + Math.floor(Math.random() * 4); // 2-5 rabbits
+    const count = Math.floor(Math.random() * 4); // 0-3 rabbits
     for (let i = 0; i < count; i++) {
       const rx = (Math.random() - 0.5) * REGION_SIZE * 0.7;
       const rz = (Math.random() - 0.5) * REGION_SIZE * 0.7;
@@ -24623,11 +24692,40 @@ RegionManager.onLoad((reg) => {
 });
 
 RegionManager.onUnload((reg) => {
-  // Despawn all creatures that belong to this region
+  // Re-home or despawn creatures that belong to this region
   const creatures = CreatureController.creatures;
   for (let i = 0; i < creatures.length; i++) {
     const c = creatures[i];
-    if (c.alive && c.regionGx === reg.gx && c.regionGz === reg.gz) {
+    if (!c.alive || c.regionGx !== reg.gx || c.regionGz !== reg.gz) continue;
+
+    // Try to re-home to the region the creature is currently in
+    const curGx = Math.round(c.x / REGION_SIZE);
+    const curGz = Math.round(c.z / REGION_SIZE);
+    const curBiome = getRegionBiome(curGx, curGz);
+    const curReg = regionCache.get(curGx * 1000 + curGz);
+
+    if (curReg && curBiome === 'forest' && (curGx !== reg.gx || curGz !== reg.gz)) {
+      // Re-home to current region
+      c.regionGx = curGx;
+      c.regionGz = curGz;
+      continue;
+    }
+
+    // Try nearest loaded forest region
+    let found = false;
+    for (let dz = -1; dz <= 1 && !found; dz++) {
+      for (let dx = -1; dx <= 1 && !found; dx++) {
+        if (dx === 0 && dz === 0) continue;
+        const ngx = curGx + dx, ngz = curGz + dz;
+        const nReg = regionCache.get(ngx * 1000 + ngz);
+        if (nReg && getRegionBiome(ngx, ngz) === 'forest') {
+          c.regionGx = ngx;
+          c.regionGz = ngz;
+          found = true;
+        }
+      }
+    }
+    if (!found) {
       c.alive = false;
     }
   }
