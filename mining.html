@@ -220,9 +220,9 @@ canvas { display: block; }
 })();
 </script>
 <div id="statsWrap" style="position:fixed;top:10px;left:10px;z-index:10;display:flex;align-items:flex-start;gap:14px;transition:transform 0.3s ease;">
-  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">144 FPS | 1.0ms (0.0-2.0)
-5,824 Tris | 27 Draws (705)
-Zoom 0 | 26.2.658</div>
+  <div id="stats" style="color:rgba(255,255,255,0.5);font:11px/1.6 monospace;pointer-events:none;white-space:pre;">165 FPS | 1.0ms (0.0-1.0)
+5,814 Tris | 27 Draws (700)
+Zoom 0 | 26.2.696</div>
   <button id="statsToggle" title="Hide stats" style="
     width:27px;height:37px;border:1px solid #3a3a40;border-radius:6px;
     background:linear-gradient(180deg, #2a2a30 0%, #0a0a0f 100%);
@@ -286,7 +286,7 @@ Zoom 0 | 26.2.658</div>
   </svg>
 </button>
 
-<canvas id="gl" width="2486" height="1326" style="width: 1865px; height: 995px;"></canvas>
+<canvas id="gl" width="2486" height="1326" style="width: 1906px; height: 1017px;"></canvas>
 <script>
 // ============================================================
 // SCREEN DIRECTION REFERENCE (isometric camera at camRotY = PI/4)
@@ -309,7 +309,7 @@ Zoom 0 | 26.2.658</div>
 // Rule: Each edit increments the last digit. New month resets
 // edit to 1 and increments month. E.g. 26.2.2 -> 26.3.1
 // ============================================================
-const GAME_VERSION = '26.2.658';
+const GAME_VERSION = '26.2.696';
 window._debugFlatTerrain = false;
 
 const canvas = document.getElementById('gl');
@@ -325,6 +325,7 @@ function resize() {
 }
 resize();
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => { setTimeout(resize, 150); });
 
 // --- Shaders ---
 const vsSource = `#version 300 es
@@ -21441,17 +21442,30 @@ const dbgCircleVS_Src = `#version 300 es
   uniform mat4 uProj;
   uniform mat4 uView;
   out vec3 vColor;
+  out float vAngle;
+  out float vRadius;
   void main() {
-    vec3 worldPos = iCenterRadius.xyz + vec3(aPos.x * iCenterRadius.w, 0.0, aPos.z * iCenterRadius.w);
+    float r = iCenterRadius.w;
+    vec3 worldPos = iCenterRadius.xyz + vec3(aPos.x * r, 0.0, aPos.z * r);
     gl_Position = uProj * uView * vec4(worldPos, 1.0);
     vColor = iColor;
+    vRadius = r;
+    vAngle = atan(aPos.z, aPos.x) + 3.14159265;
   }
 `;
 const dbgCircleFS_Src = `#version 300 es
   precision mediump float;
   in vec3 vColor;
+  in float vAngle;
+  in float vRadius;
+  uniform float uDashed;
   out vec4 fragColor;
   void main() {
+    if (uDashed > 0.5) {
+      float arcLen = vAngle * vRadius;
+      float dashPeriod = 0.1;
+      if (mod(arcLen, dashPeriod) > dashPeriod * 0.5) discard;
+    }
     fragColor = vec4(vColor, 1.0);
   }
 `;
@@ -21475,8 +21489,7 @@ const lineFSSource = `#version 300 es
     fragColor = vec4(vColor, 1.0);
   }
 `;
-const DBG_RING_SEGS = 12;
-const DBG_DOTTED_SEGS = 6;
+const DBG_RING_SEGS = 64;
 const DBG_CIRCLE_FLOATS = 7; // centerXYZ(3) + radius(1) + colorRGB(3)
 const _dbgSolidBatch = new InstanceBatch(DBG_CIRCLE_FLOATS, 64);
 const _dbgDottedBatch = new InstanceBatch(DBG_CIRCLE_FLOATS, 16);
@@ -21511,18 +21524,6 @@ function _ensureDbg() {
   gl.bindBuffer(gl.ARRAY_BUFFER, ringVBO);
   gl.bufferData(gl.ARRAY_BUFFER, ringVerts, gl.STATIC_DRAW);
 
-  // Dotted ring geometry
-  const dottedVerts = new Float32Array(DBG_DOTTED_SEGS * 2 * 3);
-  for (let i = 0; i < DBG_DOTTED_SEGS; i++) {
-    const a0 = ((i * 2) / DBG_RING_SEGS) * Math.PI * 2;
-    const a1 = ((i * 2 + 1) / DBG_RING_SEGS) * Math.PI * 2;
-    dottedVerts[i * 6] = Math.cos(a0); dottedVerts[i * 6 + 1] = 0; dottedVerts[i * 6 + 2] = Math.sin(a0);
-    dottedVerts[i * 6 + 3] = Math.cos(a1); dottedVerts[i * 6 + 4] = 0; dottedVerts[i * 6 + 5] = Math.sin(a1);
-  }
-  const dottedVBO = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, dottedVBO);
-  gl.bufferData(gl.ARRAY_BUFFER, dottedVerts, gl.STATIC_DRAW);
-
   // Separate instance buffers for solid and dotted (avoids repack)
   // (using pre-created InstanceBatch objects)
 
@@ -21546,7 +21547,7 @@ function _ensureDbg() {
   }
 
   const ringVAO = makeCircleVAO(ringVBO, _dbgSolidBatch.buf);
-  const dottedVAO = makeCircleVAO(dottedVBO, _dbgDottedBatch.buf);
+  const dottedVAO = makeCircleVAO(ringVBO, _dbgDottedBatch.buf);
 
   // Batched line VAO (uses _dbgLineBatch.buf, 6 floats/vert: pos3 + color3)
   const dbgLineStride = _dbgLineBatch.floats * 4;
@@ -21563,6 +21564,7 @@ function _ensureDbg() {
     dbgProg: dp,
     dbgUProj: gl.getUniformLocation(dp, 'uProj'),
     dbgUView: gl.getUniformLocation(dp, 'uView'),
+    dbgUDashed: gl.getUniformLocation(dp, 'uDashed'),
     dbgRingVAO: ringVAO, dbgDottedVAO: dottedVAO,
     lineProg: lp,
     lineUProj: gl.getUniformLocation(lp, 'uProj'),
@@ -22873,6 +22875,9 @@ const CharacterController = {
   },
 
   // --- Collision resolution ---
+  // Reusable buffer for spatial hash query results
+  _dynamicColliders: [],
+
   resolveCollisions(regions) {
     const cc = CharacterController;
     cc.speedMult = 1.0;
@@ -22904,6 +22909,24 @@ const CharacterController = {
         }
       }
     }
+    // Dynamic colliders from spatial hash (creatures, future items)
+    const dynBuf = cc._dynamicColliders;
+    const dynCount = DynamicColliders.queryAll(cc.x, cc.z, cc.RADIUS, dynBuf, 0);
+    for (let i = 0; i < dynCount; i++) {
+      const col = dynBuf[i];
+      const ct = COLLIDER_TYPES[col.type];
+      if (!ct || !ct.blocksPlayer) continue;
+      const minDist = cc.RADIUS + col.colR;
+      const dx = cc.x - col.colX, dz = cc.z - col.colZ;
+      const distSq = dx * dx + dz * dz;
+      if (distSq < minDist * minDist && distSq > 0.000001) {
+        const dist = Math.sqrt(distSq);
+        const push = (minDist - dist) / dist;
+        cc.x += dx * push;
+        cc.z += dz * push;
+      }
+    }
+    dynBuf.length = 0;
     const worldHalf = (GRID_HALF + 0.5) * REGION_SIZE;
     cc.x = Math.max(-worldHalf + cc.RADIUS, Math.min(worldHalf - cc.RADIUS, cc.x));
     cc.z = Math.max(-worldHalf + cc.RADIUS, Math.min(worldHalf - cc.RADIUS, cc.z));
@@ -23428,6 +23451,7 @@ const COLLIDER_TYPES = {
   minable:     { blocksPlayer: true,  debugColor: [0.7, 0.15, 0.9],  debugStyle: 'solid'  },
   stick:       { blocksPlayer: false, debugColor: [0.2, 0.85, 0.85], debugStyle: 'dotted' },
   creature:    { blocksPlayer: false, debugColor: [1.0, 0.6, 0.9],  debugStyle: 'solid'  },
+  creature_near: { blocksPlayer: false, debugColor: [1.0, 0.6, 0.2], debugStyle: 'dotted' },
 };
 
 // Build unified collider list per region (called once at region init, no per-frame alloc)
@@ -23460,11 +23484,163 @@ function buildRegionColliders(reg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SPATIAL HASH — O(1) insert/remove grid for dynamic colliders
+// Constructor-based: each instance is an independent grid.
+// ═══════════════════════════════════════════════════════════════════════════
+const SH_CELL_SIZE = 3;
+const SH_PRIME = 100003;
+
+function SpatialHash() {
+  this._cells = new Map();
+}
+
+SpatialHash.prototype = {
+  _key(x, z) {
+    return Math.floor(x / SH_CELL_SIZE) * SH_PRIME + Math.floor(z / SH_CELL_SIZE);
+  },
+
+  _getOrCreate(key) {
+    let b = this._cells.get(key);
+    if (!b) { b = []; this._cells.set(key, b); }
+    return b;
+  },
+
+  insert(collider) {
+    const key = this._key(collider.colX, collider.colZ);
+    const b = this._getOrCreate(key);
+    collider._shIdx = b.length;
+    collider._shKey = key;
+    b.push(collider);
+  },
+
+  remove(collider) {
+    const b = this._cells.get(collider._shKey);
+    if (!b) return;
+    const idx = collider._shIdx;
+    const last = b[b.length - 1];
+    b[idx] = last;
+    last._shIdx = idx;
+    b.pop();
+    collider._shKey = -1;
+    collider._shIdx = -1;
+  },
+
+  move(collider) {
+    const newKey = this._key(collider.colX, collider.colZ);
+    if (newKey === collider._shKey) return;
+    this.remove(collider);
+    const b = this._getOrCreate(newKey);
+    collider._shIdx = b.length;
+    collider._shKey = newKey;
+    b.push(collider);
+  },
+
+  query(x, z, radius, out, outStart) {
+    const cs = SH_CELL_SIZE;
+    const r = radius + cs;
+    const minCX = Math.floor((x - r) / cs);
+    const maxCX = Math.floor((x + r) / cs);
+    const minCZ = Math.floor((z - r) / cs);
+    const maxCZ = Math.floor((z + r) / cs);
+    let count = outStart || 0;
+    for (let cz = minCZ; cz <= maxCZ; cz++) {
+      for (let cx = minCX; cx <= maxCX; cx++) {
+        const b = this._cells.get(cx * SH_PRIME + cz);
+        if (!b) continue;
+        for (let i = 0; i < b.length; i++) {
+          out[count++] = b[i];
+        }
+      }
+    }
+    return count;
+  },
+
+  queryRegion(gx, gz, out, outStart) {
+    const cs = SH_CELL_SIZE;
+    const ox = gx * REGION_SIZE, oz = gz * REGION_SIZE;
+    const minCX = Math.floor((ox - S) / cs);
+    const maxCX = Math.floor((ox + S) / cs);
+    const minCZ = Math.floor((oz - S) / cs);
+    const maxCZ = Math.floor((oz + S) / cs);
+    let count = outStart || 0;
+    for (let cz = minCZ; cz <= maxCZ; cz++) {
+      for (let cx = minCX; cx <= maxCX; cx++) {
+        const b = this._cells.get(cx * SH_PRIME + cz);
+        if (!b) continue;
+        for (let i = 0; i < b.length; i++) {
+          out[count++] = b[i];
+        }
+      }
+    }
+    return count;
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DYNAMIC COLLIDERS — per-type spatial hashes for moving objects
+// Each collider type gets its own hash. Query by type, region, or all.
+//
+// API:
+//   DynamicColliders.register(type)              — create hash for a type
+//   DynamicColliders.get(type)                   — get hash for a type
+//   DynamicColliders.insert(type, collider)      — add to type's hash
+//   DynamicColliders.remove(type, collider)      — remove from type's hash
+//   DynamicColliders.move(type, collider)         — update cell in type's hash
+//   DynamicColliders.query(type, x, z, r, out, start)        — one type
+//   DynamicColliders.queryAll(x, z, r, out, start)           — all types
+//   DynamicColliders.queryRegion(type, gx, gz, out, start)   — one type in region
+//   DynamicColliders.queryRegionAll(gx, gz, out, start)      — all types in region
+// ═══════════════════════════════════════════════════════════════════════════
+const DynamicColliders = {
+  _hashes: {},
+  _types: [],
+
+  register(type) {
+    if (!this._hashes[type]) {
+      this._hashes[type] = new SpatialHash();
+      this._types.push(type);
+    }
+    return this._hashes[type];
+  },
+
+  get(type) {
+    return this._hashes[type] || this.register(type);
+  },
+
+  insert(type, collider) { this.get(type).insert(collider); },
+  remove(type, collider) { this.get(type).remove(collider); },
+  move(type, collider) { this.get(type).move(collider); },
+
+  query(type, x, z, radius, out, start) {
+    return this.get(type).query(x, z, radius, out, start);
+  },
+
+  queryAll(x, z, radius, out, start) {
+    let count = start || 0;
+    for (let i = 0; i < this._types.length; i++) {
+      count = this._hashes[this._types[i]].query(x, z, radius, out, count);
+    }
+    return count;
+  },
+
+  queryRegion(type, gx, gz, out, start) {
+    return this.get(type).queryRegion(gx, gz, out, start);
+  },
+
+  queryRegionAll(gx, gz, out, start) {
+    let count = start || 0;
+    for (let i = 0; i < this._types.length; i++) {
+      count = this._hashes[this._types[i]].queryRegion(gx, gz, out, count);
+    }
+    return count;
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // COLLISION QUERY
 // Shared spatial query for any system that needs "what's near this point?"
 // Works for player, creatures, NPC AI — any actor at a world position.
-// Currently brute-force over nearby regions; grid partition can slot in later
-// without changing the API.
+// Checks both static per-region colliders and dynamic SpatialHash colliders.
 // ═══════════════════════════════════════════════════════════════════════════
 const CollisionQuery = {
   // Returns all colliders within `radius` of world position (wx, wz).
@@ -23479,7 +23655,7 @@ const CollisionQuery = {
     const pgx = Math.round(wx / REGION_SIZE);
     const pgz = Math.round(wz / REGION_SIZE);
     const rSq = radius * radius;
-    // Check 3x3 regions around query position
+    // Check 3x3 regions around query position (static colliders)
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
         const gx = pgx + dx, gz = pgz + dz;
@@ -23501,12 +23677,30 @@ const CollisionQuery = {
         }
       }
     }
+    // Dynamic colliders from spatial hash
+    const dynBuf = this._dynBuf;
+    const dynCount = DynamicColliders.queryAll(wx, wz, radius, dynBuf, 0);
+    for (let i = 0; i < dynCount; i++) {
+      const col = dynBuf[i];
+      if (filter) {
+        if (typeof filter === 'string') { if (col.type !== filter) continue; }
+        else { if (!filter.includes(col.type)) continue; }
+      }
+      const ddx = wx - col.colX, ddz = wz - col.colZ;
+      const distSq = ddx * ddx + ddz * ddz;
+      const reach = radius + col.colR;
+      if (distSq < reach * reach) {
+        results.push({ collider: col, distSq });
+      }
+    }
+    dynBuf.length = 0;
     // Sort nearest first
     if (results.length > 1) {
       results.sort((a, b) => a.distSq - b.distSq);
     }
     return results;
   },
+  _dynBuf: [],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -23742,8 +23936,8 @@ function onCollideEnd(colA, colB) {
 // ═══════════════════════════════════════════════════════════════════════════
 // CREATURE CONTROLLER
 // Manages ambient creatures (rabbits, deer, etc.) with per-type behaviors.
-// Each creature has a state machine driven by its type's tick function.
-// AI ticks at a reduced rate (per-type); visual interpolation runs every frame.
+// Each creature has a state machine driven by its type's tick/frame callbacks.
+// AI ticks at a reduced rate (per-type); visual + reactive behaviors run every frame.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // --- Creature type registry ---
@@ -23775,18 +23969,29 @@ function createCreature(typeId, wx, wz, regionGx, regionGz) {
     regionGx, regionGz,
     // Freeform per-behavior state
     custom: {},
+    // Movement pattern state (managed by MovementPatterns)
+    _move: null,
     // Collider (updated each tick)
     collider: {
       type: type.colliderType || 'creature',
       colX: wx, colZ: wz, colR: type.colR || 0.1,
       colY: 0, src: null,
     },
+    // Near-detection collider (optional, for proximity interactions)
+    nearCollider: type.nearRadius ? {
+      type: 'creature_near',
+      colX: wx, colZ: wz, colR: type.nearRadius,
+      colY: 0, src: null,
+    } : null,
+    // Whether player is currently within near radius
+    playerNear: false,
     // AI tick tracking
     _tickAccum: Math.random() * (1 / (type.tickRate || 4)), // stagger initial ticks
     // Active flag (for despawn)
     alive: true,
   };
   c.collider.src = c;
+  if (c.nearCollider) c.nearCollider.src = c;
   c.y = getWorldHeight(wx, wz);
   c.collider.colY = c.y;
   if (type.onSpawn) type.onSpawn(c);
@@ -23800,6 +24005,8 @@ const CreatureController = {
   spawn(typeId, wx, wz, regionGx, regionGz) {
     const c = createCreature(typeId, wx, wz, regionGx, regionGz);
     this.creatures.push(c);
+    DynamicColliders.insert(c.type.id, c.collider);
+    if (c.nearCollider) DynamicColliders.insert(c.type.id + '_near', c.nearCollider);
     return c;
   },
 
@@ -23808,10 +24015,7 @@ const CreatureController = {
   },
 
   // Called once per frame from main loop
-  _tickCtx: {
-    dt: 0, playerX: 0, playerZ: 0, playerY: 0, playerDist: 0,
-    getHeight: null, getRegionColliders: null,
-  },
+  _tickCtx: { dt: 0, playerX: 0, playerZ: 0, playerDist: 0 },
   update(dt) {
     const cc = CharacterController;
     const creatures = this.creatures;
@@ -23819,14 +24023,15 @@ const CreatureController = {
     let len = creatures.length;
     for (let i = len - 1; i >= 0; i--) {
       if (!creatures[i].alive) {
+        const dead = creatures[i];
+        DynamicColliders.remove(dead.type.id, dead.collider);
+        if (dead.nearCollider) DynamicColliders.remove(dead.type.id + '_near', dead.nearCollider);
         creatures[i] = creatures[--len];
       }
     }
     creatures.length = len;
     const ctx = this._tickCtx;
-    ctx.getHeight = getWorldHeight;
-    ctx.getRegionColliders = _getCreatureRegionColliders;
-    ctx.playerX = cc.x; ctx.playerZ = cc.z; ctx.playerY = cc.y;
+    ctx.playerX = cc.x; ctx.playerZ = cc.z;
     for (let i = 0; i < creatures.length; i++) {
       const c = creatures[i];
       const type = c.type;
@@ -23838,11 +24043,22 @@ const CreatureController = {
         ctx.dt = tickInterval;
         ctx.playerDist = Math.sqrt((c.x - cc.x) * (c.x - cc.x) + (c.z - cc.z) * (c.z - cc.z));
         if (type.onTick) type.onTick(c, ctx);
-        // Snap to terrain
-        c.y = getWorldHeight(c.x, c.z);
-        c.collider.colX = c.x;
-        c.collider.colZ = c.z;
-        c.collider.colY = c.y;
+      }
+      // Snap to terrain + sync colliders every frame
+      c.y = getWorldHeight(c.x, c.z);
+      c.collider.colX = c.x;
+      c.collider.colZ = c.z;
+      c.collider.colY = c.y;
+      DynamicColliders.move(c.type.id, c.collider);
+      // Near collider + playerNear checked every frame (not gated by tick rate)
+      if (c.nearCollider) {
+        c.nearCollider.colX = c.x;
+        c.nearCollider.colZ = c.z;
+        c.nearCollider.colY = c.y;
+        DynamicColliders.move(c.type.id + '_near', c.nearCollider);
+        const pdx = c.x - cc.x, pdz = c.z - cc.z;
+        const pDist = Math.sqrt(pdx * pdx + pdz * pdz);
+        c.playerNear = pDist < (c.nearCollider.colR + CharacterController.RADIUS);
       }
       // Visual interpolation every frame
       c.stateTime += dt;
@@ -23852,24 +24068,68 @@ const CreatureController = {
 
 };
 
-// Helper: get colliders for a creature's region (for avoidance/pathfinding)
-function _getCreatureRegionColliders(gx, gz) {
-  const key = gx * 1000 + gz;
-  const reg = regionCache.get(key);
-  if (reg) {
-    if (!reg.allColliders) buildRegionColliders(reg);
-    return reg.allColliders;
-  }
-  return [];
+// ═══════════════════════════════════════════════════════════════════════════
+// CREATURE UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Clamp a world position to within a region's bounds.
+// margin is optional (default 0) — used for items like trees that need inset.
+function clampToRegion(gx, gz, x, z, margin) {
+  const m = margin || 0;
+  const ox = gx * REGION_SIZE, oz = gz * REGION_SIZE;
+  return [
+    Math.max(ox - S + m, Math.min(ox + S - m, x)),
+    Math.max(oz - S + m, Math.min(oz + S - m, z)),
+  ];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CREATURE STATE MACHINE
+// Lightweight state machine for creature AI. Each state defines:
+//   enter(c, cu, prev)  — called on transition (optional)
+//   tick(c, cu, ctx)    — called at AI tick rate (optional)
+//   frame(c, cu, dt)    — called every frame (optional)
+// Transition via: CreatureState.transition(c, stateName)
+// ═══════════════════════════════════════════════════════════════════════════
+const CreatureState = {
+  // Register states for a creature type. stateMap = { stateName: { enter, tick, frame } }
+  define(typeDef, stateMap) {
+    typeDef._states = stateMap;
+  },
+
+  transition(c, stateName) {
+    const prev = c.state;
+    c.state = stateName;
+    c.stateTime = 0;
+    const s = c.type._states && c.type._states[stateName];
+    if (s && s.enter) s.enter(c, c.custom, prev);
+  },
+
+  tick(c, ctx) {
+    const s = c.type._states && c.type._states[c.state];
+    if (s && s.tick) s.tick(c, c.custom, ctx);
+  },
+
+  frame(c, dt) {
+    const s = c.type._states && c.type._states[c.state];
+    if (s && s.frame) s.frame(c, c.custom, dt);
+  },
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MOVEMENT PATTERNS
-// Define *how* a creature moves from A to B. AI decides the destination;
-// the pattern handles easing, speed curves, vertical bounce, and timing.
-// Usage: MovementPatterns.start(creature, patternName, targetX, targetZ)
-//        MovementPatterns.update(creature, dt) → true when done
+// Reusable movement behaviors that define *how* a creature travels from A
+// to B. The creature's AI decides the destination; the pattern handles
+// easing, speed curves, vertical bounce, and timing.
+//
+// API:
+//   MovementPatterns.start(creature, patternId, targetX, targetZ)
+//   MovementPatterns.update(creature, dt) → true when done
+//   MovementPatterns.frame(creature, dt)  → smooth animation (call in onFrame)
+//   MovementPatterns.isActive(creature)   → bool
+//
+// Each pattern emits m.status ('jumping','falling','grounded', etc.) so the
+// creature type can choose sprites/poses accordingly.
 // ═══════════════════════════════════════════════════════════════════════════
 const _movementPatterns = {};
 
@@ -23878,22 +24138,24 @@ function registerMovementPattern(def) {
 }
 
 const MovementPatterns = {
-  start(c, patternId, tx, tz) {
-    const pat = _movementPatterns[patternId];
-    if (!pat) throw new Error('Unknown movement pattern: ' + patternId);
-    c._move = {
-      pat,
-      startX: c.x, startZ: c.z,
-      targetX: tx, targetZ: tz,
-      t: 0,           // overall progress 0→1
-      phase: 0,       // sub-phase for pattern use (e.g. hop cycle)
-      done: false,
-      custom: {},      // pattern-specific state
-    };
-    if (pat.onStart) pat.onStart(c, c._move);
+  start(c, patternId, tx, tz, opts) {
+    const pat = _movementPatterns[patternId] || _movementPatterns['linear'];
+    if (!pat) throw new Error('No movement patterns registered');
+    let m = c._move;
+    if (!m) {
+      m = c._move = { pat: null, startX: 0, startZ: 0, targetX: 0, targetZ: 0, done: false, status: 'grounded', custom: {}, opts: {} };
+    }
+    m.pat = pat;
+    m.startX = c.x; m.startZ = c.z;
+    m.targetX = tx; m.targetZ = tz;
+    m.done = false;
+    m.status = 'grounded';
+    for (const k in m.custom) delete m.custom[k];
+    for (const k in m.opts) delete m.opts[k];
+    if (opts) { for (const k in opts) m.opts[k] = opts[k]; }
+    if (pat.onStart) pat.onStart(c, m);
   },
 
-  // Returns true when movement is complete
   update(c, dt) {
     const m = c._move;
     if (!m || m.done) return true;
@@ -23901,11 +24163,9 @@ const MovementPatterns = {
     return m.done;
   },
 
-  // Per-frame visual interpolation (called every frame, not just AI ticks)
   frame(c, dt) {
     const m = c._move;
     if (!m || m.done) {
-      // Decay any leftover visual offset
       c.visualYOffset *= 0.85;
       if (Math.abs(c.visualYOffset) < 0.001) c.visualYOffset = 0;
       return;
@@ -23916,12 +24176,68 @@ const MovementPatterns = {
   isActive(c) {
     return c._move && !c._move.done;
   },
+
+  // Abort current movement. If hop pattern, finishes current hop then stops.
+  // If immediate=true, stops right now.
+  abort(c, immediate) {
+    const m = c._move;
+    if (!m || m.done) return;
+    if (immediate || !m.pat.onAbort) {
+      c.visualYOffset = 0;
+      m.done = true;
+      m.status = 'grounded';
+    } else {
+      m.pat.onAbort(c, m);
+    }
+  },
 };
 
+// --- LINEAR pattern (default) ---
+// Smooth linear movement from A to B with ease-in-out.
+// No vertical bounce. Emits status: 'moving', 'grounded'.
+registerMovementPattern({
+  id: 'linear',
+  onStart(c, m) {
+    const dx = m.targetX - m.startX;
+    const dz = m.targetZ - m.startZ;
+    m.custom.totalDist = Math.sqrt(dx * dx + dz * dz);
+    m.custom.speed = (m.opts && m.opts.speed) || 1.5;
+    m.custom.duration = m.custom.totalDist / m.custom.speed;
+    m.custom.elapsed = 0;
+    m.status = 'moving';
+  },
+  onUpdate(c, m, dt) {
+    if (m.done) return;
+    if (m.custom.elapsed >= m.custom.duration) {
+      c.x = m.targetX;
+      c.z = m.targetZ;
+      m.status = 'grounded';
+      m.done = true;
+    }
+  },
+  onFrame(c, m, dt) {
+    const h = m.custom;
+    h.elapsed += dt;
+    if (h.elapsed >= h.duration) {
+      c.x = m.targetX;
+      c.z = m.targetZ;
+      m.status = 'grounded';
+      m.done = true;
+      return;
+    }
+    // Smoothstep ease-in-out
+    let t = h.elapsed / h.duration;
+    t = t * t * (3 - 2 * t);
+    c.x = m.startX + (m.targetX - m.startX) * t;
+    c.z = m.startZ + (m.targetZ - m.startZ) * t;
+    m.status = 'moving';
+  },
+});
+
 // --- HOP pattern ---
-// Moves in a series of discrete hops with sinusoidal vertical bounce and
-// ease-in-out XZ speed per hop. Each hop covers an equal fraction of the
-// total distance.
+// Discrete hops with sinusoidal vertical bounce and smoothstep XZ easing.
+// Hop count scales with distance (~1 hop per 0.6 units, min 1, max 8).
+// Emits status: 'jumping' (ascending), 'falling' (descending), 'grounded'.
 registerMovementPattern({
   id: 'hop',
   onStart(c, m) {
@@ -23931,15 +24247,15 @@ registerMovementPattern({
     m.custom.numHops = Math.max(1, Math.min(8, Math.round(totalDist / 0.6)));
     m.custom.hopIndex = 0;
     m.custom.hopPhase = 0;
-    m.custom.hopDuration = 0.55;
+    m.custom.hopDuration = (m.opts && m.opts.hopDuration) || 0.55;
+    m.custom.hopHeight = (m.opts && m.opts.hopHeight) || 0.5;
     m.custom.totalDist = totalDist;
-    m.status = 'jumping'; // initial status
+    m.status = 'jumping';
   },
   onUpdate(c, m, dt) {
-    // onUpdate only checks completion — onFrame handles all animation
+    // Completion check only — onFrame handles animation
     if (m.done) return;
-    const h = m.custom;
-    if (h.hopIndex >= h.numHops) {
+    if (m.custom.hopIndex >= m.custom.numHops) {
       c.x = m.targetX;
       c.z = m.targetZ;
       c.visualYOffset = 0;
@@ -23968,193 +24284,327 @@ registerMovementPattern({
     const hopFrac = (h.hopIndex + eased) / h.numHops;
     c.x = m.startX + (m.targetX - m.startX) * hopFrac;
     c.z = m.startZ + (m.targetZ - m.startZ) * hopFrac;
-    c.visualYOffset = Math.sin(h.hopPhase * Math.PI) * 0.5;
+    c.visualYOffset = Math.sin(h.hopPhase * Math.PI) * h.hopHeight;
+  },
+  onAbort(c, m) {
+    // Let current hop finish, then stop
+    const h = m.custom;
+    const newNumHops = h.hopIndex + 1;
+    // Recalculate target to where we'll actually land after this hop
+    const landFrac = newNumHops / h.numHops;
+    m.targetX = m.startX + (m.targetX - m.startX) * landFrac;
+    m.targetZ = m.startZ + (m.targetZ - m.startZ) * landFrac;
+    h.numHops = newNumHops;
   },
 });
 
-// CREATURE TYPE: RABBIT
-// Small forest creature. Hops in a random direction, pauses, repeats.
-// Textured quad, Y-rotated to show facing direction.
 // ═══════════════════════════════════════════════════════════════════════════
-registerCreatureType({
-  id: 'rabbit',
-  tickRate: 6, // AI ticks per second
-  colR: 0.08,
-  colliderType: 'creature', // non-blocking
-  // Rendering: vertical flat quad, Y-rotated to show facing
-  textureId: 'rabbit',
-  atlasCols: 4, // poses: standing, sitting, hop_up, landing
-  atlasRows: 3, // color variants
-  meshSize: [0.18, 0.18, 1.0], // width, height (Z unused for quad but must be nonzero)
-
-  onSpawn(c) {
-    c.custom = {
-      idleDuration: 0,
-      displayRotY: 3 * Math.PI / 4,
-      variant: Math.floor(Math.random() * 3),
-      flipU: 0,
-      scale: 1.0 + Math.random() * 0.35,
-      movePattern: 'hop',
-      poseFrame: 0, // 0=standing, 1=sitting, 2=hop_up, 3=landing
-    };
-    // Start with a hop in the facing direction
-    const dist = 1.5 + Math.random() * 3.0;
-    const ox = c.regionGx * REGION_SIZE, oz = c.regionGz * REGION_SIZE;
-    const margin = 0.3;
-    const tx = Math.max(ox - S + margin, Math.min(ox + S - margin, c.x + Math.cos(c.facing) * dist));
-    const tz = Math.max(oz - S + margin, Math.min(oz + S - margin, c.z + Math.sin(c.facing) * dist));
-    MovementPatterns.start(c, 'hop', tx, tz);
-    c.state = 'moving';
-    c.stateTime = 0;
+// BILLBOARD CREATURE HELPERS
+// Shared rendering logic for any creature rendered as a textured billboard
+// quad. Handles: visualForward, flipU, displayRotY, tiltZ.
+// Creature types call these in their onFrame to get consistent behavior.
+// ═══════════════════════════════════════════════════════════════════════════
+const BillboardCreature = {
+  // Initialize billboard-specific custom fields
+  initCustom(cu) {
+    cu.displayRotY = 3 * Math.PI / 4;
+    cu.flipU = 0;
+    cu.visualForward = -1; // -1 = facing screen-left (default sprite direction)
+    cu.tiltZ = 0;
+    cu.poseFrame = 0;
   },
 
-  onTick(c, ctx) {
+  // Update billboard facing, flip, and tilt each frame.
+  // moveStatus: 'jumping'|'falling'|null — drives tilt direction.
+  // tiltAmount: radians of tilt when jumping/falling (0 to disable).
+  updateFrame(c, dt, moveStatus, tiltAmount) {
     const cu = c.custom;
-    switch (c.state) {
-      // Moving → normal pause when done
-      case 'moving': {
-        const done = MovementPatterns.update(c, ctx.dt);
-        // Update pose from movement status
-        const status = c._move && c._move.status;
-        if (status === 'jumping') cu.poseFrame = 2;
-        else if (status === 'falling') cu.poseFrame = 3;
-        else cu.poseFrame = 0;
-        if (done) {
-          cu.poseFrame = 0; // standing
-          c.state = 'idle';
-          c.stateTime = 0;
-          cu.idleDuration = 2.0 + Math.random() * 5.0;
-        }
-        break;
+
+    // Compute screen-space direction from actual movement or facing
+    let dirX, dirZ;
+    if ((c.state === 'moving' || c.state === 'fleeing') && c._move && !c._move.done) {
+      dirX = c._move.targetX - c._move.startX;
+      dirZ = c._move.targetZ - c._move.startZ;
+      const dlen = Math.sqrt(dirX * dirX + dirZ * dirZ);
+      if (dlen > 0.001) {
+        dirX /= dlen; dirZ /= dlen;
+        c.facing = Math.atan2(dirZ, dirX);
+      } else {
+        dirX = Math.cos(c.facing); dirZ = Math.sin(c.facing);
       }
-
-      // Normal pause → always turn after
-      case 'idle':
-        if (c.stateTime >= cu.idleDuration) {
-          c.state = 'turning';
-          c.stateTime = 0;
-          cu.turnFrom = c.facing;
-          cu.turnTo = Math.random() * Math.PI * 2;
-          cu.turnDuration = 0.2 + Math.random() * 0.2;
-        }
-        break;
-
-      // Turn → small pause
-      case 'turning': {
-        const t = Math.min(1, c.stateTime / cu.turnDuration);
-        let delta = cu.turnTo - cu.turnFrom;
-        while (delta > Math.PI) delta -= Math.PI * 2;
-        while (delta < -Math.PI) delta += Math.PI * 2;
-        c.facing = cu.turnFrom + delta * t;
-        if (t >= 1) {
-          c.facing = cu.turnTo;
-          c.state = 'post_turn';
-          c.stateTime = 0;
-          cu.postTurnPause = cu._fromSitting ? (0.05 + Math.random() * 0.1) : (0.3 + Math.random() * 0.4);
-          cu._fromSitting = false;
-        }
-        break;
-      }
-
-      // Small pause after turn → move or sit
-      case 'post_turn':
-        if (c.stateTime >= cu.postTurnPause) {
-          if (Math.random() < 0.35) {
-            // Don't move → sit, pause, then turn again
-            cu.poseFrame = 1; // sitting
-            c.state = 'sitting';
-            c.stateTime = 0;
-            cu.sitDuration = 3.0 + Math.random() * 6.0;
-          } else {
-            // Move → standing, brief pause, then hop
-            cu.poseFrame = 0; // standing
-            c.state = 'pre_move';
-            c.stateTime = 0;
-            cu.preMovePause = 0.2 + Math.random() * 0.3;
-          }
-        }
-        break;
-
-      // Sitting → turn again (which leads back to post_turn → decide again)
-      case 'sitting':
-        if (c.stateTime >= cu.sitDuration) {
-          cu.poseFrame = 0; // standing
-          c.state = 'turning';
-          c.stateTime = 0;
-          cu.turnFrom = c.facing;
-          cu.turnTo = Math.random() * Math.PI * 2;
-          cu.turnDuration = 0.15 + Math.random() * 0.15;
-          cu._fromSitting = true;
-        }
-        break;
-
-      // Brief standing pause before initiating movement
-      case 'pre_move':
-        if (c.stateTime >= cu.preMovePause) {
-          const dist = 1.5 + Math.random() * 3.0;
-          const ox = c.regionGx * REGION_SIZE, oz = c.regionGz * REGION_SIZE;
-          const margin = 0.3;
-          const tx = Math.max(ox - S + margin, Math.min(ox + S - margin, c.x + Math.cos(c.facing) * dist));
-          const tz = Math.max(oz - S + margin, Math.min(oz + S - margin, c.z + Math.sin(c.facing) * dist));
-          MovementPatterns.start(c, cu.movePattern, tx, tz);
-          c.state = 'moving';
-          c.stateTime = 0;
-        }
-        break;
+    } else {
+      dirX = Math.cos(c.facing); dirZ = Math.sin(c.facing);
     }
-  },
 
-  onFrame(c, dt) {
-    MovementPatterns.frame(c, dt);
-    const cu = c.custom;
-
-    // Compute screen-space direction from world facing
-    const dx = Math.cos(c.facing);
-    const dz = Math.sin(c.facing);
-    const sh = screenH(dx, dz);
-    const sv = screenV(dx, dz);
+    const sh = screenH(dirX, dirZ);
+    const sv = screenV(dirX, dirZ);
     const len = Math.sqrt(sh * sh + sv * sv);
     const shNorm = len > 0.001 ? sh / len : 0;
+    const svNorm = len > 0.001 ? sv / len : 0;
 
-    // visualForward: +1 = image faces screen-right, -1 = faces screen-left
-    // This is the single source of truth for "which way the sprite looks"
+    // visualForward: single source of truth for sprite direction
     if (len > 0.001) {
       cu.visualForward = shNorm > 0 ? 1 : -1;
     }
-    // flipU mirrors the texture when facing screen-right (sprite drawn facing left)
     cu.flipU = cu.visualForward > 0 ? 1 : 0;
 
-    // Update pose from movement status at frame rate
-    if (c.state === 'moving' && c._move) {
-      const status = c._move.status;
-      if (status === 'jumping') cu.poseFrame = 2;
-      else if (status === 'falling') cu.poseFrame = 3;
-      else cu.poseFrame = 0;
-      // Tilt billboard in screen space: lean back jumping, forward landing
-      const baseTilt = status === 'jumping' ? 0.35 : status === 'falling' ? -0.35 : 0;
+    // Screen-space tilt
+    if (tiltAmount > 0 && moveStatus) {
+      const baseTilt = moveStatus === 'jumping' ? tiltAmount : moveStatus === 'falling' ? -tiltAmount : 0;
       const targetTilt = baseTilt * cu.visualForward;
-      cu.tiltZ = cu.tiltZ || 0;
       cu.tiltZ += (targetTilt - cu.tiltZ) * Math.min(1, 10 * dt);
     } else {
-      cu.tiltZ = (cu.tiltZ || 0) * (1 - Math.min(1, 10 * dt));
+      cu.tiltZ *= (1 - Math.min(1, 10 * dt));
       if (Math.abs(cu.tiltZ) < 0.001) cu.tiltZ = 0;
     }
 
-    // Y rotation: quad faces toward camera with slight angle based on facing
+    // Y rotation: billboard faces camera with slight angle offset
     const CENTER_ROT = 3 * Math.PI / 4;
     const MAX_OFFSET = 35 * Math.PI / 180;
-    const svNorm = len > 0.001 ? sv / len : 0;
     const rotSign = svNorm < 0 ? -1 : 1;
     const vertScale = Math.abs(svNorm);
     let targetRotY = CENTER_ROT - shNorm * MAX_OFFSET * rotSign * vertScale;
-    if (targetRotY < Math.PI / 2) targetRotY = Math.PI / 2;
-    if (targetRotY > Math.PI) targetRotY = Math.PI;
-    const diff = targetRotY - cu.displayRotY;
-    cu.displayRotY += diff * Math.min(1, 12.0 * dt);
-    if (cu.displayRotY < Math.PI / 2) cu.displayRotY = Math.PI / 2;
-    if (cu.displayRotY > Math.PI) cu.displayRotY = Math.PI;
+    targetRotY = Math.max(Math.PI / 2, Math.min(Math.PI, targetRotY));
+    cu.displayRotY += (targetRotY - cu.displayRotY) * Math.min(1, 12.0 * dt);
+    cu.displayRotY = Math.max(Math.PI / 2, Math.min(Math.PI, cu.displayRotY));
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CREATURE TYPE: RABBIT
+// Small forest creature. Billboard quad with 4-pose × 3-color sprite atlas.
+// AI: hop → pause → turn → (sit or move) → repeat
+// ═══════════════════════════════════════════════════════════════════════════
+const RabbitDef = {
+  id: 'rabbit',
+  tickRate: 6,
+  colR: 0.08,
+  colliderType: 'creature',
+  textureId: 'rabbit',
+  atlasCols: 4,  // standing, sitting, hop_up, landing
+  atlasRows: 3,  // color variants
+  meshSize: [0.18, 0.18, 1.0],
+
+  // --- Pose constants ---
+  POSE_STANDING: 0,
+  POSE_SITTING:  1,
+  POSE_HOP_UP:   2,
+  POSE_LANDING:  3,
+  TILT_AMOUNT:   0.35, // radians of tilt during hop
+  FLEE_DISTANCE: 2.0,  // how far to run when scared
+  nearRadius:    1.2,  // player proximity detection radius (15x colR)
+
+  // --- Compute flee direction from current position and start moving ---
+  _startFlee(c) {
+    const px = CharacterController.x, pz = CharacterController.z;
+    let fleeAngle = Math.atan2(c.z - pz, c.x - px);
+    fleeAngle += (Math.random() - 0.5) * 0.6;
+    c.facing = fleeAngle;
+
+    const [tx, tz] = clampToRegion(c.regionGx, c.regionGz,
+      c.x + Math.cos(fleeAngle) * this.FLEE_DISTANCE,
+      c.z + Math.sin(fleeAngle) * this.FLEE_DISTANCE);
+    MovementPatterns.start(c, c.custom.movePattern, tx, tz, { hopDuration: 0.3 });
+  },
+
+  // --- Spawn: randomize initial state ---
+  onSpawn(c) {
+    c.custom = {
+      variant: Math.floor(Math.random() * 3),
+      scale: 1.0 + Math.random() * 0.35,
+      movePattern: 'hop',
+      idleDuration: 0,
+    };
+    BillboardCreature.initCustom(c.custom);
+
+    const roll = Math.random();
+    if (roll < 0.3) {
+      c.custom.poseFrame = this.POSE_SITTING;
+      c.state = 'sitting';
+      c.stateTime = 0;
+      c.custom.sitDuration = 1.0 + Math.random() * 5.0;
+    } else if (roll < 0.6) {
+      c.custom.poseFrame = this.POSE_STANDING;
+      c.state = 'idle';
+      c.stateTime = 0;
+      c.custom.idleDuration = 0.5 + Math.random() * 4.0;
+    } else {
+      c.custom.poseFrame = this.POSE_STANDING;
+      c.state = 'pre_move';
+      c.stateTime = 0;
+      c.custom.preMovePause = 0.3 + Math.random() * 2.0;
+    }
+  },
+
+  // --- AI tick: delegates to state machine ---
+  onTick(c, ctx) {
+    CreatureState.tick(c, ctx);
+  },
+
+  // --- Per-frame: delegates to state machine + billboard ---
+  onFrame(c, dt) {
+    CreatureState.frame(c, dt);
+    MovementPatterns.frame(c, dt);
+
+    const cu = c.custom;
+    const def = c.type;
+    let moveStatus = null;
+    if ((c.state === 'moving' || c.state === 'fleeing') && c._move) {
+      moveStatus = c._move.status;
+      cu.poseFrame = moveStatus === 'jumping' ? def.POSE_HOP_UP
+                   : moveStatus === 'falling' ? def.POSE_LANDING
+                   : def.POSE_STANDING;
+    }
+    BillboardCreature.updateFrame(c, dt, moveStatus, def.TILT_AMOUNT);
+  },
+};
+
+// --- Rabbit state definitions ---
+const R = RabbitDef; // shorthand for state defs
+
+function _rabbitStartTurn(c, cu, duration) {
+  cu.turnFrom = c.facing;
+  cu.turnTo = Math.random() * Math.PI * 2;
+  cu.turnDuration = duration;
+}
+
+CreatureState.define(RabbitDef, {
+  idle: {
+    tick(c, cu, ctx) {
+      if (c.stateTime >= cu.idleDuration) {
+        _rabbitStartTurn(c, cu, 0.2 + Math.random() * 0.2);
+        CreatureState.transition(c, 'turning');
+      }
+    },
+  },
+
+  turning: {
+    tick(c, cu, ctx) {
+      const t = Math.min(1, c.stateTime / cu.turnDuration);
+      let delta = cu.turnTo - cu.turnFrom;
+      while (delta > Math.PI)  delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      c.facing = cu.turnFrom + delta * t;
+      if (t >= 1) {
+        c.facing = cu.turnTo;
+        cu.postTurnPause = cu._fromSitting
+          ? (0.05 + Math.random() * 0.1)
+          : (0.3 + Math.random() * 0.4);
+        cu._fromSitting = false;
+        CreatureState.transition(c, 'post_turn');
+      }
+    },
+  },
+
+  post_turn: {
+    tick(c, cu, ctx) {
+      if (c.stateTime >= cu.postTurnPause) {
+        if (Math.random() < 0.35) {
+          cu.poseFrame = R.POSE_SITTING;
+          cu.sitDuration = 3.0 + Math.random() * 6.0;
+          CreatureState.transition(c, 'sitting');
+        } else {
+          cu.poseFrame = R.POSE_STANDING;
+          cu.preMovePause = 0.2 + Math.random() * 0.3;
+          CreatureState.transition(c, 'pre_move');
+        }
+      }
+    },
+  },
+
+  sitting: {
+    tick(c, cu, ctx) {
+      if (c.stateTime >= cu.sitDuration) {
+        cu.poseFrame = R.POSE_STANDING;
+        _rabbitStartTurn(c, cu, 0.15 + Math.random() * 0.15);
+        cu._fromSitting = true;
+        CreatureState.transition(c, 'turning');
+      }
+    },
+  },
+
+  pre_move: {
+    tick(c, cu, ctx) {
+      if (c.stateTime >= cu.preMovePause) {
+        const dist = 1.5 + Math.random() * 3.0;
+        const [tx, tz] = clampToRegion(c.regionGx, c.regionGz,
+          c.x + Math.cos(c.facing) * dist,
+          c.z + Math.sin(c.facing) * dist);
+        MovementPatterns.start(c, cu.movePattern, tx, tz);
+        CreatureState.transition(c, 'moving');
+      }
+    },
+  },
+
+  moving: {
+    tick(c, cu, ctx) {
+      const done = MovementPatterns.update(c, ctx.dt);
+      if (done) {
+        cu.poseFrame = R.POSE_STANDING;
+        cu.idleDuration = 2.0 + Math.random() * 5.0;
+        CreatureState.transition(c, 'idle');
+      }
+    },
+  },
+
+  fleeing: {
+    enter(c, cu, prev) {
+      const wasSitting = (cu.poseFrame === R.POSE_SITTING);
+      const wasMoving = (prev === 'moving' && MovementPatterns.isActive(c));
+      cu.poseFrame = R.POSE_STANDING;
+
+      if (wasMoving) {
+        MovementPatterns.abort(c);
+        cu._fleeWaitForAbort = true;
+        cu._fleePause = 0;
+      } else if (wasSitting) {
+        cu._fleeWaitForAbort = false;
+        cu._fleePause = 0.2;
+      } else {
+        cu._fleeWaitForAbort = false;
+        cu._fleePause = 0;
+        R._startFlee(c);
+      }
+    },
+    frame(c, cu, dt) {
+      if (cu._fleeWaitForAbort) {
+        const done = MovementPatterns.update(c, dt);
+        if (done) {
+          cu._fleeWaitForAbort = false;
+          R._startFlee(c);
+        }
+      } else if (cu._fleePause > 0) {
+        cu._fleePause -= dt;
+        if (cu._fleePause <= 0) {
+          R._startFlee(c);
+        }
+      } else {
+        MovementPatterns.update(c, dt);
+        if (c._move && c._move.done) {
+          cu.poseFrame = R.POSE_STANDING;
+          cu.idleDuration = 1.0 + Math.random() * 3.0;
+          CreatureState.transition(c, 'idle');
+        }
+      }
+      // Check for near interaction trigger
+      if (c.playerNear && CharacterController.isMoving) {
+        // Already fleeing, but recalc direction if hop finished
+        // (handled above naturally — next flee starts from landed pos)
+      }
+    },
   },
 });
+
+// Near interaction check — runs in onFrame before state machine for instant response
+const _origRabbitOnFrame = RabbitDef.onFrame;
+RabbitDef.onFrame = function(c, dt) {
+  if (c.state !== 'fleeing' && c.playerNear && CharacterController.isMoving) {
+    CreatureState.transition(c, 'fleeing');
+  }
+  _origRabbitOnFrame.call(this, c, dt);
+};
+
+registerCreatureType(RabbitDef);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // REGION LIFECYCLE HOOKS
@@ -24555,6 +25005,9 @@ const DebugVis = {
     // Pre-count to ensure buffer capacity in one shot
     const creatures = CreatureController.creatures;
     let totalSolid = 2 + creatures.length, totalDotted = 0; // +2 for player + deadzone, +creatures
+    for (const c of creatures) {
+      if (c.alive && c.nearCollider) totalDotted++;
+    }
     for (const reg of activeRegions) {
       if (!reg.allColliders) buildRegionColliders(reg);
       for (const col of reg.allColliders) {
@@ -24594,6 +25047,17 @@ const DebugVis = {
       sd[off+3] = c.collider.colR;
       sd[off+4] = ct.debugColor[0]; sd[off+5] = ct.debugColor[1]; sd[off+6] = ct.debugColor[2];
       solidCount++;
+      // Near collider (dotted)
+      if (c.nearCollider) {
+        const nct = COLLIDER_TYPES[c.nearCollider.type];
+        if (nct) {
+          const noff = dottedCount * DBG_CIRCLE_FLOATS;
+          dd[noff] = c.nearCollider.colX; dd[noff+1] = c.nearCollider.colY; dd[noff+2] = c.nearCollider.colZ;
+          dd[noff+3] = c.nearCollider.colR;
+          dd[noff+4] = nct.debugColor[0]; dd[noff+5] = nct.debugColor[1]; dd[noff+6] = nct.debugColor[2];
+          dottedCount++;
+        }
+      }
     }
 
     // Player collider
@@ -24630,14 +25094,16 @@ const DebugVis = {
     gl.uniformMatrix4fv(d.dbgUView, false, view);
 
     if (solidCount > 0) {
+      gl.uniform1f(d.dbgUDashed, 0.0);
       _dbgSolidBatch.upload(solidCount);
       gl.bindVertexArray(d.dbgRingVAO);
       gl.drawArraysInstanced(gl.LINE_LOOP, 0, DBG_RING_SEGS, solidCount);
     }
     if (dottedCount > 0) {
+      gl.uniform1f(d.dbgUDashed, 1.0);
       _dbgDottedBatch.upload(dottedCount);
       gl.bindVertexArray(d.dbgDottedVAO);
-      gl.drawArraysInstanced(gl.LINES, 0, DBG_DOTTED_SEGS * 2, dottedCount);
+      gl.drawArraysInstanced(gl.LINE_LOOP, 0, DBG_RING_SEGS, dottedCount);
     }
 
     gl.bindVertexArray(null);
@@ -25419,6 +25885,7 @@ function render(rafTime) {
   // Dismiss loader: pause â†’ fade crystal/dots â†’ fade black overlay
   if (!_loaderDone) {
     _loaderDone = true;
+    resize(); // ensure correct aspect after load
     const loader = document.getElementById('loader');
     if (loader) {
       const loaderCanvas = document.getElementById('loaderCanvas');
