@@ -20361,6 +20361,16 @@ void main() {
     slabZ: 13.9
     // where the physical slab stands on the floor
   };
+  var REACH = {
+    doorArrive: 1.7,
+    // this close to THE DOOR while leaving = out the door
+    settleGlide: 2.6,
+    // max sit-down glide through your own chair
+    parkDesk: 1.4,
+    // must be this near your seat to set something down
+    mugOwner: 1.6
+    // a mug animates only if its owner is within this
+  };
   var PACE = {
     eventGapDays: [2.2, 2.6],
     // [min, +range]: days between decision modals
@@ -20449,7 +20459,7 @@ void main() {
     skin: [15714722, 13405798, 9723713, 16045491, 7621168],
     shirts: [4169868, 15238463, 9420650, 13724286, 8746953, 5085910, 13214271, 6139806]
   };
-  var renderer = new WebGLRenderer({ antialias: true });
+  var renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio, RENDER.maxPixelRatio));
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputColorSpace = LinearSRGBColorSpace;
@@ -20598,7 +20608,7 @@ void main() {
     return calls;
   }
 
-  // src/engine/mugs.js
+  // src/engine/props.js
   var MUG_COLS = [15262418, 9415051, 13199928, 8035253];
   var mugs = [];
   var colIx = 0;
@@ -20660,7 +20670,7 @@ void main() {
           a.mesh.position.z + oz
         );
         g.mesh.rotation.set(0, r, 0);
-        const nearSeat = a.seat && Math.hypot(a.mesh.position.x - a.seat.x, a.mesh.position.z - a.seat.z) < 1.4;
+        const nearSeat = a.seat && Math.hypot(a.mesh.position.x - a.seat.x, a.mesh.position.z - a.seat.z) < REACH.parkDesk;
         if (a.isDir && a.state === "board" && nearSeat) {
           const TB = { x0: -14.7, x1: -8.3, z0: -8.9, z1: -7.1 }, TABLE_Y = 1.12;
           const fx = Math.sin(a.seat.rot), fz = Math.cos(a.seat.rot);
@@ -20683,7 +20693,7 @@ void main() {
           g.mesh.rotation.set(0, f, 0);
         }
       } else {
-        const near = Math.hypot(a.mesh.position.x - g.home.x, a.mesh.position.z - g.home.z) < 1.6;
+        const near = Math.hypot(a.mesh.position.x - g.home.x, a.mesh.position.z - g.home.z) < REACH.mugOwner;
         const ownerPresent = a.mesh.visible !== false && near && (a.state === "work" && a.seated || a.isDir && a.state === "board");
         if (!ownerPresent) {
           g.sip = 0;
@@ -20774,7 +20784,7 @@ void main() {
           a.mesh.position.z + oz
         );
         g.mesh.rotation.set(Math.PI / 2.3, r, 0);
-        const nearSeatP = a.seat && Math.hypot(a.mesh.position.x - a.seat.x, a.mesh.position.z - a.seat.z) < 1.4;
+        const nearSeatP = a.seat && Math.hypot(a.mesh.position.x - a.seat.x, a.mesh.position.z - a.seat.z) < REACH.parkDesk;
         if (a.isDir && a.state === "board" && nearSeatP) {
           const TB = { x0: -14.7, x1: -8.3, z0: -8.9, z1: -7.1 };
           const fx = Math.sin(a.seat.rot), fz = Math.cos(a.seat.rot);
@@ -21244,6 +21254,7 @@ void main() {
   var boardChairObs;
   var deskGroupsAll;
   var WINDOW_PANES = [];
+  var doloresKettle = null;
   var PLANT_GEO = {};
   function coloredPart(geo, color, x, y, z, sx = 1, sy = 1, sz = 1, rz = 0, rx = 0, ry = 0) {
     geo.scale(sx, sy, sz);
@@ -21444,6 +21455,9 @@ void main() {
     glassWall(3.4, 4.2, 0.15, -5.2, 2.1, -1);
     addObstacle(-14.6, -1, 8.6, 0.5);
     addObstacle(-5.2, -1, 3.4, 0.5);
+    box(0.5, 0.5, 0.35, 9071434, DOOR.x - 1.6, 1.15, DOOR.z + 0.25, null, false);
+    box(0.34, 0.03, 0.06, 2762274, DOOR.x - 1.6, 1.34, DOOR.z + 0.08, null, false);
+    box(0.08, 0.9, 0.08, 5521451, DOOR.x - 1.6, 0.45, DOOR.z + 0.25, null, false);
     {
       const cv = document.createElement("canvas");
       cv.width = 1024;
@@ -21504,6 +21518,19 @@ void main() {
       // south pair faces the table (-z)
       { x: -10.2, z: -6.1, rot: Math.PI }
     ];
+    doloresKettle = new Group();
+    const kbody = new Mesh(new CylinderGeometry(0.13, 0.16, 0.2, 10), MV);
+    kbody.geometry = kbody.geometry.toNonIndexed();
+    doloresKettle.add(new Mesh(new CylinderGeometry(0.13, 0.16, 0.2, 10), M(14209e3)));
+    const spout = new Mesh(new CylinderGeometry(0.03, 0.045, 0.16, 6), M(14209e3));
+    spout.rotation.z = Math.PI / 3;
+    spout.position.set(0.16, 0.06, 0);
+    doloresKettle.add(spout);
+    const kn = new Mesh(new SphereGeometry(0.035, 8, 6), M(9071518));
+    kn.position.y = 0.13;
+    doloresKettle.add(kn);
+    doloresKettle.position.set(deskSeats[4].x + 0.55, 0.98, deskSeats[4].z - 0.7);
+    sceneG.add(doloresKettle);
     printerMesh = new Group();
     sceneG.add(printerMesh);
     box(1.3, 0.9, 1, 12169892, -2.2, 0.45, -12.7, printerMesh);
@@ -21686,6 +21713,9 @@ void main() {
     g.traverse((o) => o.userData.agent = i);
     sceneG.add(g);
     return g;
+  }
+  function removeBody(e) {
+    if (e.mesh && e.mesh.parent) e.mesh.parent.remove(e.mesh);
   }
   function setPose(a, seated) {
     if (seated && a.standing) seated = false;
@@ -22119,6 +22149,88 @@ void main() {
         return ms;
       }
     },
+    mist: {
+      name: "Focus Mist Station",
+      cost: 350,
+      removable: true,
+      chat: "coffee",
+      desc: "A wall canister that dispenses 'Citrus Clarity Blend' on approach. The label lists a scent, a promise, and no ingredients. Employees report focus, mild euphoria, and a persistent feeling of being marketed to from inside.",
+      fxTxt: "BANDWIDTH on visit \xB7 LIBERTY erodes \xB7 the ingredients are proprietary",
+      owned: false,
+      spots: [{ x: -13, z: 0.35 }],
+      effect: (a) => {
+        a.stats.band = clamp2(a.stats.band + 3);
+        a.stats.lib = clamp2(a.stats.lib - 2);
+      },
+      build() {
+        const ms = [];
+        ms.push(box(0.5, 0.7, 0.3, 14214364, -13, 2, -0.7));
+        ms.push(box(0.12, 0.12, 0.16, 8035214, -13, 1.72, -0.55));
+        return ms;
+      }
+    },
+    decoy: {
+      name: "Deterrence Dome",
+      cost: 180,
+      removable: true,
+      chat: "vending",
+      desc: "A camera housing with nothing inside. Facilities calls it 'a productivity prosthetic.' It points at the desks. It sees nothing. It doesn't have to.",
+      fxTxt: "purely ambient \xB7 people behave for the empty dome \xB7 technically not surveillance",
+      owned: false,
+      spots: [],
+      build() {
+        const ms = [];
+        ms.push(box(0.3, 0.18, 0.3, 2762274, 4, 4.5, -13.9));
+        ms.push(box(0.16, 0.1, 0.16, 1118481, 4, 4.38, -13.82));
+        return ms;
+      }
+    },
+    shredder: {
+      name: "The Shredder",
+      cost: 600,
+      removable: true,
+      chat: "printer",
+      desc: "Industrial. Hungry. Installed in the print corner like a predator downstream of a watering hole. Officially for 'document lifecycle management.' The intake slot is wider than any document has a right to be.",
+      fxTxt: "BANDWIDTH on visit \xB7 FAITH erodes \xB7 feeding it feels wrong and good",
+      owned: false,
+      spots: [{ x: 1.35, z: -11.55 }],
+      // dead-center on the intake
+      effect: (a) => {
+        a.stats.band = clamp2(a.stats.band + 2);
+        a.stats.faith = clamp2(a.stats.faith - 1);
+      },
+      build() {
+        const ms = [];
+        ms.push(box(0.9, 1.1, 0.8, 4867648, 1.35, 0.55, -12.7));
+        ms.push(box(0.7, 0.06, 0.2, 1118481, 1.35, 1.13, -12.45));
+        this.obs = [addObstacle(1.35, -12.7, 1, 0.9)];
+        return ms;
+      }
+    },
+    boothx: {
+      name: "The Feedback Booth",
+      cost: 800,
+      removable: true,
+      chat: "zen",
+      desc: "A soundproofed booth where employees may speak freely and anonymously. The anonymity is described in the signage as 'aspirational.' Inside: one chair, one microphone, one small light that is always warm.",
+      fxTxt: "they feel heard \xB7 ALIGNMENT up \xB7 what's recorded is 'aggregate'",
+      owned: false,
+      spots: [{ x: 13.6, z: -12.2 }],
+      // dead-center on the booth door
+      effect: (a) => {
+        a.stats.align = clamp2(a.stats.align + 2);
+        a.stats.teth = clamp2(a.stats.teth + 1);
+        a.stats.lib = clamp2(a.stats.lib - 2);
+      },
+      build() {
+        const ms = [];
+        ms.push(box(1.3, 2.6, 1.3, 5521451, 13.6, 1.3, -13.5));
+        ms.push(box(0.9, 1.9, 0.06, 2762274, 13.6, 1.15, -12.83));
+        ms.push(box(0.1, 0.1, 0.06, 13205061, 13.25, 2.2, -12.82));
+        this.obs = [addObstacle(13.6, -13.5, 1.4, 1.4)];
+        return ms;
+      }
+    },
     vending: {
       name: "Vending Machine",
       cost: 0,
@@ -22162,7 +22274,7 @@ void main() {
     neutral: [
       "The kerning on the new sympathy line is off. Nobody else can see it. My curse.",
       "Watered the fern. The fern persists. We persist together.",
-      "Tuesday has a texture. Today's texture is 'damp cardboard.'",
+      "Day 2 has a texture. Today's texture is 'damp cardboard.'",
       "I alphabetized the glue. It's a rich inner life, okay.",
       "Somebody microwaved fish again. Investigation ongoing. Trust no one.",
       "The stapler and I have history. Long story. Two reorgs.",
@@ -22173,7 +22285,7 @@ void main() {
       "Nothing rhymes with 'condolences.' Nothing.",
       "Third birthday card today with a golf pun. I contain multitudes.",
       "This watercolor sunset is my best work and it will live inside an envelope.",
-      "Doug Sr. used to bring donuts on Fridays.",
+      "Doug Sr. used to bring donuts. No occasion. Just donuts. Imagine.",
       "Glue viscosity is a lifestyle, not a job.",
       "'Get well soon.' Ambitious, given the healthcare plan.",
       "Someone bought 300 sympathy cards at once and I have questions.",
@@ -22230,12 +22342,12 @@ void main() {
       "Even my screensaver is on-brand now."
     ],
     lowBand: [
-      "I finished a card, blinked, and it was Thursday.",
+      "I finished a card, blinked, and the week was over.",
       "My to-do list has a to-do list. They're breeding.",
       "Coffee stopped working around ten. Now I run on spite and font muscle-memory.",
       "I said 'per my last email' OUT LOUD. To my spouse.",
       "There's a version of me that took lunch today. I salute her.",
-      "My eye has been twitching in iambic pentameter since Monday.",
+      "My eye has been twitching in iambic pentameter since Day 1.",
       "Coffee has stopped working. Escalating to espresso.",
       "I dreamed in rhyming couplets. Send help.",
       "Blinked and it was 4pm. Blinked again. Still 4pm?",
@@ -22290,9 +22402,13 @@ void main() {
       "Sold a card that made a man cry in the shop. We're told this is good.",
       "New kombucha flavor dropped. Morale: measurable.",
       "Wrote a get-well card so good the flu should apologize.",
-      "Payday Friday plus dog Tuesday. Civilization peaked.",
+      "Payday plus dog day. Civilization peaked.",
       "My pun made Ines snort. INES. The professional.",
       "The new lamp situation? Cozy. I said what I said.",
+      "The wall clock ticks like it's judging. It is 2:40. It is ALWAYS somehow 2:40.",
+      "Watched the sky go grey to greyer today. The window is basically a mood ring for the building.",
+      "There's a sheet of paper on my desk from three days ago. We've grown attached. I can't file him now.",
+      "Five o'clock hits and this place empties like someone pulled a plug. I respect it. I AM it.",
       "Today I helped a stranger say 'I'm sorry.' That's the job. It's a good job."
     ]
   };
@@ -22309,6 +22425,9 @@ void main() {
       "Performance review szn. My binder has TABS."
     ],
     cynic: [
+      "The lights click off the second the last person leaves. Even the building can't wait to stop pretending.",
+      "I counted: it takes me nineteen steps to reach the coffee. Every one of them is on camera. Probably.",
+      "New sheet of paper from the printer, still warm. Warmest thing in this office, honestly.",
       "I've survived four pivots. I'm basically load-bearing at this point.",
       "Morale is fine. Morale is ALWAYS fine. That's what worries me.",
       "I've survived three re-orgs. I'm basically a cockroach with opinions.",
@@ -22319,7 +22438,7 @@ void main() {
       "Loyalty is a currency. Mine floats.",
       "I do exactly what the number says. The number and I are professionals.",
       "New badge lanyard? Cute. Doesn't vest.",
-      "Market rate for my role went up 4% on Tuesday. I notice things.",
+      "Market rate for my role went up 4% last week. I notice things.",
       "Loyalty is a pricing error.",
       "Two more quarters and this r\xE9sum\xE9 line matures like a bond.",
       "I don't burn bridges. I just keep the receipts for the tolls."
@@ -22345,7 +22464,7 @@ void main() {
       "I have a decoy spreadsheet. It's beautiful. It does nothing."
     ],
     idealist: [
-      "A card is a tiny promise that somebody matters. I still believe that. Mostly. On Tuesdays.",
+      "A card is a tiny promise that somebody matters. I still believe that. Mostly. On good days.",
       "We could be GOOD, you know. It's right there. Goodness. Adjacent.",
       "I pitched a kindness line again. Fourth time. Hope is a renewable resource.",
       "Somewhere out there, our card is on a fridge, doing its quiet work.",
@@ -22441,6 +22560,72 @@ void main() {
     ]
   };
   var POLICY_LINES = {
+    microbreaks: {
+      vet: [
+        "Fourteen minutes. I've had meetings about meetings longer than my entire biological allowance.",
+        "I used to take walks to think. Now I think about the walk I'm not taking."
+      ],
+      new: ["I ran to the bathroom today. Ran. I'm twenty-six and I sprint to plumbing now."],
+      any: [
+        "The chime went off while I was mid-sip. I finished the sip. Outlaw behavior.",
+        "Hank doesn't drink water anymore. He calls it 'banking minutes.' His lips are a warning."
+      ]
+    },
+    bereavement: {
+      vet: [
+        "I rated my grief a three. It was a five. The form rounds down. So do we, apparently.",
+        "Twenty-two years here and the condolence card was auto-signed. I recognized the font before the sentiment."
+      ],
+      new: ["There's a MATRIX. My grandmother is worth 1.5 days. She raised me. 1.5."],
+      any: [
+        "We make sympathy cards. We MAKE them. Form G-11 asks for a receipt of loss.",
+        "Section 4: 'expected productivity dip.' I wrote 'yes.' It was returned for being non-numeric."
+      ]
+    },
+    chairtiers: {
+      vet: [
+        "I sat in that chair for eleven years. Now it's a 'performance incentive.' It has my shape in it. It misses me.",
+        "You can read the org chart from behind now. Just count the lumbar."
+      ],
+      new: ["The stool is 'an active-core opportunity.' My core is active. My core is furious."],
+      any: [
+        "Bernard got lumbar support at a CEREMONY. There was applause. For foam.",
+        "The stools wobble. On purpose, I think. Ambition via instability."
+      ]
+    },
+    paydayflex: {
+      vet: [
+        "I've seen this before, at the mill. They called it scrip then. The brochure's nicer now. The math isn't.",
+        "Colleague Interest. COLLEAGUE interest. My colleagues don't charge me 9 percent."
+      ],
+      new: ["I drew payday early once. ONCE. The sunrise on that brochure haunts me."],
+      any: [
+        "Three people literally owe the office money now. The office. The place we come to earn it.",
+        "The dashboard calls it 'loyalty velocity.' Debt. The word is debt."
+      ]
+    },
+    ghostpost: {
+      vet: [
+        "My own job is on the board. Better pay, same title. I'm apparently my own backup plan.",
+        "The mailbox is named 'Taylor Voss.' There is no Taylor Voss. Taylor Voss has 41 applicants."
+      ],
+      new: ["I applied to my own role as a joke. Rejection came in four minutes. FOUR MINUTES."],
+      any: [
+        "The openings are 'aspirational.' So is my continued employment, per the break-room board.",
+        "Investors saw twelve openings and clapped. We saw twelve openings and updated our r\xE9sum\xE9s."
+      ]
+    },
+    sentiment: {
+      vet: [
+        "They swear it doesn't record words. Just 'texture.' My texture is none of their business.",
+        "The office is a weather map now. I'm the low-pressure system. I've made peace with it."
+      ],
+      new: ["I laughed at something today and watched a graph move. I'm never laughing again."],
+      any: [
+        "The silence after all-hands registered as 'notable.' NOTABLE. It was a eulogy and they metered it.",
+        "Ruth's desk reads as 'a warning system.' Ruth has never been prouder."
+      ]
+    },
     predawn: {
       vet: [
         "Four A.M. I've seen this office in the dark now. It looks honest. That's the worst part.",
@@ -22462,12 +22647,12 @@ void main() {
     },
     tribunal: {
       vet: ["I've been deposed. DEPOSED. About a sigh. The sigh was entered into evidence.", "The gavel is a stapler in a sock and somehow that makes it worse."],
-      new: ["I got cited for 'insufficient enthusiasm, second degree.' There are DEGREES.", "My hearing is Thursday. My crime is a face I made."],
+      new: ["I got cited for 'insufficient enthusiasm, second degree.' There are DEGREES.", "My hearing is Day 3. My crime is a face I made."],
       any: ["The docket is posted by the cooler. We read it like obituaries.", "Appeals cost $50. Innocence costs more.", "Dennis bailiffs under protest. The protest is also on the docket now.", "Verdict came back: mandatory gratitude, two weeks.", "I testified against a MOOD today."]
     },
     ghostshift: {
       vet: ["There's a shift that isn't on any schedule. I know because I WORK it.", "The shredder runs at midnight. It's the only honest hour this place has."],
-      new: ["Do I get paid for the night thing? The answer was a wink. A WINK is not a currency.", "The timesheet for Tuesday night doesn't exist. Neither, officially, did I."],
+      new: ["Do I get paid for the night thing? The answer was a wink. A WINK is not a currency.", "The timesheet for last night doesn't exist. Neither, officially, did I."],
       any: ["Susan II ate the logs again. Good shredder. Terrifying shredder.", "I worked nine hours that legally never happened. My back disagrees with the law.", "Two sets of books. I'm in the fictional one.", "The night shift has no light in the kitchen. 'Lights are evidence.'"]
     },
     compound: {
@@ -22517,7 +22702,7 @@ void main() {
     },
     pto: {
       vet: ["Unlimited vacation? We had *actual* vacation. It had numbers.", "In '09 I took two full weeks. TWO. It was called 'vacation.'"],
-      any: ["I have unlimited vacation and a 'coverage guilt' rash.", "Gary requested Christmas. CHRISTMAS. The audacity, says the form.", "Unlimited PTO. So... zero PTO with extra steps?", "Asked to take Friday off. Got a 'let's circle back.'", "Requested a day off. The form asked for a 'coverage impact narrative.'", "Unlimited, huh. Hank requested a Tuesday and it's been 'pending' for a week."],
+      any: ["I have unlimited vacation and a 'coverage guilt' rash.", "Gary requested Christmas. CHRISTMAS. The audacity, says the form.", "Unlimited PTO. So... zero PTO with extra steps?", "Asked to take Day 3 off. Got a 'let's circle back.'", "Requested a day off. The form asked for a 'coverage impact narrative.'", "Unlimited, huh. Hank requested one single day and it's been 'pending' for a week."],
       neu: ["Unlimited PTO sounds amazing?? Why is everyone laughing.", "I'm going to take SO many trips! ...right?"]
     },
     brandedfriday: {
@@ -22637,7 +22822,7 @@ void main() {
       ["I hit my number early.", "Show-off.", "I'm buying the good coffee to celebrate.", "Okay show-off, I'm coming."],
       ["Saw our anniversary card at the pharmacy.", "Which one?", "Top shelf. TOP SHELF.", "We're basically famous."],
       ["Bernard hummed at his desk today.", "HUMMED? Bernard?", "Full melody. Witnesses everywhere."],
-      ["Friday tomorrow.", "Friday tomorrow.", "We say it like a prayer.", "It IS a prayer."],
+      ["Last day tomorrow.", "Last day tomorrow.", "We say it like a prayer.", "It IS a prayer."],
       ["Card of the month! You saw?", "Framed it. Sent a photo to my mom."],
       ["This place isn't so bad lately, right?", "Shh. Say it out loud and it changes."],
       ["The good pens came in.", "The GOOD good pens?", "0.5 millimeter. We feast."],
@@ -22663,7 +22848,7 @@ void main() {
       ["Last cup's yours.", "No, yours.", "We'll split it like adults.", "...it's mostly sludge.", "Adults drink sludge."]
     ],
     cooler: [
-      ["Long week.", "It's Tuesday.", "...long Tuesday."],
+      ["Long week.", "It's Day 1.", "...long Day 1."],
       ["Heard anything?", "Everything. Later. Different corner."]
     ],
     lunch: [
@@ -22794,7 +22979,7 @@ void main() {
     Kevin: [
       "Interesting search history. Professionally speaking. Just... interesting.",
       "Your machine talks to me at night. Kidding. It's mostly logs. Mostly.",
-      "{E}, your badge pinged oddly on Tuesday. Just... noting it. Aloud.",
+      "{E}, your badge pinged oddly on Day 2. Just... noting it. Aloud.",
       "Don't mind me, {E}. The sensors mind you for me."
     ],
     Frank: [
@@ -23024,6 +23209,9 @@ void main() {
   var ARCH_HOT = {
     // spoken only after the consultant has actually done something
     cynic: [
+      "The lights click off the second the last person leaves. Even the building can't wait to stop pretending.",
+      "I counted: it takes me nineteen steps to reach the coffee. Every one of them is on camera. Probably.",
+      "New sheet of paper from the printer, still warm. Warmest thing in this office, honestly.",
       "Oh, a new initiative. Let me get my bingo card.",
       "The all-hands said 'family' six times. Start counting spoons.",
       "Morale initiative incoming. I can smell the lamination.",
@@ -23297,6 +23485,8 @@ void main() {
     }
   ];
   var AMEN_WEIGHT = {
+    cooler: (a) => a.noWater ? 0 : 1,
+    // the Hydration Curve: the bottom of the bell goes thirsty
     coffee: (a) => hasMug(a) ? 0 : a.stats.band < 45 ? 3.5 : 2.2,
     // one live coffee per person
     lunch: (a, ctx) => ctx.lunchtime ? 4 : 0.5,
@@ -23321,8 +23511,14 @@ void main() {
     // the table (players face it from the ends)
     couch: { x: 8.5, z: 13.5 },
     // turn toward the couch
-    zen: { x: -9, z: 12.8 }
+    zen: { x: -9, z: 12.8 },
     // the mat
+    mist: { x: -13, z: -0.7 },
+    // the canister
+    shredder: { x: 1.35, z: -12.7 },
+    // the intake slot
+    boothx: { x: 13.6, z: -13.5 }
+    // the booth door
   };
   var AMEN_CARRY = {
     coffee: (a) => giveMug(a)
@@ -23424,8 +23620,8 @@ void main() {
   function agentTick(a, dt) {
     if (a.state === "gone" || a.state === "home") return;
     if (a.dest === "gohome") {
-      const dd = Math.hypot(a.mesh.position.x - EXIT_DOOR.x, a.mesh.position.z - EXIT_DOOR.z);
-      if (dd < 1.7) {
+      const dd = Math.hypot(a.mesh.position.x - DOOR.x, a.mesh.position.z - DOOR.z);
+      if (dd < REACH.doorArrive) {
         a.path = [];
         a.state = "home";
         a.mesh.visible = false;
@@ -23477,7 +23673,7 @@ void main() {
     } else if (a.state === "settle") {
       const dx = a.seat.x - a.mesh.position.x, dz = a.seat.z - a.mesh.position.z;
       const d = Math.hypot(dx, dz);
-      if (d > 2.6) {
+      if (d > REACH.settleGlide) {
         startWalk(a, a.seat, "home");
         return;
       }
@@ -23551,20 +23747,19 @@ void main() {
     }
     return maxRun <= 6;
   }
-  var EXIT_DOOR = DOOR;
   function beginExodus() {
     agents.forEach((a) => {
       if (a.state === "gone" || a.state === "home") return;
       simTimeout(() => {
         if (a.state === "gone" || a.state === "home") return;
         if (a.social) endSocial(a);
-        startWalk(a, { x: EXIT_DOOR.x + (Math.random() - 0.5) * 2.4, z: EXIT_DOOR.z + Math.random() * 0.6 }, "gohome");
+        startWalk(a, { x: DOOR.x + (Math.random() - 0.5) * 2.4, z: DOOR.z + Math.random() * 0.6 }, "gohome");
       }, 300 + Math.random() * 5200);
     });
     directors.forEach((d) => {
       simTimeout(() => {
         if (d.state === "dirHomeDone") return;
-        goDir(d, { x: EXIT_DOOR.x + (Math.random() - 0.5) * 2.4, z: EXIT_DOOR.z + Math.random() * 0.6 }, "dirHome");
+        goDir(d, { x: DOOR.x + (Math.random() - 0.5) * 2.4, z: DOOR.z + Math.random() * 0.6 }, "dirHome");
       }, 1200 + Math.random() * 4800);
     });
   }
@@ -23579,7 +23774,7 @@ void main() {
     agents.forEach((a, i) => {
       if (a.state !== "home") return;
       a.mesh.visible = true;
-      a.mesh.position.set(EXIT_DOOR.x + (Math.random() - 0.5) * 0.8, 0, EXIT_DOOR.z);
+      a.mesh.position.set(DOOR.x + (Math.random() - 0.5) * 0.8, 0, DOOR.z);
       simTimeout(() => {
         if (a.state === "home") {
           a.state = "pause";
@@ -23591,7 +23786,7 @@ void main() {
     directors.forEach((d, i) => {
       if (d.state !== "dirHomeDone") return;
       d.mesh.visible = true;
-      d.mesh.position.set(EXIT_DOOR.x + (Math.random() - 0.5) * 0.8, 0, EXIT_DOOR.z);
+      d.mesh.position.set(DOOR.x + (Math.random() - 0.5) * 0.8, 0, DOOR.z);
       simTimeout(() => {
         if (d.state === "dirHomeDone") goDir(d, d.seat, "board");
       }, 600 + i * 500);
@@ -23615,7 +23810,7 @@ void main() {
   function arrive(a) {
     a.mesh.position.y = 0;
     if (a.dest === "exit") {
-      sceneG.remove(a.mesh);
+      removeBody(a);
       a.state = "gone";
       return;
     }
@@ -23877,8 +24072,8 @@ void main() {
     directors.forEach((d) => {
       if (d.state === "dirHomeDone") return;
       if (d.destState === "dirHome") {
-        const dd = Math.hypot(d.mesh.position.x - EXIT_DOOR.x, d.mesh.position.z - EXIT_DOOR.z);
-        if (dd < 1.7) {
+        const dd = Math.hypot(d.mesh.position.x - DOOR.x, d.mesh.position.z - DOOR.z);
+        if (dd < REACH.doorArrive) {
           d.path = [];
           d.state = "dirHomeDone";
           d.mesh.visible = false;
@@ -23962,7 +24157,7 @@ void main() {
         const f = d.isCEO ? -0.06 : 0;
         const tx = d.seat.x + Math.sin(d.seat.rot) * f, tz = d.seat.z + Math.cos(d.seat.rot) * f;
         const dx = tx - d.mesh.position.x, dz = tz - d.mesh.position.z, dd = Math.hypot(dx, dz);
-        if (dd > 2.6) {
+        if (dd > REACH.settleGlide) {
           goDir(d, d.seat, "board");
           return;
         }
@@ -24110,6 +24305,8 @@ void main() {
     if (!focus) return false;
     const pts = s.formation === "line" ? lineUp(focus, s.lineDir || { x: 1, z: 0 }, n) : s.points ? s.points(n, focus) : ring(focus, s.ring || 1.8, n);
     toast(s.toast, Math.max(14e3, s.dur * 550));
+    if (s.onStart) s.onStart();
+    if (s.onEnd) simTimeout(() => s.onEnd(), s.dur * 1e3);
     parts.forEach((a, i) => {
       simTimeout(() => {
         if (a.state !== "work") return;
@@ -24173,6 +24370,59 @@ void main() {
       ring: 1.9,
       toast: "There is a birthday cake at the lunch table. The candles are being counted diplomatically.",
       crowd: ["Don't ask whose birthday. Just eat.", "The frosting says 'CONGRATS' \u2014 it was on sale.", "Corner piece. I called it in WRITING."]
+    },
+    {
+      id: "quarterlyBirthday",
+      gap: 26,
+      count: 8,
+      dur: 18,
+      focus: { x: -15.5, z: 7.5 },
+      ring: 2.2,
+      cond: () => sim.day >= 6,
+      onStart() {
+        const g = new Group();
+        const tier = new Mesh(new CylinderGeometry(0.42, 0.42, 0.22, 14), M(15918032));
+        const frosting = new Mesh(new CylinderGeometry(0.43, 0.43, 0.05, 14), M(15250632));
+        frosting.position.y = 0.13;
+        const candle = new Mesh(new CylinderGeometry(0.018, 0.018, 0.16, 6), M(13205061));
+        candle.position.y = 0.24;
+        const flame = new Mesh(new SphereGeometry(0.03, 6, 5), new MeshBasicMaterial({ color: 16761963, toneMapped: false }));
+        flame.position.y = 0.34;
+        g.add(tier, frosting, candle, flame);
+        g.position.set(-15.5, 1.14, 7.5);
+        sceneG.add(g);
+        this._cake = g;
+      },
+      onEnd() {
+        if (this._cake) {
+          this._cake.removeFromParent();
+          this._cake = null;
+        }
+      },
+      toast: "The Quarterly Employee Event is underway. One cake, eleven birthdays, a banner that names no one.",
+      crowd: [
+        "Happy birthday to... us, I guess.",
+        "The cake says CONGRATULATIONS EMPLOYEE. Which one? Unclear. All? None?",
+        "They consolidated the candles too. One candle. For efficiency.",
+        "Make a wish. A collective, budget-approved wish."
+      ]
+    },
+    {
+      id: "formQueue",
+      gap: 24,
+      count: 5,
+      dur: 16,
+      focus: { x: -2.2, z: -11.6 },
+      formation: "line",
+      lineDir: { x: 1, z: 0 },
+      cond: () => sim.mirror > 0,
+      toast: "A queue has formed at the printer. Everyone is printing forms required by other forms.",
+      crowd: [
+        "I need a G-11 to justify the time I'll spend filling the G-11.",
+        "This form asks how long the form took. It's watching itself.",
+        "Page two is just the word 'initial' eleven times.",
+        "I've been in this line long enough to grieve. Good thing I have the form."
+      ]
     },
     {
       id: "fireDrill",
@@ -24547,8 +24797,8 @@ void main() {
     while (i < KEYS.length - 2 && f > KEYS[i + 1][0]) i++;
     const A = KEYS[i], B = KEYS[i + 1];
     const t2 = (f - A[0]) / Math.max(1e-4, B[0] - A[0]);
-    const sky = lerpColor(A[1], B[1], t2).clone();
-    WINDOW_PANES.forEach((m) => m.color.copy(sky));
+    lerpColor(A[1], B[1], t2);
+    WINDOW_PANES.forEach((m) => m.color.copy(_a));
     hemi.color.copy(lerpColor(A[2], B[2], t2));
     sun.color.copy(lerpColor(A[3], B[3], t2));
     const base = A[4] + (B[4] - A[4]) * t2;
@@ -24626,6 +24876,75 @@ void main() {
     5: { name: 'Tier 5 \xB7 "The Deep End"', req: 90 }
   };
   var POLICIES = [
+    {
+      id: "microbreaks",
+      name: "Micro-Break Accounting",
+      tag: "MINUTES",
+      blurb: "Away-from-desk time is now a personal daily allowance: fourteen minutes, all-inclusive. Bathroom, water, 'stretching,' existential pauses by the window. A gentle chime marks minute twelve. The chime is called Hope.",
+      fx: "Profit +5% \xB7 LIBERTY down \xB7 people learn to walk faster",
+      profit: 0.05,
+      half: 8,
+      settle: 0.3,
+      deltas: { lib: -3 },
+      choices: [
+        { label: "Honor system (audited monthly)", sub: "Trust, but with a spreadsheet behind it.", profitMul: 0.7, deltaMul: 0.6 },
+        {
+          label: "Badge-gated, to the second",
+          sub: "The bathroom door has opinions now.",
+          profitMul: 1,
+          deltaMul: 1.2,
+          fx: () => {
+            toast("Day one: Hank banks eleven minutes by not drinking water. The dashboard calls him a 'hydration optimizer.' His head hurts.");
+          }
+        }
+      ]
+    },
+    {
+      id: "bereavement",
+      name: "Bereavement Efficiency Review",
+      tag: "CONDOLENCES",
+      blurb: "Grief leave now requires Form G-11, 'Loss Impact Statement,' with a section asking the applicant to rate their expected productivity dip on a scale of one to five. The form's footer says 'We're here for you' in six-point type.",
+      fx: "Profit +3% \xB7 FAITH down \xB7 the cards we sell say we care",
+      profit: 0.03,
+      half: 10,
+      settle: 0.3,
+      deltas: { faith: -3 },
+      choices: [
+        { label: "Form required, approval generous", sub: "Everyone passes. Everyone had to ask.", profitMul: 0.7, deltaMul: 0.7 },
+        {
+          label: "Tiered by relationship proximity",
+          sub: "A matrix. There is a matrix for this now.",
+          profitMul: 1,
+          deltaMul: 1.2,
+          fx: () => {
+            toast("The matrix grants grandparents 1.5 days. Ines reads row four \u2014 'pets: see wellness portal' \u2014 and quietly laminates it for the break room, as evidence.");
+          }
+        }
+      ]
+    },
+    {
+      id: "chairtiers",
+      name: "Ergonomic Entitlement Review",
+      tag: "POSTURE",
+      blurb: "Chairs are reclassified from equipment to incentives. Top performers keep lumbar support. The middle gets 'task seating.' The bottom band receives posture stools \u2014 described in the memo as 'an active-core opportunity.'",
+      fx: "Profit +4% \xB7 BANDWIDTH down \xB7 the org chart becomes visible from behind",
+      profit: 0.04,
+      half: 8,
+      settle: 0.35,
+      deltas: { band: -3 },
+      choices: [
+        { label: "Quiet rollout, attrition-based", sub: "Chairs vanish when people do. Nobody mentions it.", profitMul: 0.7, deltaMul: 0.7 },
+        {
+          label: "Annual Chair Ceremony",
+          sub: "Public. Doug hands out the good ones like medals.",
+          profitMul: 1,
+          deltaMul: 1.3,
+          fx: () => {
+            toast("The first Chair Ceremony runs forty minutes. Bernard receives lumbar support to applause. Ruth, on a stool, applauds with her whole face saying something else.");
+          }
+        }
+      ]
+    },
     {
       id: "snacklytics",
       name: "Snack Analytics Pilot",
@@ -24768,6 +25087,78 @@ void main() {
       ]
     },
     // ============ TIER 2 — "PERFORMANCE CULTURE" ============
+    {
+      id: "paydayflex",
+      tier: 2,
+      name: "PaydayFlex\u2122",
+      tag: "ADVANCE",
+      blurb: "Employees may draw tomorrow's wages today, at a 'friendly internal rate' the brochure calls Colleague Interest. The brochure has a sunrise on it. Nobody who reads the rate looks at the sunrise.",
+      fx: "Profit +8% \xB7 TETHER UP \xB7 FAITH down \xB7 they owe the office now",
+      profit: 0.08,
+      half: 7,
+      settle: 0.4,
+      deltas: { teth: 5, faith: -4 },
+      choices: [
+        { label: "Modest rate, capped draws", sub: "A leash, but padded.", profitMul: 0.7, deltaMul: 0.7 },
+        {
+          label: "Compounding, auto-renewed",
+          sub: "The sunrise brochure does not mention compounding.",
+          profitMul: 1.2,
+          deltaMul: 1.3,
+          fx: () => {
+            toast("Three people are now, mathematically, employees of their own paychecks. The dashboard tracks 'loyalty velocity.' It is up.");
+          }
+        }
+      ]
+    },
+    {
+      id: "ghostpost",
+      tier: 2,
+      name: "Aspirational Headcount",
+      tag: "OPENINGS",
+      blurb: "The company posts job openings it will never fill. Investors see growth. Staff see their own roles listed at slightly better pay, 'for benchmarking.' Applications route to a mailbox named after a person who does not exist.",
+      fx: "Profit +6% \xB7 FAITH down \xB7 everyone learns they are replaceable, hypothetically",
+      profit: 0.06,
+      half: 8,
+      settle: 0.4,
+      deltas: { faith: -4, align: -2 },
+      choices: [
+        { label: "External-only visibility", sub: "The staff never see the listings. Probably.", profitMul: 0.7, deltaMul: 0.6 },
+        {
+          label: "Pin them to the break-room board",
+          sub: "Motivation via existential preview.",
+          profitMul: 1,
+          deltaMul: 1.3,
+          fx: () => {
+            toast("Hank applies to his own job under a light pseudonym. He does not get an interview. He takes it exactly as well as you'd think.");
+          }
+        }
+      ]
+    },
+    {
+      id: "sentiment",
+      tier: 2,
+      name: "Ambient Sentiment Capture",
+      tag: "LISTENING",
+      blurb: "Small ceiling microphones sample tone \u2014 not words, the memo stresses, only 'emotional texture.' Laughter, sighs, the specific silence after announcements. The dashboard renders the office as a weather map of feelings.",
+      fx: "Profit +7% \xB7 LIBERTY down \xB7 the sigh becomes a metric",
+      profit: 0.07,
+      half: 7,
+      settle: 0.4,
+      deltas: { lib: -4 },
+      choices: [
+        { label: "Aggregate weather only", sub: "Tuesday: overcast, chance of morale.", profitMul: 0.7, deltaMul: 0.7 },
+        {
+          label: "Per-desk sentiment scores",
+          sub: "Ruth's desk registers as 'a warning system.'",
+          profitMul: 1.1,
+          deltaMul: 1.3,
+          fx: () => {
+            toast("The map shows a permanent low-pressure system over the boardroom. Engineering insists the sensor is fine. The sensor is fine.");
+          }
+        }
+      ]
+    },
     {
       id: "climate",
       tier: 2,
@@ -25727,6 +26118,19 @@ void main() {
   var anyAlive = () => agents.filter((a) => a.state !== "gone");
 
   // src/content/events.js
+  function spawnDeskStar(a) {
+    const s = new Mesh(new OctahedronGeometry(0.14), new MeshBasicMaterial({ color: 15254346, toneMapped: false }));
+    s.position.set(a.seat.x + 0.7, 1.25, a.seat.z - 0.6);
+    sceneG.add(s);
+    const t0 = performance.now();
+    const spin = () => {
+      if (!s.parent) return;
+      s.rotation.y = (performance.now() - t0) * 1e-3;
+      requestAnimationFrame(spin);
+    };
+    spin();
+    simTimeout(() => s.removeFromParent(), 42e4);
+  }
   function recolor(group, fn) {
     group.traverse((m) => {
       if (m.isMesh) {
@@ -25841,8 +26245,8 @@ void main() {
           }
         },
         {
-          name: "Cold Pizza Fridays",
-          sub: "Thursday's pizza, resold Friday at a discount. +$600 \xB7 FAITH\u2212",
+          name: "Cold Pizza Day 3s",
+          sub: "Day 2's pizza, resold on Day 3 at a discount. +$600 \xB7 FAITH\u2212",
           fx: () => {
             sim.profitToday += 600;
             anyAlive().forEach((x) => {
@@ -25904,7 +26308,7 @@ void main() {
       body: 'Doug arrives holding a sombrero he clearly bought on the way in.<br><br><i>"TACOS. I had a vision seizure at a food truck. Culture is food. I want taco infrastructure. TODAY. This hat is non-negotiable."</i>',
       schemes: [
         {
-          name: "Fiesta Compliance Fridays",
+          name: "Fiesta Compliance Day",
           sub: "Mandatory weekly fiesta, attendance logged. \u2212$400 \xB7 LIBERTY\u2212 \xB7 BANDWIDTH\u2212",
           fx: () => {
             sim.profitToday -= 400;
@@ -26770,6 +27174,516 @@ void main() {
   var EVENTS = [
     // ================= EXPANSION: floor stories =================
     {
+      id: "voicesII",
+      once: true,
+      cond: () => flags.suggestion === "framed" && sim.day >= flags.day0suggest + 3,
+      build() {
+        return {
+          title: "VOICES II",
+          body: "Since the framing of the chair note, seventeen new suggestions have arrived. Facilities proposes a gallery wall: <i>VOICES II</i>. Framing budget: $60 per voice. Implementing any suggestion: not budgeted.<br><br>The newest note reads: <i>'please stop framing these.'</i>",
+          choices: [
+            {
+              label: "Frame that one too",
+              sub: "It's the centerpiece, honestly.",
+              fn: () => {
+                sim.profitToday -= 60;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 3));
+                heatUp(1);
+                toast("'please stop framing these' hangs center-wall, lit from above. Visitors call the collection 'brave.' The staff calls it a hostage wall.");
+              }
+            },
+            {
+              label: "Quietly implement ONE suggestion",
+              sub: "Break the pattern. Terrify everyone.",
+              fn: () => {
+                sim.profitToday -= 250;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith + 5));
+                toast("The break room gets a second kettle shelf. Nobody claims credit. The floor spends a full day looking for the trap.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "dougDayArrives",
+      once: true,
+      cond: () => flags.birthday === "dougday" && sim.day >= flags.day0bday + 4,
+      build() {
+        return {
+          title: "Doug Day",
+          body: "It is Doug Day. There is a cake shaped like Doug. There is a slideshow titled 'A Life (So Far).' Attendance is being taken by Dennis with a clipboard and an expression of practiced neutrality.<br><br>Doug would like someone to give the toast. Doug is looking at you.",
+          choices: [
+            {
+              label: "Give a stirring toast",
+              sub: "Sell it. Sell all of it.",
+              fn: () => {
+                sim.ceo = clamp2(sim.ceo + 10);
+                anyAlive().forEach((x) => x.stats.align = clamp2(x.stats.align - 4));
+                toast("You describe Doug as 'a lighthouse.' Doug wipes a tear with a napkin bearing his own face. The floor watches you differently now.");
+              }
+            },
+            {
+              label: "Delegate the toast to Ruth",
+              sub: "A gamble the size of a career.",
+              fn: () => {
+                heatUp(2);
+                sim.ceo = clamp2(sim.ceo - 4);
+                anyAlive().forEach((x) => x.stats.align = clamp2(x.stats.align + 3));
+                toast("Ruth toasts: 'To Doug. Who is, and I want the record to show I chose this word carefully... present.' The room drinks. Doug beams. He heard 'a present.'");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "amnestyShelf",
+      once: true,
+      cond: () => flags.kettle === "confiscated" && sim.day >= flags.day0kettle + 3,
+      build() {
+        return {
+          title: "The Amnesty Shelf Is Full",
+          body: "Since the kettle, the Amnesty Shelf has become a monument. A lamp. A fan. A photo of a dog in a frame ('personal morale device'). Dolores visits the kettle on her break. She doesn't touch it. She just stands there. Others have started joining her.<br><br>It is becoming, Dennis says quietly, 'a thing.'",
+          choices: [
+            {
+              label: "Return everything, no memo",
+              sub: "The shelf empties overnight. Nobody speaks of it.",
+              fn: () => {
+                anyAlive().forEach((x) => {
+                  x.stats.faith = clamp2(x.stats.faith + 6);
+                  x.stats.lib = clamp2(x.stats.lib + 4);
+                });
+                if (doloresKettle) {
+                  const ds = byName("Dolores");
+                  if (ds && ds.seat) doloresKettle.position.set(ds.seat.x + 0.55, 0.98, ds.seat.z - 0.7);
+                }
+                toast("Morning: the kettle is back, warm by nine. The shelf holds only a note in Dolores's hand: 'thank you for the loan.'");
+              }
+            },
+            {
+              label: "Glass-case the shelf as 'Compliance History'",
+              sub: "A museum of small confiscations.",
+              fn: () => {
+                sim.profitToday += 150;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 6));
+                heatUp(1);
+                toast("The case is lit like a jewelry display. The dog photo gets a placard: EXHIBIT C. People bring their kids on family day and explain it in low voices.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "legacyHearing",
+      once: true,
+      cond: () => flags.kettle === "legacy" && sim.day >= flags.day0kettle + 3,
+      build() {
+        return {
+          title: "The Legacy Appliance Board",
+          body: "Your kettle precedent has matured into an institution. The Legacy Appliance Board (Dolores, chair) meets Day 3s to hear applications. Today's docket: a bread machine (year 9), a lava lamp (sentimental), and Gordon's massage chair (arrived yesterday, application backdated).<br><br>Dolores requests your ruling on Gordon.",
+          choices: [
+            {
+              label: "Deny Gordon (the backdating is shameless)",
+              sub: "The Board's integrity holds.",
+              fn: () => {
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith + 4));
+                toast("DENIED, stamped in red. Gordon appeals. The appeal form was written by Dolores. It is seven pages. He withdraws.");
+              }
+            },
+            {
+              label: "Approve Gordon (executives grease wheels)",
+              sub: "The precedent curdles publicly.",
+              fn: () => {
+                sim.ceo = clamp2(sim.ceo + 3);
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 5));
+                toast("Approved. The massage chair hums behind glass office walls. The Legacy Board resigns as one. Dolores leaves the stamp on your desk, ink side down.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "nickelDelivery",
+      once: true,
+      cond: () => flags.kettle === "licensed" && sim.day >= flags.day0kettle + 2,
+      build() {
+        return {
+          title: "The Nickels",
+          body: "Month one of the kettle license. Dolores has delivered forty nickels to Dennis's desk in a small floral bag, as threatened. Dennis has not touched it. It sits there. Everyone who passes his desk looks at it. The bag has become the loudest object in the office.<br><br>Dennis asks, formally, what he should do with the bag.",
+          choices: [
+            {
+              label: "Bank it (revenue is revenue)",
+              sub: "Two dollars, formally recognized.",
+              fn: () => {
+                sim.profitToday += 2;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 4));
+                heatUp(1);
+                toast("The nickels enter the ledger as 'appliance income.' Frank creates a line item. The line item is named. It is named 'Dolores.'");
+              }
+            },
+            {
+              label: "Refund the license, keep the story",
+              sub: "Retreat, dressed as magnanimity.",
+              fn: () => {
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith + 3));
+                toast("License voided 'upon review.' Dolores accepts the bag back without a word, and makes tea for the whole pod. It is, everyone agrees, excellent tea.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "eotm",
+      once: true,
+      cond: () => sim.day >= 2,
+      build() {
+        return {
+          title: "Employee of the Month",
+          body: "Dennis proposes an Employee of the Month program. He has already bought the plaque frame. It is, he admits, from the Amnesty Shelf aesthetic school: brushed steel, hungry for a name.<br><br>How shall recognition work at Hartfelt?",
+          choices: [
+            {
+              label: "Real award: $200 bonus + the plaque",
+              sub: "Sincere. Expensive. Suspicious, at first.",
+              fn: () => {
+                sim.profitToday -= 200;
+                const top = anyAlive().sort((x, y) => y.stats.align - x.stats.align)[0];
+                if (top) {
+                  top.stats.faith = clamp2(top.stats.faith + 8);
+                  top.stats.align = clamp2(top.stats.align + 4);
+                  anyAlive().forEach((x) => {
+                    if (x !== top) x.stats.faith = clamp2(x.stats.faith + 2);
+                  });
+                  spawnDeskStar(top);
+                  say(top, "I got... recognized? With money? Is this a test.", false, 5, true);
+                  toast(top.n + " is Employee of the Month. A small gold star appears at their desk. People keep walking past it slowly.");
+                }
+              }
+            },
+            {
+              label: "Plaque only ('recognition IS the reward')",
+              sub: "Free. Hollow. On-brand.",
+              fn: () => {
+                const top = anyAlive().sort((x, y) => y.stats.align - x.stats.align)[0];
+                if (top) {
+                  top.stats.align = clamp2(top.stats.align + 3);
+                  top.stats.faith = clamp2(top.stats.faith - 2);
+                  spawnDeskStar(top);
+                  toast(top.n + "'s name enters the frame. The memo explains that 'visibility is the new bonus.' The star on their desk is, on inspection, plastic.");
+                }
+              }
+            },
+            {
+              label: "Doug awards it to Doug",
+              sub: "For vision. He was very clear about the criteria.",
+              fn: () => {
+                sim.ceo = clamp2(sim.ceo + 8);
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 4));
+                toast("Employee of the Month: Doug Hartman Jr. The plaque hangs in his office, visible through the glass, angled outward.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "gemProgram",
+      once: true,
+      cond: () => sim.day >= 4 && sim.mirror >= 8,
+      build() {
+        return {
+          title: "The Gem Program",
+          body: "A points system: employees earn <b>Gems\u2122</b> for 'observed excellence.' Gems are redeemable at the vending machine. The exchange rate is printed nowhere. The gems are printed on cardstock.<br><br>Frank asks how Gems should relate to actual money.",
+          choices: [
+            {
+              label: "Gems supplement pay",
+              sub: "A garnish of whimsy on real wages.",
+              fn: () => {
+                sim.profitToday -= 150;
+                anyAlive().forEach((x) => {
+                  x.stats.align = clamp2(x.stats.align + 3);
+                  x.stats.faith = clamp2(x.stats.faith + 2);
+                });
+                toast("First redemption: Ines trades four Gems for a mystery bar. The transaction takes both parties a moment of genuine delight. Frank logs the moment as 'engagement.'");
+              }
+            },
+            {
+              label: "Gems replace this quarter's raise pool",
+              sub: "Compensation, but crafty.",
+              fn: () => {
+                sim.profitToday += 900;
+                sim.indivRaises = 0;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 6));
+                toast("The raise pool becomes 4,000 Gems. Ruth calculates the implied exchange rate on the whiteboard, shows her work, and writes 'INSULTING' as the units.");
+              }
+            },
+            {
+              label: "Gems expire weekly",
+              sub: "Urgency-based gratitude.",
+              fn: () => {
+                sim.profitToday += 300;
+                anyAlive().forEach((x) => {
+                  x.stats.lib = clamp2(x.stats.lib - 3);
+                  x.stats.band = clamp2(x.stats.band - 2);
+                });
+                toast("Sunday midnight: 212 Gems evaporate. Hank sets an alarm for 11:50 PM titled 'SPEND JOY.' This is his life now.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "hydrationCurve",
+      once: true,
+      cond: () => sim.day >= 6 && sim.mirror >= 25,
+      build() {
+        return {
+          title: "The Hydration Curve",
+          body: "The consultant literature is unanimous: rankings need consequences. Proposal: employees are placed on a bell curve monthly. The top quintile receives sparkling water. The middle receives the cooler, as before.<br><br>The bottom quintile receives <i>'an opportunity to want it more.'</i> The cooler will not recognize their badges.",
+          choices: [
+            {
+              label: "Full curve, effective today",
+              sub: "The thirstiest incentive in the literature.",
+              fn: () => {
+                sim.profitToday += 700;
+                heatUp(2);
+                const ranked = anyAlive().sort((x, y) => x.stats.align - y.stats.align);
+                const cut = Math.max(1, Math.floor(ranked.length * 0.2));
+                ranked.slice(0, cut).forEach((x) => {
+                  x.noWater = true;
+                  x.stats.faith = clamp2(x.stats.faith - 10);
+                  x.stats.lib = clamp2(x.stats.lib - 6);
+                  say(x, "The cooler beeped at me. Beeped. At ME.", false, 5, true);
+                });
+                ranked.slice(cut).forEach((x) => x.stats.faith = clamp2(x.stats.faith - 3));
+                toast("The bottom quintile's badges now bounce off the cooler. Someone has already left a full cup on the counter, anonymously, like contraband kindness.");
+              }
+            },
+            {
+              label: "Curve the sparkling only",
+              sub: "Status via bubbles. Nobody goes without.",
+              fn: () => {
+                sim.profitToday += 200;
+                anyAlive().forEach((x) => x.stats.align = clamp2(x.stats.align - 2));
+                toast("Flat water for all; carbonation for the elect. The sparkling shelf has a small brass rail now. It didn't need one. That's the point.");
+              }
+            },
+            {
+              label: "Refuse: water is water",
+              sub: "Doug will hear about this restraint.",
+              fn: () => {
+                sim.ceo = clamp2(sim.ceo - 5);
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith + 4));
+                toast("You table the curve. Doug circles 'HYDRATION MEANS HUNGER?' on the whiteboard twice, then wanders off. The cooler hums on, democratic.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "presidentsClub",
+      once: true,
+      cond: () => sim.day >= 8 && sim.mirror >= 15,
+      build() {
+        return {
+          title: "President's Club",
+          body: "An elite recognition tier for the quarter's top performer. The prize, per Doug's own memo: <i>'a full working lunch with Doug, weekly, indefinitely.'</i><br><br>Doug is thrilled. The floor has read the memo very carefully, twice, looking for an exit.",
+          choices: [
+            {
+              label: "Launch as designed",
+              sub: "The prize is Doug. Forever.",
+              fn: () => {
+                sim.ceo = clamp2(sim.ceo + 8);
+                const top = anyAlive().sort((x, y) => y.stats.align - x.stats.align)[0];
+                if (top) {
+                  top.stats.band = clamp2(top.stats.band - 8);
+                  top.stats.align = clamp2(top.stats.align - 4);
+                  say(top, "I won. I... won.", false, 5, true);
+                  toast(top.n + " has won President's Club. Their calendar now contains a weekly recurring event with no end date. The subject line is 'US.'");
+                }
+              }
+            },
+            {
+              label: "Quietly make the prize a paid day off",
+              sub: "Doug must never know the prize changed.",
+              fn: () => {
+                sim.profitToday -= 300;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith + 4));
+                toast("The 'lunch' is now a day off, listed in the system as 'Executive Immersion (Offsite) (Very Offsite).' Doug believes the winners are simply shy.");
+              }
+            },
+            {
+              label: "Make it opt-in",
+              sub: "Watch precisely nobody opt in.",
+              fn: () => {
+                anyAlive().forEach((x) => x.stats.lib = clamp2(x.stats.lib + 2));
+                sim.ceo = clamp2(sim.ceo - 3);
+                toast("Enrollment: zero. Doug interprets this as humility and is moved. A second memo praises the floor's 'quiet hunger.'");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "suggestionBox",
+      once: true,
+      cond: () => sim.day >= 3,
+      build() {
+        return {
+          title: "The Suggestion Box Has Produced",
+          body: "The suggestion box \u2014 installed in 1994, emptied never \u2014 has received its first note in years. Unfolded, in careful pencil: <i>'maybe more chairs?'</i><br><br>Dennis is holding it like evidence. The floor is watching you read it.",
+          choices: [
+            {
+              label: "Frame it in the lobby as 'Employee Voice'",
+              sub: "The note becomes art. The chairs remain theoretical.",
+              fn: () => {
+                sim.profitToday += 200;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 3));
+                flags.suggestion = "framed";
+                flags.day0suggest = sim.day;
+                toast("The note hangs in a brushed-steel frame titled VOICES. Beneath it, a plaque: 'We hear you.' There are no new chairs.");
+              }
+            },
+            {
+              label: "Actually buy two chairs",
+              sub: "Cost. Morale. Confusion.",
+              fn: () => {
+                sim.profitToday -= 350;
+                anyAlive().forEach((x) => {
+                  x.stats.faith = clamp2(x.stats.faith + 4);
+                  x.stats.band = clamp2(x.stats.band + 2);
+                });
+                flags.suggestion = "chairs";
+                flags.day0suggest = sim.day;
+                toast("Two chairs arrive. The floor is unsettled by the compliance. Ruth checks the chairs for microphones. Twice.");
+              }
+            },
+            {
+              label: "Install a second suggestion box for suggestions about the box",
+              sub: "Recursive listening.",
+              fn: () => {
+                heatUp(1);
+                anyAlive().forEach((x) => x.stats.lib = clamp2(x.stats.lib - 2));
+                flags.suggestion = "meta";
+                flags.day0suggest = sim.day;
+                toast("The meta-box fills within a day. Every note is about the first box. One is just a drawing of a chair, weeping.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "birthdayConsolidation",
+      once: true,
+      cond: () => sim.day >= 5,
+      build() {
+        return {
+          title: "Birthday Consolidation",
+          body: "Facilities notes that individual birthday celebrations cost 40 productive minutes each. Proposal: one quarterly ceremony, one cake, one banner reading <i>CONGRATULATIONS EMPLOYEE</i>.<br><br>The cake vendor offers a discount for ordering four identical cakes a year in advance.",
+          choices: [
+            {
+              label: "Approve the Quarterly Employee Event",
+              sub: "Efficient. Haunted.",
+              fn: () => {
+                sim.profitToday += 600;
+                anyAlive().forEach((x) => x.stats.faith = clamp2(x.stats.faith - 4));
+                flags.birthday = "quarterly";
+                flags.day0bday = sim.day;
+                toast("The first ceremony honors eleven birthdays at once. The cake says CONGRATULATIONS EMPLOYEE. Someone quietly sings the song with no name in it.");
+              }
+            },
+            {
+              label: "Keep birthdays, remove the cake",
+              sub: "The celebration survives. Hollowed.",
+              fn: () => {
+                sim.profitToday += 250;
+                anyAlive().forEach((x) => x.stats.align = clamp2(x.stats.align - 3));
+                toast("Birthdays are now a calendar notification and a firm nod. Ines describes it as 'being wished well by a spreadsheet.'");
+              }
+            },
+            {
+              label: "Doug's counter-offer: HIS birthday becomes a company holiday",
+              sub: "One birthday to rule them all.",
+              fn: () => {
+                anyAlive().forEach((x) => {
+                  x.stats.faith = clamp2(x.stats.faith - 5);
+                  x.stats.align = clamp2(x.stats.align - 3);
+                });
+                sim.ceo = clamp2(sim.ceo + 8);
+                flags.birthday = "dougday";
+                flags.day0bday = sim.day;
+                toast("Doug Day is announced for spring. Attendance mandatory, gifts 'discouraged but welcome.' The memo includes a wishlist, for reference.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
+      id: "kettleIncident",
+      once: true,
+      cond: () => sim.day >= 4 && alive("Dolores"),
+      build() {
+        const m = byName("Dolores");
+        return {
+          title: "The Kettle",
+          body: "An audit has found an unauthorized personal kettle at Dolores's desk. It is small, floral, and older than two of your policies. She has had it for nineteen years. It is, technically, an appliance.<br><br>Dennis awaits guidance. Dolores awaits nothing. She is drinking tea.",
+          choices: [
+            {
+              label: "Confiscate it (policy is policy)",
+              sub: "The kettle goes to a shelf in Facilities called 'Amnesty.'",
+              fn: () => {
+                m.stats.lib = clamp2(m.stats.lib - 12);
+                m.stats.faith = clamp2(m.stats.faith - 8);
+                anyAlive().forEach((x) => {
+                  if (x !== m) x.stats.faith = clamp2(x.stats.faith - 3);
+                });
+                flags.kettle = "confiscated";
+                flags.day0kettle = sim.day;
+                box(1.4, 0.06, 0.4, 13222574, 17.8, 1.6, 8.5);
+                box(0.06, 1.6, 0.4, 9077362, 17.15, 0.8, 8.5);
+                box(0.06, 1.6, 0.4, 9077362, 18.45, 0.8, 8.5);
+                if (doloresKettle) {
+                  doloresKettle.position.set(17.8, 1.66, 8.5);
+                }
+                toast("The kettle sits on the Amnesty shelf between a hot plate from 2009 and someone's lamp. Dolores now drinks the break-room tea. She looks at you while she does it.");
+              }
+            },
+            {
+              label: "Grant it 'Legacy Appliance' status",
+              sub: "A precedent. A dangerous, floral precedent.",
+              fn: () => {
+                m.stats.faith = clamp2(m.stats.faith + 8);
+                m.stats.lib = clamp2(m.stats.lib + 4);
+                flags.kettle = "legacy";
+                flags.day0kettle = sim.day;
+                toast("The kettle receives a laminated certificate. Within a week, three lamps, a fan, and a bread machine apply for Legacy status. There is a form now.");
+              }
+            },
+            {
+              label: "License it back to her ($2/month, payroll-deducted)",
+              sub: "Her kettle. Your terms.",
+              fn: () => {
+                sim.profitToday += 180;
+                m.stats.faith = clamp2(m.stats.faith - 10);
+                heatUp(1);
+                flags.kettle = "licensed";
+                flags.day0kettle = sim.day;
+                toast("Dolores now rents her own kettle. She pays the $2 in nickels, delivered to Dennis's desk, monthly, in a small floral bag. Dennis has said nothing. Dennis will never say anything.");
+              }
+            }
+          ]
+        };
+      }
+    },
+    {
       id: "marcusStopwatch",
       once: true,
       cond: () => sim.day >= 4 && alive("Sandra"),
@@ -26788,7 +27702,7 @@ void main() {
                 anyAlive().forEach((x) => {
                   if (x !== m) x.stats.align = clamp2(x.stats.align - 3);
                 });
-                say(m, "Liaison. LIAISON. It's laminated by Thursday.", false, 5, true);
+                say(m, "Liaison. LIAISON. It's laminated by tomorrow.", false, 5, true);
                 toast("Sandra has a title now. The notebook has a cover page. The floor has a narc.");
               }
             },
@@ -27048,7 +27962,7 @@ void main() {
                 flags.unionTalkDay = sim.day;
                 heatUp(1.5);
                 anyAlive().forEach((x) => x.stats.align = clamp2(x.stats.align - 4));
-                toast("The memo used the word 'family' five times. Stairwell attendance doubled by Thursday.");
+                toast("The memo used the word 'family' five times. Stairwell attendance doubled by Day 3.");
               }
             }
           ]
@@ -31313,7 +32227,7 @@ void main() {
     }, 6e3 + Math.random() * 9e3);
   }
   function rehire(a) {
-    if (a.mesh && a.mesh.parent) sceneG.remove(a.mesh);
+    removeBody(a);
     a.n = NEWHIRE_NAMES[nhIx++ % NEWHIRE_NAMES.length];
     a.ten = "new";
     a.arch = ["striver", "mercenary", "workhorse"][Math.floor(Math.random() * 3)];
@@ -31436,7 +32350,7 @@ void main() {
     sim.profitToday -= cost;
     logDecision("fired", a.n);
     agents.forEach((x) => {
-      if (x !== a && x.state !== "gone" && x.state !== "home" && x.mesh.visible !== false) floorFx(x);
+      if (x !== a && present(x)) floorFx(x);
     });
     shockAll(a.n, "quitshock");
     departure(a, exitLine);
