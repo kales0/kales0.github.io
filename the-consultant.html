@@ -464,7 +464,7 @@
   </div>
   <div id="sheetBody">
     <div class="pane" id="panePulse">
-      <canvas id="pulseMirror" width="1024" height="560"></canvas>
+      <canvas id="pulseMirror" width="1280" height="700" style="width:100%;height:auto;display:block;border-radius:10px"></canvas>
       <div id="money">
         <div class="mrow"><span class="mlab">Profit today</span><span id="profitToday">$0</span></div>
         <div class="mrow"><span class="mlab">Your cut (running)</span><span id="cut">$0</span></div>
@@ -20353,6 +20353,14 @@ void main() {
   }
 
   // src/config.js
+  var DOOR = {
+    x: -4.5,
+    // center, on the south edge
+    z: 13.3,
+    // where walkers target (interior, walkable)
+    slabZ: 13.9
+    // where the physical slab stands on the floor
+  };
   var PACE = {
     eventGapDays: [2.2, 2.6],
     // [min, +range]: days between decision modals
@@ -20962,7 +20970,7 @@ void main() {
     const open = [{ x: sx, z: sz, g: 0, f: Math.abs(tx - sx) + Math.abs(tz - sz) }];
     const came = /* @__PURE__ */ new Map(), gScore = /* @__PURE__ */ new Map([[key(sx, sz), 0]]), closed = /* @__PURE__ */ new Set();
     let iter = 0;
-    while (open.length && iter++ < 4e3) {
+    while (open.length && iter++ < 12e3) {
       let bi = 0;
       for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
       const cur = open.splice(bi, 1)[0];
@@ -21007,7 +21015,10 @@ void main() {
     const cells = astar(s[0], s[1], t2[0], t2[1]);
     const tBlocked = blocked[t0[1] * GW + t0[0]] === 1;
     const endPt = tBlocked ? cellToWorld(t2[0], t2[1]) : { x: to.x, z: to.z };
-    if (!cells) return [endPt];
+    if (!cells) {
+      if (losClear(from, endPt)) return [endPt];
+      return [cellToWorld(s[0], s[1])];
+    }
     let pts = cells.map((c) => cellToWorld(c[0], c[1]));
     const sm = [pts[0]];
     let i = 0;
@@ -21096,7 +21107,8 @@ void main() {
               c2 = toCell(sx, sz);
             }
             if (!cellBlocked(c2[0], c2[1])) {
-              ent.path.unshift({ x: sx, z: sz });
+              const dc = toCell(sx, sz);
+              if (!cellBlocked(dc[0], dc[1])) ent.path.unshift({ x: sx, z: sz });
               ent.noYieldT = 2.2;
               ent._lastD = void 0;
             } else {
@@ -21352,9 +21364,12 @@ void main() {
     box(38, 0.7, 0.5, C.wall, 0, 4.65, -14.2, null, false);
     [[-17.75, 2.5], [-10.5, 2], [-3.5, 2], [3.5, 2], [10.5, 2], [17.75, 2.5]].forEach(([cx, w]) => box(w, 2.6, 0.5, C.wall, cx, 3, -14.2, null, false));
     box(0.5, 5, 28, C.wall, -19.2, 2.5, 0, null, false);
-    box(0.16, 3.1, 2, 2762274, -18.92, 1.55, 10.5, null, false);
-    box(0.1, 2.9, 1.7, 14209728, -18.86, 1.45, 10.5, null, false);
-    box(0.05, 0.5, 0.16, 12162607, -18.79, 1.45, 11.15, null, false);
+    box(0.18, 3.1, 0.2, 2762274, DOOR.x - 0.94, 1.55, DOOR.slabZ, null, false);
+    box(0.18, 3.1, 0.2, 2762274, DOOR.x + 0.94, 1.55, DOOR.slabZ, null, false);
+    box(2.06, 0.22, 0.2, 2762274, DOOR.x, 3.02, DOOR.slabZ, null, false);
+    box(1.7, 2.9, 0.1, 14209728, DOOR.x, 1.45, DOOR.slabZ, null, false);
+    box(0.16, 0.5, 0.05, 12162607, DOOR.x + 0.65, 1.45, DOOR.slabZ - 0.07, null, false);
+    box(0.16, 0.5, 0.05, 12162607, DOOR.x + 0.65, 1.45, DOOR.slabZ + 0.09, null, false);
     {
       const skyMat = new MeshBasicMaterial({ color: 8369380, toneMapped: false });
       for (let i = -2; i <= 2; i++) {
@@ -22019,18 +22034,18 @@ void main() {
       desc: "Nothing says 'we're a fun company' like the hollow tok-tok of borrowed time.",
       fxTxt: "ALIGNMENT + BANDWIDTH on visit \xB7 strong social draw",
       owned: false,
-      spots: [{ x: -0.9, z: 12.3 }, { x: 3.9, z: 12.3 }],
+      spots: [{ x: 14.9, z: -1.4 }, { x: 14.9, z: 3.4 }],
       effect: (a) => {
         a.stats.align = clamp2(a.stats.align + 1.5);
         a.stats.band = clamp2(a.stats.band + 1);
       },
       build() {
         const ms = [];
-        ms.push(box(3.8, 0.12, 1.9, 3046747, 1.5, 0.85, 12.3));
-        ms.push(box(0.12, 0.9, 1.9, 5521451, -0.1, 0.42, 12.3));
-        ms.push(box(0.12, 0.9, 1.9, 5521451, 3.1, 0.42, 12.3));
-        ms.push(box(0.05, 0.28, 1.95, 15591122, 1.5, 1.03, 12.3));
-        this.obs = [addObstacle(1.5, 12.3, 4, 2.1)];
+        ms.push(box(1.9, 0.12, 3.8, 3046747, 14.9, 0.85, 1));
+        ms.push(box(1.9, 0.9, 0.12, 5521451, 14.9, 0.42, -0.6));
+        ms.push(box(1.9, 0.9, 0.12, 5521451, 14.9, 0.42, 2.6));
+        ms.push(box(1.95, 0.28, 0.05, 15591122, 14.9, 1.03, 1));
+        this.obs = [addObstacle(14.9, 1, 2.1, 4)];
         return ms;
       }
     },
@@ -23302,7 +23317,7 @@ void main() {
     // the cabinet
     darts: { x: 11, z: -13.95 },
     // the board
-    pingpong: { x: 1.5, z: 12.3 },
+    pingpong: { x: 14.9, z: 1 },
     // the table (players face it from the ends)
     couch: { x: 8.5, z: 13.5 },
     // turn toward the couch
@@ -23311,6 +23326,14 @@ void main() {
   };
   var AMEN_CARRY = {
     coffee: (a) => giveMug(a)
+  };
+  var SIT = {
+    couch: (sp) => ({ x: sp.x, z: 13.25, yaw: Math.PI })
+    // onto the cushion, facing the room
+  };
+  var SIT_DWELL = {
+    couch: () => 6 + Math.random() * 5
+    // you don't sit down for four seconds
   };
   function stationList(ctx) {
     const out = [];
@@ -23324,7 +23347,8 @@ void main() {
         target: (sp) => ({ x: sp.x + (Math.random() - 0.5) * 0.1, z: sp.z + (Math.random() - 0.5) * 0.1 }),
         face: FACE[k],
         dest: "amen",
-        dwell: (a) => k === "coffee" && AMEN.espresso.owned ? 1.6 : 2.5 + Math.random() * 3,
+        dwell: (a) => SIT_DWELL[k] ? SIT_DWELL[k](a) : k === "coffee" && AMEN.espresso.owned ? 1.6 : 2.5 + Math.random() * 3,
+        sit: SIT[k],
         effect: d.effect,
         chat: d.chat,
         carry: AMEN_CARRY[k]
@@ -23400,7 +23424,7 @@ void main() {
   function agentTick(a, dt) {
     if (a.state === "gone" || a.state === "home") return;
     if (a.dest === "gohome") {
-      const dd = Math.hypot(a.mesh.position.x - WEST_DOOR.x, a.mesh.position.z - WEST_DOOR.z);
+      const dd = Math.hypot(a.mesh.position.x - EXIT_DOOR.x, a.mesh.position.z - EXIT_DOOR.z);
       if (dd < 1.7) {
         a.path = [];
         a.state = "home";
@@ -23502,6 +23526,10 @@ void main() {
           a.t = 8 + Math.random() * 20;
         } else {
           const stn = stationByKey(a.visitAmen);
+          if (stn && stn.sit && a.seated) {
+            setPose(a, false);
+            if (a.amenSpot) a.mesh.position.set(a.amenSpot.x, 0, a.amenSpot.z);
+          }
           if (stn && stn.carry) stn.carry(a);
           startWalk(a, a.seat, "home");
         }
@@ -23523,20 +23551,20 @@ void main() {
     }
     return maxRun <= 6;
   }
-  var WEST_DOOR = { x: -18, z: 10.5 };
+  var EXIT_DOOR = DOOR;
   function beginExodus() {
     agents.forEach((a) => {
       if (a.state === "gone" || a.state === "home") return;
       simTimeout(() => {
         if (a.state === "gone" || a.state === "home") return;
         if (a.social) endSocial(a);
-        startWalk(a, { x: WEST_DOOR.x + Math.random() * 0.6, z: WEST_DOOR.z + (Math.random() - 0.5) * 2.4 }, "gohome");
+        startWalk(a, { x: EXIT_DOOR.x + (Math.random() - 0.5) * 2.4, z: EXIT_DOOR.z + Math.random() * 0.6 }, "gohome");
       }, 300 + Math.random() * 5200);
     });
     directors.forEach((d) => {
       simTimeout(() => {
         if (d.state === "dirHomeDone") return;
-        goDir(d, { x: WEST_DOOR.x + Math.random() * 0.6, z: WEST_DOOR.z + (Math.random() - 0.5) * 2.4 }, "dirHome");
+        goDir(d, { x: EXIT_DOOR.x + (Math.random() - 0.5) * 2.4, z: EXIT_DOOR.z + Math.random() * 0.6 }, "dirHome");
       }, 1200 + Math.random() * 4800);
     });
   }
@@ -23551,7 +23579,7 @@ void main() {
     agents.forEach((a, i) => {
       if (a.state !== "home") return;
       a.mesh.visible = true;
-      a.mesh.position.set(WEST_DOOR.x, 0, WEST_DOOR.z + (Math.random() - 0.5) * 0.8);
+      a.mesh.position.set(EXIT_DOOR.x + (Math.random() - 0.5) * 0.8, 0, EXIT_DOOR.z);
       simTimeout(() => {
         if (a.state === "home") {
           a.state = "pause";
@@ -23563,7 +23591,7 @@ void main() {
     directors.forEach((d, i) => {
       if (d.state !== "dirHomeDone") return;
       d.mesh.visible = true;
-      d.mesh.position.set(WEST_DOOR.x, 0, WEST_DOOR.z + (Math.random() - 0.5) * 0.8);
+      d.mesh.position.set(EXIT_DOOR.x + (Math.random() - 0.5) * 0.8, 0, EXIT_DOOR.z);
       simTimeout(() => {
         if (d.state === "dirHomeDone") goDir(d, d.seat, "board");
       }, 600 + i * 500);
@@ -23601,6 +23629,12 @@ void main() {
       const st = stationByKey(a.visitAmen);
       a.t = st && st.dwell ? st.dwell(a) : 2.5 + Math.random() * 3;
       if (st && st.face) a.mesh.rotation.y = Math.atan2(st.face.x - a.mesh.position.x, st.face.z - a.mesh.position.z);
+      if (st && st.sit && a.amenSpot) {
+        const sp2 = st.sit(a.amenSpot);
+        a.mesh.position.set(sp2.x, 0, sp2.z);
+        a.mesh.rotation.y = sp2.yaw;
+        setPose(a, true);
+      }
       if (st && st.effect) st.effect(a);
       if (st && SOLO_LINES[st.chat] && Math.random() < 0.35) {
         a.queue.push({ t: pickFrom(SOLO_LINES[st.chat], a), dark: false, prio: 0 });
@@ -23843,7 +23877,7 @@ void main() {
     directors.forEach((d) => {
       if (d.state === "dirHomeDone") return;
       if (d.destState === "dirHome") {
-        const dd = Math.hypot(d.mesh.position.x - WEST_DOOR.x, d.mesh.position.z - WEST_DOOR.z);
+        const dd = Math.hypot(d.mesh.position.x - EXIT_DOOR.x, d.mesh.position.z - EXIT_DOOR.z);
         if (dd < 1.7) {
           d.path = [];
           d.state = "dirHomeDone";
@@ -24049,6 +24083,16 @@ void main() {
     }
     return pts;
   }
+  function lineUp(f, dir, n) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      pts.push({
+        x: f.x + dir.x * (0.85 * i) + (Math.random() - 0.5) * 0.18,
+        z: f.z + dir.z * (0.85 * i) + (Math.random() - 0.5) * 0.18
+      });
+    }
+    return pts;
+  }
   function rows(cx, cz, cols, n, dx, dz) {
     const pts = [];
     for (let i = 0; i < n; i++) {
@@ -24064,7 +24108,7 @@ void main() {
     const parts = pool.slice(0, n);
     const focus = typeof s.focus === "function" ? s.focus() : s.focus;
     if (!focus) return false;
-    const pts = s.points ? s.points(n, focus) : ring(focus, s.ring || 1.8, n);
+    const pts = s.formation === "line" ? lineUp(focus, s.lineDir || { x: 1, z: 0 }, n) : s.points ? s.points(n, focus) : ring(focus, s.ring || 1.8, n);
     toast(s.toast, Math.max(14e3, s.dur * 550));
     parts.forEach((a, i) => {
       simTimeout(() => {
@@ -24135,8 +24179,9 @@ void main() {
       gap: 20,
       count: "all",
       dur: 16,
-      focus: { x: -4.5, z: 12.6 },
-      ring: 2.4,
+      focus: { x: DOOR.x + 0.6, z: DOOR.z - 0.2 },
+      formation: "line",
+      lineDir: { x: 1, z: 0 },
       toast: "FIRE DRILL. Everyone to the exit. The directors are exempt, for reasons described as 'structural.'",
       crowd: ["Walk, don't run. But WALK fast.", "Is it real? It's never real.", "Bernard brought his mug. Priorities."]
     },
@@ -24166,7 +24211,7 @@ void main() {
       id: "pingpongFinal",
       count: 6,
       dur: 24,
-      focus: { x: 1.5, z: 12.3 },
+      focus: { x: 14.9, z: 1 },
       ring: 2,
       cond: () => AMEN.pingpong.owned,
       toast: "Championship point at the ping-pong table. The office has gathered. History is watching.",
@@ -24244,8 +24289,9 @@ void main() {
       gap: 25,
       count: 7,
       dur: 16,
-      focus: { x: -4.5, z: 12.8 },
+      focus: { x: DOOR.x, z: DOOR.z - 0.5 },
       ring: 2,
+      // deliveries arrive at THE door
       toast: "The quarter's biggest order is shipping out. The floor has gathered to watch the truck leave, like sailors' families at a dock.",
       crowd: ["Forty thousand cards. We MADE those.", "Godspeed, you absolute pallet.", "Wave. It matters that we wave."]
     },
@@ -31246,7 +31292,7 @@ void main() {
     say(a, line, true, 5, true);
     a.state = "walk";
     a.dest = "exit";
-    a.path = buildPath(a.mesh.position, { x: -4.5, z: 13.2 });
+    a.path = buildPath(a.mesh.position, { x: DOOR.x, z: DOOR.z });
     a.replaceAt = sim.day + 3;
     if (runtime.selectedAgent === a) emit("dossier-close");
   }
@@ -31281,10 +31327,10 @@ void main() {
     a.stats = s;
     a.base = { ...s };
     a.mesh = makePerson(a.i, a);
-    a.mesh.position.set(-4.5, 0, 13.2);
+    a.mesh.position.set(DOOR.x, 0, DOOR.z);
     a.state = "walk";
     a.dest = "home";
-    a.path = buildPath({ x: -4.5, z: 13.2 }, { x: a.seat.x, z: a.seat.z });
+    a.path = buildPath({ x: DOOR.x, z: DOOR.z }, { x: a.seat.x, z: a.seat.z });
     a.queue.push({ t: EVENT_LINES.newhire[Math.floor(Math.random() * EVENT_LINES.newhire.length)], dark: false });
     a.bubbleCd = 2.5;
     boardBanner("WELCOME, " + a.n.toUpperCase() + "!", "#6FA08E");
@@ -31535,7 +31581,7 @@ void main() {
     ceoEl.className = "chv " + (cv >= 55 ? "up" : cv >= 38 ? "flat" : "dn");
     const mir = document.getElementById("pulseMirror");
     if (mir && mir.offsetParent) {
-      mir.getContext("2d").drawImage(boardCv, 0, 0);
+      mir.getContext("2d").drawImage(boardCv, 0, 0, boardCv.width, boardCv.height, 0, 0, mir.width, mir.height);
     }
     document.getElementById("streakv").textContent = sim.streak > 0 ? "streak x" + sim.streak + " \u2605" : "streak 0";
     const dirEl = document.getElementById("dirRow");
@@ -32026,7 +32072,7 @@ void main() {
       drawBoard(0.25);
       PULSE.drawCd = 0.25;
     }
-    boardMesh.scale.setScalar(1 + PULSE.flash * 0.035);
+    boardMesh.scale.setScalar(1);
     frameBubbles(dt);
     hudT -= dt;
     if (hudT <= 0) {
