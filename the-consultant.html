@@ -29,7 +29,7 @@
   .bub.fluff, .bub.fluff.dark, .bub.fluff.ceo{
     background:none; border:none; border-radius:0; box-shadow:none; padding:0;
     max-width:150px;
-    text-shadow:0 1px 0 rgba(255,253,247,.95), 0 0 5px rgba(255,253,247,.85), 0 0 12px rgba(255,253,247,.6);
+    text-shadow:0 1px 0 rgba(255,253,247,.95), 0 0 5px rgba(255,253,247,.85), 0 0 12px rgba(255,253,247,.6), 0 1px 4px rgba(40,34,26,.42);
   }
   .bub.fluff.dark{color:#57493A;}
   .bub.fluff .tail{display:none;}
@@ -402,6 +402,39 @@
   .dFacts{ display:flex; flex-direction:column; gap:2px; margin-top:9px; padding-top:7px;
     border-top:1.5px solid var(--line);
     font-family:Verdana,sans-serif; font-size:9.5px; color:#6B6455; }
+
+  /* ---------- the AWARD popup: Doug's confidence, celebrated ---------- */
+  #award{position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:60; display:none; pointer-events:none;}
+  #award .card{
+    position:relative; overflow:hidden; min-width:300px; max-width:min(460px,90vw);
+    padding:16px 26px 14px; text-align:center; border-radius:14px;
+    background:linear-gradient(180deg,#FFE9A0 0%,#F5CE52 55%,#E8B93A 100%);
+    border:3px solid #8A6508; box-shadow:0 6px 0 rgba(122,90,6,.4), 0 10px 28px rgba(0,0,0,.35);
+    color:#4A3600;
+  }
+  #award .kind{font-size:11px; letter-spacing:.22em; color:#7A5A06; font-weight:700;}
+  #award .title{font-size:20px; font-weight:800; margin:4px 0 2px; color:#3E2D00; text-shadow:0 1px 0 #FFF3C4;}
+  #award .sub{font-size:13px; color:#6B4E00;}
+  #award .stars{font-size:15px; letter-spacing:.35em; color:#8A6508; margin-top:3px;}
+  #award .shine{position:absolute; top:0; left:-70%; width:45%; height:100%;
+    background:linear-gradient(105deg, transparent 0%, rgba(255,255,255,.75) 50%, transparent 100%);
+    transform:skewX(-18deg);}
+  #award.show{display:block; animation:awardIn .5s cubic-bezier(.2,1.6,.35,1) both;}
+  #award.show .shine{animation:awardShine 1.1s .35s ease-out both;}
+  #award.out{animation:awardOut .55s ease-in both;}
+  @keyframes awardIn{ from{opacity:0; transform:translateX(-50%) translateY(-36px) scale(.85);} to{opacity:1; transform:translateX(-50%) translateY(0) scale(1);} }
+  @keyframes awardShine{ from{left:-70%;} to{left:130%;} }
+  @keyframes awardOut{ from{opacity:1; transform:translateX(-50%) translateY(0);} to{opacity:0; transform:translateX(-50%) translateY(-30px) scale(.92);} }
+  /* negative variant: confidence LOST — same ceremony, wrong color */
+  #award .card.bad{
+    background:linear-gradient(180deg,#E8A9A0 0%,#C95A4E 55%,#A83A32 100%);
+    border-color:#5E1410; color:#3A0B08; box-shadow:0 6px 0 rgba(94,20,16,.4), 0 10px 28px rgba(0,0,0,.35);
+  }
+  #award .card.bad .kind{color:#5E1410;} #award .card.bad .title{color:#2E0705; text-shadow:0 1px 0 #F2C7C0;}
+  #award .card.bad .sub{color:#4A100C;} #award .card.bad .stars{color:#5E1410;}
+
+  #introLogo{width:92px;height:92px;margin:0 auto 6px;}
+  #introLogo svg{width:100%;height:100%;display:block;}
 </style>
 </head>
 <body>
@@ -411,6 +444,7 @@
 
 <div id="intro">
   <div id="introCard">
+    <div id="introLogo"></div>
     <h1>THE CONSULTANT</h1>
     <div class="memo">
       <b>Hartfelt &amp; Co.</b> — greeting cards, est. 1987<br><br>
@@ -528,6 +562,25 @@
 
 <script>
 (() => {
+  // src/engine/colliders.js
+  var COLLIDER = { employee: 0.36, director: 0.52, dog: 0.3 };
+  var CARRY_PAD = { case: 0.12, mug: 0, paper: 0 };
+  function pickUp(p, item) {
+    (p.carried || (p.carried = {}))[item] = true;
+  }
+  function putDown(p, item) {
+    if (p.carried) delete p.carried[item];
+  }
+  function carryPad(p) {
+    let pad = 0;
+    if (p.carried) for (const k in p.carried) pad = Math.max(pad, CARRY_PAD[k] || 0);
+    return pad;
+  }
+  function colliderRadius(p) {
+    const base = p.isDir || p.isCEO ? COLLIDER.director : COLLIDER.employee;
+    return base + carryPad(p);
+  }
+
   // node_modules/three/build/three.module.js
   var REVISION = "161";
   var CullFaceNone = 0;
@@ -3936,27 +3989,27 @@
         te[6] = b * c;
         te[10] = a * c;
       } else if (euler.order === "YZX") {
-        const ac = a * c, ad = a * d, bc = b * c, bd = b * d;
+        const ac2 = a * c, ad = a * d, bc = b * c, bd = b * d;
         te[0] = c * e;
-        te[4] = bd - ac * f;
+        te[4] = bd - ac2 * f;
         te[8] = bc * f + ad;
         te[1] = f;
         te[5] = a * e;
         te[9] = -b * e;
         te[2] = -d * e;
         te[6] = ad * f + bc;
-        te[10] = ac - bd * f;
+        te[10] = ac2 - bd * f;
       } else if (euler.order === "XZY") {
-        const ac = a * c, ad = a * d, bc = b * c, bd = b * d;
+        const ac2 = a * c, ad = a * d, bc = b * c, bd = b * d;
         te[0] = c * e;
         te[4] = -f;
         te[8] = d * e;
-        te[1] = ac * f + bd;
+        te[1] = ac2 * f + bd;
         te[5] = a * e;
         te[9] = ad * f - bc;
         te[2] = bc * f - ad;
         te[6] = b * e;
-        te[10] = bd * f + ac;
+        te[10] = bd * f + ac2;
       }
       te[3] = 0;
       te[7] = 0;
@@ -6783,9 +6836,9 @@
         }];
       }
       for (let i = 0, il = groups.length; i < il; ++i) {
-        const group = groups[i];
-        const start = group.start;
-        const count = group.count;
+        const group2 = groups[i];
+        const start = group2.start;
+        const count = group2.count;
         for (let j = start, jl = start + count; j < jl; j += 3) {
           handleTriangle(
             indices[j + 0],
@@ -6811,9 +6864,9 @@
         tangents[v * 4 + 3] = w;
       }
       for (let i = 0, il = groups.length; i < il; ++i) {
-        const group = groups[i];
-        const start = group.start;
-        const count = group.count;
+        const group2 = groups[i];
+        const start = group2.start;
+        const count = group2.count;
         for (let j = start, jl = start + count; j < jl; j += 3) {
           handleVertex(indices[j + 0]);
           handleVertex(indices[j + 1]);
@@ -6928,8 +6981,8 @@
       geometry2.morphTargetsRelative = this.morphTargetsRelative;
       const groups = this.groups;
       for (let i = 0, l = groups.length; i < l; i++) {
-        const group = groups[i];
-        geometry2.addGroup(group.start, group.count, group.materialIndex);
+        const group2 = groups[i];
+        geometry2.addGroup(group2.start, group2.count, group2.materialIndex);
       }
       return geometry2;
     }
@@ -7029,8 +7082,8 @@
       this.morphTargetsRelative = source.morphTargetsRelative;
       const groups = source.groups;
       for (let i = 0, l = groups.length; i < l; i++) {
-        const group = groups[i];
-        this.addGroup(group.start, group.count, group.materialIndex);
+        const group2 = groups[i];
+        this.addGroup(group2.start, group2.count, group2.materialIndex);
       }
       const boundingBox = source.boundingBox;
       if (boundingBox !== null) {
@@ -7162,10 +7215,10 @@
       if (index !== null) {
         if (Array.isArray(material)) {
           for (let i = 0, il = groups.length; i < il; i++) {
-            const group = groups[i];
-            const groupMaterial = material[group.materialIndex];
-            const start = Math.max(group.start, drawRange.start);
-            const end = Math.min(index.count, Math.min(group.start + group.count, drawRange.start + drawRange.count));
+            const group2 = groups[i];
+            const groupMaterial = material[group2.materialIndex];
+            const start = Math.max(group2.start, drawRange.start);
+            const end = Math.min(index.count, Math.min(group2.start + group2.count, drawRange.start + drawRange.count));
             for (let j = start, jl = end; j < jl; j += 3) {
               const a = index.getX(j);
               const b = index.getX(j + 1);
@@ -7173,7 +7226,7 @@
               intersection = checkGeometryIntersection(this, groupMaterial, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c);
               if (intersection) {
                 intersection.faceIndex = Math.floor(j / 3);
-                intersection.face.materialIndex = group.materialIndex;
+                intersection.face.materialIndex = group2.materialIndex;
                 intersects.push(intersection);
               }
             }
@@ -7195,10 +7248,10 @@
       } else if (position !== void 0) {
         if (Array.isArray(material)) {
           for (let i = 0, il = groups.length; i < il; i++) {
-            const group = groups[i];
-            const groupMaterial = material[group.materialIndex];
-            const start = Math.max(group.start, drawRange.start);
-            const end = Math.min(position.count, Math.min(group.start + group.count, drawRange.start + drawRange.count));
+            const group2 = groups[i];
+            const groupMaterial = material[group2.materialIndex];
+            const start = Math.max(group2.start, drawRange.start);
+            const end = Math.min(position.count, Math.min(group2.start + group2.count, drawRange.start + drawRange.count));
             for (let j = start, jl = end; j < jl; j += 3) {
               const a = j;
               const b = j + 1;
@@ -7206,7 +7259,7 @@
               intersection = checkGeometryIntersection(this, groupMaterial, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c);
               if (intersection) {
                 intersection.faceIndex = Math.floor(j / 3);
-                intersection.face.materialIndex = group.materialIndex;
+                intersection.face.materialIndex = group2.materialIndex;
                 intersects.push(intersection);
               }
             }
@@ -13007,7 +13060,7 @@
       transmissive.length = 0;
       transparent.length = 0;
     }
-    function getNextRenderItem(object, geometry, material, groupOrder, z, group) {
+    function getNextRenderItem(object, geometry, material, groupOrder, z, group2) {
       let renderItem = renderItems[renderItemsIndex];
       if (renderItem === void 0) {
         renderItem = {
@@ -13018,7 +13071,7 @@
           groupOrder,
           renderOrder: object.renderOrder,
           z,
-          group
+          group: group2
         };
         renderItems[renderItemsIndex] = renderItem;
       } else {
@@ -13029,13 +13082,13 @@
         renderItem.groupOrder = groupOrder;
         renderItem.renderOrder = object.renderOrder;
         renderItem.z = z;
-        renderItem.group = group;
+        renderItem.group = group2;
       }
       renderItemsIndex++;
       return renderItem;
     }
-    function push(object, geometry, material, groupOrder, z, group) {
-      const renderItem = getNextRenderItem(object, geometry, material, groupOrder, z, group);
+    function push(object, geometry, material, groupOrder, z, group2) {
+      const renderItem = getNextRenderItem(object, geometry, material, groupOrder, z, group2);
       if (material.transmission > 0) {
         transmissive.push(renderItem);
       } else if (material.transparent === true) {
@@ -13044,8 +13097,8 @@
         opaque.push(renderItem);
       }
     }
-    function unshift(object, geometry, material, groupOrder, z, group) {
-      const renderItem = getNextRenderItem(object, geometry, material, groupOrder, z, group);
+    function unshift(object, geometry, material, groupOrder, z, group2) {
+      const renderItem = getNextRenderItem(object, geometry, material, groupOrder, z, group2);
       if (material.transmission > 0) {
         transmissive.unshift(renderItem);
       } else if (material.transparent === true) {
@@ -13774,13 +13827,13 @@
           if (Array.isArray(material)) {
             const groups = geometry.groups;
             for (let k = 0, kl = groups.length; k < kl; k++) {
-              const group = groups[k];
-              const groupMaterial = material[group.materialIndex];
+              const group2 = groups[k];
+              const groupMaterial = material[group2.materialIndex];
               if (groupMaterial && groupMaterial.visible) {
                 const depthMaterial = getDepthMaterial(object, groupMaterial, light, type);
-                object.onBeforeShadow(_renderer, object, camera2, shadowCamera, geometry, depthMaterial, group);
-                _renderer.renderBufferDirect(shadowCamera, null, geometry, depthMaterial, object, group);
-                object.onAfterShadow(_renderer, object, camera2, shadowCamera, geometry, depthMaterial, group);
+                object.onBeforeShadow(_renderer, object, camera2, shadowCamera, geometry, depthMaterial, group2);
+                _renderer.renderBufferDirect(shadowCamera, null, geometry, depthMaterial, object, group2);
+                object.onAfterShadow(_renderer, object, camera2, shadowCamera, geometry, depthMaterial, group2);
               }
             }
           } else if (material.visible) {
@@ -17426,7 +17479,7 @@ void main() {
           }
         }
       }
-      this.renderBufferDirect = function(camera2, scene, geometry, material, object, group) {
+      this.renderBufferDirect = function(camera2, scene, geometry, material, object, group2) {
         if (scene === null) scene = _emptyScene;
         const frontFaceCW = object.isMesh && object.matrixWorld.determinant() < 0;
         const program = setProgram(camera2, scene, geometry, material, object);
@@ -17442,9 +17495,9 @@ void main() {
         const position = geometry.attributes.position;
         let drawStart = drawRange.start * rangeFactor;
         let drawEnd = (drawRange.start + drawRange.count) * rangeFactor;
-        if (group !== null) {
-          drawStart = Math.max(drawStart, group.start * rangeFactor);
-          drawEnd = Math.min(drawEnd, (group.start + group.count) * rangeFactor);
+        if (group2 !== null) {
+          drawStart = Math.max(drawStart, group2.start * rangeFactor);
+          drawEnd = Math.min(drawEnd, (group2.start + group2.count) * rangeFactor);
         }
         if (index !== null) {
           drawStart = Math.max(drawStart, 0);
@@ -17708,10 +17761,10 @@ void main() {
               if (Array.isArray(material)) {
                 const groups = geometry.groups;
                 for (let i = 0, l = groups.length; i < l; i++) {
-                  const group = groups[i];
-                  const groupMaterial = material[group.materialIndex];
+                  const group2 = groups[i];
+                  const groupMaterial = material[group2.materialIndex];
                   if (groupMaterial && groupMaterial.visible) {
-                    currentRenderList.push(object, geometry, groupMaterial, groupOrder, _vector3.z, group);
+                    currentRenderList.push(object, geometry, groupMaterial, groupOrder, _vector3.z, group2);
                   }
                 }
               } else if (material.visible) {
@@ -17778,12 +17831,12 @@ void main() {
           const object = renderItem.object;
           const geometry = renderItem.geometry;
           const material = renderItem.material;
-          const group = renderItem.group;
+          const group2 = renderItem.group;
           if (material.side === DoubleSide && object.layers.test(camera2.layers)) {
             const currentSide = material.side;
             material.side = BackSide;
             material.needsUpdate = true;
-            renderObject(object, scene, camera2, geometry, material, group);
+            renderObject(object, scene, camera2, geometry, material, group2);
             material.side = currentSide;
             material.needsUpdate = true;
             renderTargetNeedsUpdate = true;
@@ -17804,29 +17857,29 @@ void main() {
           const object = renderItem.object;
           const geometry = renderItem.geometry;
           const material = overrideMaterial === null ? renderItem.material : overrideMaterial;
-          const group = renderItem.group;
+          const group2 = renderItem.group;
           if (object.layers.test(camera2.layers)) {
-            renderObject(object, scene, camera2, geometry, material, group);
+            renderObject(object, scene, camera2, geometry, material, group2);
           }
         }
       }
-      function renderObject(object, scene, camera2, geometry, material, group) {
-        object.onBeforeRender(_this, scene, camera2, geometry, material, group);
+      function renderObject(object, scene, camera2, geometry, material, group2) {
+        object.onBeforeRender(_this, scene, camera2, geometry, material, group2);
         object.modelViewMatrix.multiplyMatrices(camera2.matrixWorldInverse, object.matrixWorld);
         object.normalMatrix.getNormalMatrix(object.modelViewMatrix);
-        material.onBeforeRender(_this, scene, camera2, geometry, object, group);
+        material.onBeforeRender(_this, scene, camera2, geometry, object, group2);
         if (material.transparent === true && material.side === DoubleSide && material.forceSinglePass === false) {
           material.side = BackSide;
           material.needsUpdate = true;
-          _this.renderBufferDirect(camera2, scene, geometry, material, object, group);
+          _this.renderBufferDirect(camera2, scene, geometry, material, object, group2);
           material.side = FrontSide;
           material.needsUpdate = true;
-          _this.renderBufferDirect(camera2, scene, geometry, material, object, group);
+          _this.renderBufferDirect(camera2, scene, geometry, material, object, group2);
           material.side = DoubleSide;
         } else {
-          _this.renderBufferDirect(camera2, scene, geometry, material, object, group);
+          _this.renderBufferDirect(camera2, scene, geometry, material, object, group2);
         }
-        object.onAfterRender(_this, scene, camera2, geometry, material, group);
+        object.onAfterRender(_this, scene, camera2, geometry, material, group2);
       }
       function getProgram(material, scene, object) {
         if (scene.isScene !== true) scene = _emptyScene;
@@ -18084,9 +18137,9 @@ void main() {
           const groups = material.uniformsGroups;
           for (let i = 0, l = groups.length; i < l; i++) {
             if (capabilities.isWebGL2) {
-              const group = groups[i];
-              uniformsGroups.update(group, program);
-              uniformsGroups.bind(group, program);
+              const group2 = groups[i];
+              uniformsGroups.update(group2, program);
+              uniformsGroups.bind(group2, program);
             } else {
               console.warn("THREE.WebGLRenderer: Uniform Buffer Objects can only be used with WebGL 2.");
             }
@@ -18416,6 +18469,155 @@ void main() {
       this.generateMipmaps = false;
       this.flipY = false;
       this.unpackAlignment = 1;
+    }
+  };
+  var LineBasicMaterial = class extends Material {
+    constructor(parameters) {
+      super();
+      this.isLineBasicMaterial = true;
+      this.type = "LineBasicMaterial";
+      this.color = new Color(16777215);
+      this.map = null;
+      this.linewidth = 1;
+      this.linecap = "round";
+      this.linejoin = "round";
+      this.fog = true;
+      this.setValues(parameters);
+    }
+    copy(source) {
+      super.copy(source);
+      this.color.copy(source.color);
+      this.map = source.map;
+      this.linewidth = source.linewidth;
+      this.linecap = source.linecap;
+      this.linejoin = source.linejoin;
+      this.fog = source.fog;
+      return this;
+    }
+  };
+  var _start$1 = /* @__PURE__ */ new Vector3();
+  var _end$1 = /* @__PURE__ */ new Vector3();
+  var _inverseMatrix$1 = /* @__PURE__ */ new Matrix4();
+  var _ray$1 = /* @__PURE__ */ new Ray();
+  var _sphere$1 = /* @__PURE__ */ new Sphere();
+  var Line = class extends Object3D {
+    constructor(geometry = new BufferGeometry(), material = new LineBasicMaterial()) {
+      super();
+      this.isLine = true;
+      this.type = "Line";
+      this.geometry = geometry;
+      this.material = material;
+      this.updateMorphTargets();
+    }
+    copy(source, recursive) {
+      super.copy(source, recursive);
+      this.material = Array.isArray(source.material) ? source.material.slice() : source.material;
+      this.geometry = source.geometry;
+      return this;
+    }
+    computeLineDistances() {
+      const geometry = this.geometry;
+      if (geometry.index === null) {
+        const positionAttribute = geometry.attributes.position;
+        const lineDistances = [0];
+        for (let i = 1, l = positionAttribute.count; i < l; i++) {
+          _start$1.fromBufferAttribute(positionAttribute, i - 1);
+          _end$1.fromBufferAttribute(positionAttribute, i);
+          lineDistances[i] = lineDistances[i - 1];
+          lineDistances[i] += _start$1.distanceTo(_end$1);
+        }
+        geometry.setAttribute("lineDistance", new Float32BufferAttribute(lineDistances, 1));
+      } else {
+        console.warn("THREE.Line.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.");
+      }
+      return this;
+    }
+    raycast(raycaster, intersects) {
+      const geometry = this.geometry;
+      const matrixWorld = this.matrixWorld;
+      const threshold = raycaster.params.Line.threshold;
+      const drawRange = geometry.drawRange;
+      if (geometry.boundingSphere === null) geometry.computeBoundingSphere();
+      _sphere$1.copy(geometry.boundingSphere);
+      _sphere$1.applyMatrix4(matrixWorld);
+      _sphere$1.radius += threshold;
+      if (raycaster.ray.intersectsSphere(_sphere$1) === false) return;
+      _inverseMatrix$1.copy(matrixWorld).invert();
+      _ray$1.copy(raycaster.ray).applyMatrix4(_inverseMatrix$1);
+      const localThreshold = threshold / ((this.scale.x + this.scale.y + this.scale.z) / 3);
+      const localThresholdSq = localThreshold * localThreshold;
+      const vStart = new Vector3();
+      const vEnd = new Vector3();
+      const interSegment = new Vector3();
+      const interRay = new Vector3();
+      const step = this.isLineSegments ? 2 : 1;
+      const index = geometry.index;
+      const attributes = geometry.attributes;
+      const positionAttribute = attributes.position;
+      if (index !== null) {
+        const start = Math.max(0, drawRange.start);
+        const end = Math.min(index.count, drawRange.start + drawRange.count);
+        for (let i = start, l = end - 1; i < l; i += step) {
+          const a = index.getX(i);
+          const b = index.getX(i + 1);
+          vStart.fromBufferAttribute(positionAttribute, a);
+          vEnd.fromBufferAttribute(positionAttribute, b);
+          const distSq = _ray$1.distanceSqToSegment(vStart, vEnd, interRay, interSegment);
+          if (distSq > localThresholdSq) continue;
+          interRay.applyMatrix4(this.matrixWorld);
+          const distance = raycaster.ray.origin.distanceTo(interRay);
+          if (distance < raycaster.near || distance > raycaster.far) continue;
+          intersects.push({
+            distance,
+            // What do we want? intersection point on the ray or on the segment??
+            // point: raycaster.ray.at( distance ),
+            point: interSegment.clone().applyMatrix4(this.matrixWorld),
+            index: i,
+            face: null,
+            faceIndex: null,
+            object: this
+          });
+        }
+      } else {
+        const start = Math.max(0, drawRange.start);
+        const end = Math.min(positionAttribute.count, drawRange.start + drawRange.count);
+        for (let i = start, l = end - 1; i < l; i += step) {
+          vStart.fromBufferAttribute(positionAttribute, i);
+          vEnd.fromBufferAttribute(positionAttribute, i + 1);
+          const distSq = _ray$1.distanceSqToSegment(vStart, vEnd, interRay, interSegment);
+          if (distSq > localThresholdSq) continue;
+          interRay.applyMatrix4(this.matrixWorld);
+          const distance = raycaster.ray.origin.distanceTo(interRay);
+          if (distance < raycaster.near || distance > raycaster.far) continue;
+          intersects.push({
+            distance,
+            // What do we want? intersection point on the ray or on the segment??
+            // point: raycaster.ray.at( distance ),
+            point: interSegment.clone().applyMatrix4(this.matrixWorld),
+            index: i,
+            face: null,
+            faceIndex: null,
+            object: this
+          });
+        }
+      }
+    }
+    updateMorphTargets() {
+      const geometry = this.geometry;
+      const morphAttributes = geometry.morphAttributes;
+      const keys = Object.keys(morphAttributes);
+      if (keys.length > 0) {
+        const morphAttribute = morphAttributes[keys[0]];
+        if (morphAttribute !== void 0) {
+          this.morphTargetInfluences = [];
+          this.morphTargetDictionary = {};
+          for (let m = 0, ml = morphAttribute.length; m < ml; m++) {
+            const name = morphAttribute[m].name || String(m);
+            this.morphTargetInfluences.push(0);
+            this.morphTargetDictionary[name] = m;
+          }
+        }
+      }
     }
   };
   var CanvasTexture = class extends Texture {
@@ -18856,6 +19058,66 @@ void main() {
       return new _SphereGeometry(data.radius, data.widthSegments, data.heightSegments, data.phiStart, data.phiLength, data.thetaStart, data.thetaLength);
     }
   };
+  var TorusGeometry = class _TorusGeometry extends BufferGeometry {
+    constructor(radius = 1, tube = 0.4, radialSegments = 12, tubularSegments = 48, arc = Math.PI * 2) {
+      super();
+      this.type = "TorusGeometry";
+      this.parameters = {
+        radius,
+        tube,
+        radialSegments,
+        tubularSegments,
+        arc
+      };
+      radialSegments = Math.floor(radialSegments);
+      tubularSegments = Math.floor(tubularSegments);
+      const indices = [];
+      const vertices = [];
+      const normals = [];
+      const uvs = [];
+      const center = new Vector3();
+      const vertex2 = new Vector3();
+      const normal = new Vector3();
+      for (let j = 0; j <= radialSegments; j++) {
+        for (let i = 0; i <= tubularSegments; i++) {
+          const u = i / tubularSegments * arc;
+          const v = j / radialSegments * Math.PI * 2;
+          vertex2.x = (radius + tube * Math.cos(v)) * Math.cos(u);
+          vertex2.y = (radius + tube * Math.cos(v)) * Math.sin(u);
+          vertex2.z = tube * Math.sin(v);
+          vertices.push(vertex2.x, vertex2.y, vertex2.z);
+          center.x = radius * Math.cos(u);
+          center.y = radius * Math.sin(u);
+          normal.subVectors(vertex2, center).normalize();
+          normals.push(normal.x, normal.y, normal.z);
+          uvs.push(i / tubularSegments);
+          uvs.push(j / radialSegments);
+        }
+      }
+      for (let j = 1; j <= radialSegments; j++) {
+        for (let i = 1; i <= tubularSegments; i++) {
+          const a = (tubularSegments + 1) * j + i - 1;
+          const b = (tubularSegments + 1) * (j - 1) + i - 1;
+          const c = (tubularSegments + 1) * (j - 1) + i;
+          const d = (tubularSegments + 1) * j + i;
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+      this.setIndex(indices);
+      this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+      this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+      this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+    }
+    copy(source) {
+      super.copy(source);
+      this.parameters = Object.assign({}, source.parameters);
+      return this;
+    }
+    static fromJSON(data) {
+      return new _TorusGeometry(data.radius, data.tube, data.radialSegments, data.tubularSegments, data.arc);
+    }
+  };
   var MeshStandardMaterial = class extends Material {
     constructor(parameters) {
       super();
@@ -18927,6 +19189,139 @@ void main() {
       this.wireframeLinejoin = source.wireframeLinejoin;
       this.flatShading = source.flatShading;
       this.fog = source.fog;
+      return this;
+    }
+  };
+  var MeshPhysicalMaterial = class extends MeshStandardMaterial {
+    constructor(parameters) {
+      super();
+      this.isMeshPhysicalMaterial = true;
+      this.defines = {
+        "STANDARD": "",
+        "PHYSICAL": ""
+      };
+      this.type = "MeshPhysicalMaterial";
+      this.anisotropyRotation = 0;
+      this.anisotropyMap = null;
+      this.clearcoatMap = null;
+      this.clearcoatRoughness = 0;
+      this.clearcoatRoughnessMap = null;
+      this.clearcoatNormalScale = new Vector2(1, 1);
+      this.clearcoatNormalMap = null;
+      this.ior = 1.5;
+      Object.defineProperty(this, "reflectivity", {
+        get: function() {
+          return clamp(2.5 * (this.ior - 1) / (this.ior + 1), 0, 1);
+        },
+        set: function(reflectivity) {
+          this.ior = (1 + 0.4 * reflectivity) / (1 - 0.4 * reflectivity);
+        }
+      });
+      this.iridescenceMap = null;
+      this.iridescenceIOR = 1.3;
+      this.iridescenceThicknessRange = [100, 400];
+      this.iridescenceThicknessMap = null;
+      this.sheenColor = new Color(0);
+      this.sheenColorMap = null;
+      this.sheenRoughness = 1;
+      this.sheenRoughnessMap = null;
+      this.transmissionMap = null;
+      this.thickness = 0;
+      this.thicknessMap = null;
+      this.attenuationDistance = Infinity;
+      this.attenuationColor = new Color(1, 1, 1);
+      this.specularIntensity = 1;
+      this.specularIntensityMap = null;
+      this.specularColor = new Color(1, 1, 1);
+      this.specularColorMap = null;
+      this._anisotropy = 0;
+      this._clearcoat = 0;
+      this._iridescence = 0;
+      this._sheen = 0;
+      this._transmission = 0;
+      this.setValues(parameters);
+    }
+    get anisotropy() {
+      return this._anisotropy;
+    }
+    set anisotropy(value) {
+      if (this._anisotropy > 0 !== value > 0) {
+        this.version++;
+      }
+      this._anisotropy = value;
+    }
+    get clearcoat() {
+      return this._clearcoat;
+    }
+    set clearcoat(value) {
+      if (this._clearcoat > 0 !== value > 0) {
+        this.version++;
+      }
+      this._clearcoat = value;
+    }
+    get iridescence() {
+      return this._iridescence;
+    }
+    set iridescence(value) {
+      if (this._iridescence > 0 !== value > 0) {
+        this.version++;
+      }
+      this._iridescence = value;
+    }
+    get sheen() {
+      return this._sheen;
+    }
+    set sheen(value) {
+      if (this._sheen > 0 !== value > 0) {
+        this.version++;
+      }
+      this._sheen = value;
+    }
+    get transmission() {
+      return this._transmission;
+    }
+    set transmission(value) {
+      if (this._transmission > 0 !== value > 0) {
+        this.version++;
+      }
+      this._transmission = value;
+    }
+    copy(source) {
+      super.copy(source);
+      this.defines = {
+        "STANDARD": "",
+        "PHYSICAL": ""
+      };
+      this.anisotropy = source.anisotropy;
+      this.anisotropyRotation = source.anisotropyRotation;
+      this.anisotropyMap = source.anisotropyMap;
+      this.clearcoat = source.clearcoat;
+      this.clearcoatMap = source.clearcoatMap;
+      this.clearcoatRoughness = source.clearcoatRoughness;
+      this.clearcoatRoughnessMap = source.clearcoatRoughnessMap;
+      this.clearcoatNormalMap = source.clearcoatNormalMap;
+      this.clearcoatNormalScale.copy(source.clearcoatNormalScale);
+      this.ior = source.ior;
+      this.iridescence = source.iridescence;
+      this.iridescenceMap = source.iridescenceMap;
+      this.iridescenceIOR = source.iridescenceIOR;
+      this.iridescenceThicknessRange = [...source.iridescenceThicknessRange];
+      this.iridescenceThicknessMap = source.iridescenceThicknessMap;
+      this.sheen = source.sheen;
+      this.sheenColor.copy(source.sheenColor);
+      this.sheenColorMap = source.sheenColorMap;
+      this.sheenRoughness = source.sheenRoughness;
+      this.sheenRoughnessMap = source.sheenRoughnessMap;
+      this.transmission = source.transmission;
+      this.transmissionMap = source.transmissionMap;
+      this.thickness = source.thickness;
+      this.thicknessMap = source.thicknessMap;
+      this.attenuationDistance = source.attenuationDistance;
+      this.attenuationColor.copy(source.attenuationColor);
+      this.specularIntensity = source.specularIntensity;
+      this.specularIntensityMap = source.specularIntensityMap;
+      this.specularColor.copy(source.specularColor);
+      this.specularColorMap = source.specularColorMap;
       return this;
     }
   };
@@ -20380,7 +20775,7 @@ void main() {
     // how long Doug looms at a desk
     socialSecs: [14, 9],
     // floor conversation dwell
-    ambientCalmSecs: [40, 60],
+    ambientCalmSecs: [26, 39],
     // gaps between idle desk thoughts
     ambientHotSecs: [10, 14],
     // ...when the floor is agitated
@@ -20434,7 +20829,6 @@ void main() {
     // an EMPTY office covers its whole gap in ~this many real seconds
   };
   var RENDER = {
-    maxPixelRatio: 2,
     clearColor: 2893342,
     frustumHalfHeight: 13.5,
     cameraRadius: 60,
@@ -20460,11 +20854,32 @@ void main() {
     shirts: [4169868, 15238463, 9420650, 13724286, 8746953, 5085910, 13214271, 6139806]
   };
   var renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, RENDER.maxPixelRatio));
+  renderer.setPixelRatio(devicePixelRatio);
   renderer.setSize(innerWidth, innerHeight);
+  renderer.domElement.style.filter = "saturate(1.06)";
+  {
+    const v = document.createElement("div");
+    v.id = "vignette";
+    v.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:5;background:radial-gradient(ellipse at center, rgba(0,0,0,0) 52%, rgba(0,0,0,0.30) 100%)";
+    document.body.appendChild(v);
+  }
   renderer.outputColorSpace = LinearSRGBColorSpace;
   renderer.shadowMap.enabled = false;
   renderer.setClearColor(RENDER.clearColor);
+  var SAFE = { level: 0 };
+  function enterSafeMode() {
+    SAFE.level++;
+    if (SAFE.level >= 2) renderer.setPixelRatio(1);
+    console.warn("WebGL safe mode level " + SAFE.level + (SAFE.level === 1 ? " (post chain off)" : " (pixel ratio 1)"));
+  }
+  renderer.domElement.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    console.warn("WebGL context lost \u2014 degrading before restore");
+    enterSafeMode();
+  });
+  renderer.domElement.addEventListener("webglcontextrestored", () => {
+    console.warn("WebGL context restored at safe level " + SAFE.level);
+  });
   var sceneG = new Scene();
   var camTheta = Math.PI / 4;
   var camZoom = 1;
@@ -20540,11 +20955,22 @@ void main() {
   toonRamp.minFilter = NearestFilter;
   toonRamp.magFilter = NearestFilter;
   toonRamp.needsUpdate = true;
+  var WORLD_FOG = { value: new Color(RENDER.clearColor) };
   var toonCache = /* @__PURE__ */ new Map();
   var M = (c) => {
     let m = toonCache.get(c);
     if (!m) {
       m = new MeshToonMaterial({ color: c, gradientMap: toonRamp });
+      m.onBeforeCompile = (s) => {
+        s.uniforms.uBgC = WORLD_FOG;
+        s.vertexShader = s.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWorldP;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvWorldP = (modelMatrix * vec4(position, 1.0)).xyz;");
+        s.fragmentShader = s.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vWorldP;\nuniform vec3 uBgC;").replace("#include <dithering_fragment>", `#include <dithering_fragment>
+          vec2 dOut = max(abs(vWorldP.xz - vec2(0.0, 0.0)) - vec2(19.5, 14.45), vec2(0.0));
+          float dist = length(dOut);
+          float f = smoothstep(0.35, 2.6, dist);
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, uBgC, f);`);
+      };
+      m.customProgramCacheKey = () => "toon-worldfog";
       toonCache.set(c, m);
     }
     return m;
@@ -20619,38 +21045,86 @@ void main() {
     if (list) for (const fn of list) fn(payload);
   }
 
+  // src/content/logo.js
+  var PATHS = `<g fill="none" stroke="none">
+<path fill="{F1}" d="M170,26 C142,34 110,58 89,92 C74,116 64,140 58,162 C56,169 59,171 64,167 C90,147 122,132 142,106 C159,84 170,54 170,26 Z"/>
+<path fill="{F2}" d="M164,34 C144,48 122,72 105,102 C93,123 83,143 76,159 L80,162 C88,143 99,121 113,99 C129,73 147,50 166,38 Z"/>
+<path fill="{F1}" d="M73,146 C64,170 55,191 45,210 L40,205 C50,189 59,168 66,144 Z"/>
+<path fill="{F1}" d="M45,210 L34,222 L38,197 C40,201 43,206 45,210 Z"/>
+<circle cx="39" cy="210" r="1.6" fill="{F2}"/>
+<path stroke="{F1}" stroke-width="3.4" stroke-linecap="round" d="M34,222 C62,235 106,232 138,222 C170,211 196,214 206,224"/>
+<path stroke="{F1}" stroke-width="1.6" stroke-linecap="round" opacity="0.55" d="M206,224 C212,229 216,228 219,224"/>
+</g>`;
+  var DEFS = `<defs>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#E9D9A0"/><stop offset="0.45" stop-color="#C9A23F"/><stop offset="1" stop-color="#8A6508"/>
+</linearGradient>
+<linearGradient id="shaft" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#F4EAC8"/><stop offset="1" stop-color="#B78F2E"/>
+</linearGradient></defs>`;
+  function logoSVG(mode) {
+    if (mode === "etch")
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">' + PATHS.split("{F1}").join("#EAF4F7").split("{F2}").join("#FFFFFF") + "</svg>";
+    if (mode === "ink")
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">' + PATHS.split("{F1}").join("#3E3428").split("{F2}").join("#6B5B40") + "</svg>";
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">' + DEFS + PATHS.split("{F1}").join("url(#gold)").split("{F2}").join("url(#shaft)") + "</svg>";
+  }
+  function logoCanvas(mode, size, cb) {
+    const img = new window.Image();
+    img.onload = () => {
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = size;
+      cv.getContext("2d").drawImage(img, 0, 0, size, size);
+      cb(cv);
+    };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(logoSVG(mode));
+  }
+
   // src/engine/glass-sign.js
   var signTex = null;
   var signMat = null;
+  var _logoCv = null;
   function mottoFor(M2) {
     return M2 >= 97 ? "feed it." : M2 >= 90 ? "no one is missing. stop asking." : M2 >= 82 ? "verdicts daily at noon" : M2 >= 74 ? "the carpet is sovereign soil" : M2 >= 66 ? "wages are a suggestion" : M2 >= 58 ? "the cameras are for love" : M2 >= 50 ? "consent is implied by employment" : M2 >= 42 ? "overtime is a state of mind" : M2 >= 34 ? "your grief is our growth vertical" : M2 >= 26 ? "feelings are inventory" : M2 >= 18 ? "sincerity, at scale" : "say it like you mean it";
   }
   function paintGlassSign(motto) {
+    if (!_logoCv) {
+      logoCanvas("ink", 512, (cv2) => {
+        _logoCv = cv2;
+        paintGlassSign(lastMotto || motto);
+      });
+    }
     const cv = signTex ? signTex.image : document.createElement("canvas");
     cv.width = 2048;
-    cv.height = 640;
-    const ctx = cv.getContext("2d");
-    ctx.clearRect(0, 0, 2048, 640);
-    ctx.textAlign = "center";
-    ctx.lineJoin = "round";
-    ctx.font = "bold 215px Georgia, serif";
-    ctx.strokeStyle = "rgba(243,239,226,0.9)";
-    ctx.lineWidth = 14;
-    ctx.strokeText("HARTFELT & CO.", 1024, 250);
-    ctx.fillStyle = "rgba(30,26,20,0.95)";
-    ctx.fillText("HARTFELT & CO.", 1024, 250);
+    cv.height = 900;
+    const ctx2 = cv.getContext("2d");
+    ctx2.clearRect(0, 0, 2048, 900);
+    ctx2.textAlign = "center";
+    ctx2.lineJoin = "round";
+    ctx2.font = "bold 215px Georgia, serif";
+    ctx2.strokeStyle = "rgba(243,239,226,0.9)";
+    ctx2.lineWidth = 14;
+    ctx2.strokeText("HARTFELT & CO.", 1024, 250);
+    ctx2.fillStyle = "rgba(30,26,20,0.95)";
+    ctx2.fillText("HARTFELT & CO.", 1024, 250);
     const line = "\u2014 " + motto + " \u2014";
     let fs = 150;
-    ctx.font = "italic " + fs + "px Georgia, serif";
-    while (fs > 84 && ctx.measureText(line).width > 1900) {
+    ctx2.font = "italic " + fs + "px Georgia, serif";
+    while (fs > 84 && ctx2.measureText(line).width > 1900) {
       fs -= 6;
-      ctx.font = "italic " + fs + "px Georgia, serif";
+      ctx2.font = "italic " + fs + "px Georgia, serif";
     }
-    ctx.strokeStyle = "rgba(243,239,226,0.9)";
-    ctx.lineWidth = Math.max(8, fs * 0.075);
-    ctx.strokeText(line, 1024, 500);
-    ctx.fillStyle = "rgba(30,26,20,0.95)";
-    ctx.fillText(line, 1024, 500);
+    ctx2.strokeStyle = "rgba(243,239,226,0.9)";
+    ctx2.lineWidth = Math.max(8, fs * 0.075);
+    ctx2.strokeText(line, 1024, 500);
+    ctx2.fillStyle = "rgba(30,26,20,0.95)";
+    ctx2.fillText(line, 1024, 500);
+    if (_logoCv) {
+      ctx2.save();
+      ctx2.globalAlpha = 0.92;
+      ctx2.drawImage(_logoCv, 924, 560, 200, 200);
+      ctx2.restore();
+    }
     if (!signTex) {
       signTex = new CanvasTexture(cv);
       signTex.anisotropy = 8;
@@ -20660,8 +21134,8 @@ void main() {
         side: DoubleSide,
         depthWrite: false
       });
-      const plane = new Mesh(new PlaneGeometry(5.6, 1.75), signMat);
-      plane.position.set(-3.36, 2.75, -7.5);
+      const plane = new Mesh(new PlaneGeometry(5.6, 2.46), signMat);
+      plane.position.set(-3.36, 2.55, -7.5);
       plane.rotation.y = Math.PI / 2;
       plane.renderOrder = 3;
       sceneG.add(plane);
@@ -20672,10 +21146,10 @@ void main() {
     lastMotto = mottoFor(0);
     paintGlassSign(lastMotto);
     on("mirror", (M2) => {
-      const want = mottoFor(M2);
-      if (want !== lastMotto) {
-        lastMotto = want;
-        paintGlassSign(want);
+      const want2 = mottoFor(M2);
+      if (want2 !== lastMotto) {
+        lastMotto = want2;
+        paintGlassSign(want2);
       }
     });
   }
@@ -20686,11 +21160,12 @@ void main() {
     perfNow = v;
   }
   var CS = 0.5;
-  var GW = Math.round(38 / CS) + 2;
-  var GH = Math.round(28 / CS) + 2;
-  var OX = 19 + CS;
-  var OZ = 14 + CS;
+  var GW = Math.round(52 / CS) + 2;
+  var GH = Math.round(44 / CS) + 2;
+  var OX = 26 + CS;
+  var OZ = 22 + CS;
   var blocked = new Uint8Array(GW * GH);
+  var NAV_PAD = COLLIDER.employee;
   var obstacles = [];
   function addObstacle(x, z, w, d) {
     const o = { x, z, w, d };
@@ -20701,6 +21176,7 @@ void main() {
     const i = obstacles.indexOf(o);
     if (i >= 0) obstacles.splice(i, 1);
   }
+  var inFunnel = (x, z) => Math.abs(x - DOOR.x) < 1.4 && z > 12.6;
   function cellBlocked(cx, cz) {
     return cx < 0 || cz < 0 || cx >= GW || cz >= GH || blocked[cz * GW + cx] === 1;
   }
@@ -20708,13 +21184,9 @@ void main() {
     blocked.fill(0);
     for (let cx = 0; cx < GW; cx++) for (let cz = 0; cz < GH; cz++) {
       const wx = cx * CS - OX, wz = cz * CS - OZ;
-      if (wx < -18.4 || wx > 18.4 || wz < -13.5 || wz > 13.4) {
-        blocked[cz * GW + cx] = 1;
-        continue;
-      }
       for (let i = 0; i < obstacles.length; i++) {
         const o = obstacles[i];
-        if (Math.abs(wx - o.x) <= o.w / 2 + 0.35 && Math.abs(wz - o.z) <= o.d / 2 + 0.35) {
+        if (Math.abs(wx - o.x) <= o.w / 2 + NAV_PAD && Math.abs(wz - o.z) <= o.d / 2 + NAV_PAD) {
           blocked[cz * GW + cx] = 1;
           break;
         }
@@ -20807,14 +21279,44 @@ void main() {
     return sm;
   }
   var BLOCKERS = [];
+  function losClearR(x0, z0, x1, z1, r) {
+    const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz);
+    if (L > 6) return false;
+    const minX = Math.min(x0, x1) - r, maxX = Math.max(x0, x1) + r;
+    const minZ = Math.min(z0, z1) - r, maxZ = Math.max(z0, z1) + r;
+    const steps = Math.max(2, Math.ceil(L / 0.4));
+    for (const o of obstacles) {
+      if (o.x + o.w / 2 < minX || o.x - o.w / 2 > maxX || o.z + o.d / 2 < minZ || o.z - o.d / 2 > maxZ) continue;
+      for (let i = 0; i <= steps; i++) {
+        const t2 = i / steps, px = x0 + dx * t2, pz = z0 + dz * t2;
+        if (Math.abs(px - o.x) <= o.w / 2 + r && Math.abs(pz - o.z) <= o.d / 2 + r) return false;
+      }
+    }
+    return true;
+  }
   function stepMover(ent, tgt, speed, dt, isFinal = false) {
     if (ent._aroundCd > 0) ent._aroundCd -= dt;
     if (ent.yieldT > 0) {
       ent.yieldT -= dt;
       ent.mesh.position.y = 0;
+      gaitPose(ent, false, dt);
       return false;
     }
     if (ent.path && ent.path.length) {
+      ent._cutCd = (ent._cutCd || 0) - dt;
+      let cuts = 0;
+      while (ent._cutCd <= 0 && ent.path.length > 1 && cuts < 3 && losClearR(
+        ent.mesh.position.x,
+        ent.mesh.position.z,
+        ent.path[1].x,
+        ent.path[1].z,
+        colliderRadius(ent) + 0.04
+      )) {
+        ent.path.shift();
+        ent._wdBest = void 0;
+        cuts++;
+      }
+      if (cuts === 0 && ent._cutCd <= 0) ent._cutCd = 0.22;
       const wp = ent.path[0];
       const dNow = Math.hypot(wp.x - ent.mesh.position.x, wp.z - ent.mesh.position.z);
       if (ent._wdBest === void 0 || dNow < ent._wdBest - 0.12) {
@@ -20941,7 +21443,7 @@ void main() {
         if (ahead > 0.7 && d < 1.1 && b.ref) {
           const sdir = dx * oz - dz * ox >= 0 ? 1 : -1;
           let placed = false;
-          if (ent.path && !(ent._aroundCd > 0)) {
+          if (ent.path && !(ent._aroundCd > 0) && !inFunnel(ent.mesh.position.x, ent.mesh.position.z)) {
             if (ent._aroundBlk === b.cid) ent._aroundN = (ent._aroundN || 0) + 1;
             else {
               ent._aroundBlk = b.cid;
@@ -20966,7 +21468,7 @@ void main() {
               }
             }
           }
-          if (!placed && d < 0.9 && b.canNudge && (b.ref.nudgeCd || 0) <= 0) {
+          if (!placed && d < colliderRadius(ent) + colliderRadius(b.ref) + 0.12 && b.canNudge && (b.ref.nudgeCd || 0) <= 0 && !inFunnel(ent.mesh.position.x, ent.mesh.position.z)) {
             b.ref.nudgeCd = 2.5;
             let qx = b.x - dz * sdir * 0.8, qz = b.z + dx * sdir * 0.8;
             let cc = toCell(qx, qz);
@@ -20988,6 +21490,15 @@ void main() {
     const ml = Math.hypot(mx, mz) || 1;
     mx /= ml;
     mz /= ml;
+    {
+      const pvx = ent._vx || mx, pvz = ent._vz || mz;
+      const k = Math.min(1, dt * 3.1);
+      mx = pvx + (mx - pvx) * k;
+      mz = pvz + (mz - pvz) * k;
+      const bl = Math.hypot(mx, mz) || 1;
+      mx /= bl;
+      mz /= bl;
+    }
     const s = speed * slow * dt;
     const nx = px + mx * s, nz = pz + mz * s;
     const c = toCell(nx, nz);
@@ -21002,7 +21513,16 @@ void main() {
     }
     ent._vx = mx;
     ent._vz = mz;
-    ent.mesh.rotation.y = Math.atan2(mx, mz);
+    gaitPose(ent, true, dt);
+    {
+      const want2 = Math.atan2(mx, mz);
+      let cur = ent.mesh.rotation.y;
+      let diff = want2 - cur;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const maxTurn = 4.6 * dt;
+      ent.mesh.rotation.y = cur + Math.max(-maxTurn, Math.min(maxTurn, diff));
+    }
     ent.mesh.position.y = Math.abs(Math.sin(perfNow * 9 + (ent.cid || 0))) * 0.05;
     for (const b of BLOCKERS) {
       if (b.cid === ent.cid) continue;
@@ -21061,6 +21581,43 @@ void main() {
       if (blocked[c[1] * GW + c[0]] !== 1) mv.shiftTo = { x: nx, z: nz };
     }
   }
+
+  // src/content/roster.js
+  var AGENTS_DATA = [
+    { n: "Ruth", role: "Senior Card Writer", arch: "veteran-cynic", ten: "veteran", note: "22 years. Wrote the bestselling sympathy line of 2009." },
+    { n: "Bernard", role: "Verse Metrist", arch: "veteran-idealist", ten: "veteran", note: "Believes a good couplet can save a marriage." },
+    { n: "Dolores", role: "Envelope QA", arch: "caretaker", ten: "veteran", note: "Two kids. Checks 400 envelopes a day by feel." },
+    { n: "Hank", role: "Foil-Stamp Operator", arch: "workhorse", ten: "veteran", note: "Hands like oven mitts. Heart like a card." },
+    { n: "Tia", role: "Birthday Div. Lead", arch: "striver", ten: "mid", note: "Wants Ruth's desk. Says so, cheerfully." },
+    { n: "Walt", role: "Glue Systems", arch: "coaster", ten: "mid", note: "Has perfected looking busy. It's an art." },
+    { n: "Ines", role: "Pun Department (dept. of 1)", arch: "idealist", ten: "mid", note: "Every pun is load-bearing." },
+    { n: "Gary", role: "Warehouse & Shipping", arch: "workhorse", ten: "mid", note: "Lifts with his legs and his grievances." },
+    { n: "Sandra", role: "Accounts", arch: "caretaker", ten: "mid", note: "Knows exactly what everyone earns. Says nothing." },
+    { n: "Kyle", role: "Junior Card Writer", arch: "striver", ten: "new", note: "Thinks 'grindset' unironically. Hired last month." },
+    { n: "Agnes", role: "Receptionist", arch: "idealist", ten: "veteran", note: "Remembers every birthday. Every single one." },
+    { n: "Theo", role: "Print Technician", arch: "mercenary", ten: "new", note: "Here for the r\xE9sum\xE9 line. Eighteen months, tops." }
+  ];
+  var ARCH_MOD = {
+    // sensitivity multipliers for negative deltas
+    "veteran-cynic": 1.25,
+    "veteran-idealist": 1.15,
+    "caretaker": 1.2,
+    "workhorse": 0.9,
+    "idealist": 1.1,
+    "cynic": 1.15,
+    "striver": 0.7,
+    "coaster": 0.95,
+    "mercenary": 0.8
+  };
+  var TEN_MOD = { veteran: 1.3, mid: 1, new: 0.6 };
+  var DIRECTOR_DATA = [
+    { n: "Doug", role: "CEO", color: 13214247, isCEO: true },
+    { n: "Frank", role: "Finance", color: 3754590 },
+    { n: "Dennis", role: "People", color: 6175308 },
+    { n: "Gordon", role: "Sales", color: 7223856 },
+    { n: "Kevin", role: "IT & Facilities", color: 3947594 }
+  ];
+  var NEWHIRE_NAMES = ["Jordan", "Sam", "Riley", "Casey", "Avery", "Quinn", "Rowan", "Skyler", "Emerson", "Blake"];
 
   // src/engine/office.js
   var deskSeats;
@@ -21157,18 +21714,18 @@ void main() {
       P.push(coloredPart(new CylinderGeometry(0.05, 0.08, 1.15, 6), TRUNK, 0, 0.95, 0, 1, 1, 1, -0.05));
       const g = [5810282, 4954717, 6731123];
       for (let i = 0; i < 6; i++) {
-        const ang = i * (Math.PI * 2 / 6) + 0.4;
+        const ang2 = i * (Math.PI * 2 / 6) + 0.4;
         P.push(coloredPart(
           new ConeGeometry(0.16, 0.95, 5),
           g[i % 3],
-          Math.cos(ang) * 0.34,
+          Math.cos(ang2) * 0.34,
           1.52,
-          Math.sin(ang) * 0.34,
+          Math.sin(ang2) * 0.34,
           1,
           1,
           0.4,
-          Math.cos(ang) * 1.25,
-          Math.sin(ang) * -1.25,
+          Math.cos(ang2) * 1.25,
+          Math.sin(ang2) * -1.25,
           0
         ));
       }
@@ -21182,6 +21739,104 @@ void main() {
     m.scale.setScalar(s);
     sceneG.add(m);
     return m;
+  }
+  var PERSONAL_EFFECTS = [];
+  var SURFACES = [];
+  var WORKSTATIONS = [];
+  function addSurface(spec) {
+    SURFACES.push(spec);
+    return spec;
+  }
+  function addWorkstation(surface, seat) {
+    let lx = (seat.x - surface.cx) * Math.cos(surface.yaw) - (seat.z - surface.cz) * Math.sin(surface.yaw);
+    let lz = (seat.x - surface.cx) * Math.sin(surface.yaw) + (seat.z - surface.cz) * Math.cos(surface.yaw);
+    const zx = Math.max(-surface.halfW + 0.35, Math.min(surface.halfW - 0.35, lx));
+    const zz = Math.max(-surface.halfD + 0.28, Math.min(surface.halfD - 0.28, lz));
+    const ws = { surface, seat, seatLocal: { x: lx, z: lz }, zone: { x: zx, z: zz, halfW: 0.5, halfD: 0.26 } };
+    WORKSTATIONS.push(ws);
+    return ws;
+  }
+  function workstationForSeat(seat) {
+    return WORKSTATIONS.find((w) => w.seat === seat);
+  }
+  function finalizeWorkstations() {
+    const bySurface = /* @__PURE__ */ new Map();
+    for (const w of WORKSTATIONS) {
+      (bySurface.get(w.surface) || bySurface.set(w.surface, []).get(w.surface)).push(w);
+    }
+    for (const [surface, list] of bySurface) {
+      if (list.length === 1) {
+        list[0].zone = { x: 0, z: 0, halfW: surface.halfW - 0.15, halfD: surface.halfD - 0.1 };
+        continue;
+      }
+      const edgeOf = (w) => Math.abs(w.seatLocal.x) / surface.halfW > Math.abs(w.seatLocal.z) / surface.halfD ? w.seatLocal.x < 0 ? "W" : "E" : w.seatLocal.z < 0 ? "N" : "S";
+      const groups = {};
+      for (const w of list) {
+        const e = edgeOf(w);
+        (groups[e] = groups[e] || []).push(w);
+      }
+      const GAP = 0.06;
+      const depthWE = Math.min(surface.halfW / 2, 0.55);
+      const depthNS = Math.min(surface.halfD / 2, 0.55);
+      for (const e of Object.keys(groups)) {
+        const g = groups[e];
+        const NS = e === "N" || e === "S";
+        g.sort((a, b) => NS ? a.seatLocal.x - b.seatLocal.x : a.seatLocal.z - b.seatLocal.z);
+        const lo = NS ? -surface.halfW + (groups.W ? 2 * depthWE + GAP : GAP) : -surface.halfD + GAP;
+        const hi = NS ? surface.halfW - (groups.E ? 2 * depthWE + GAP : GAP) : surface.halfD - GAP;
+        const fairH = (hi - lo) / g.length / 2 * 0.94;
+        const spans = g.map((w) => {
+          const d = NS ? w.seatLocal.x : w.seatLocal.z;
+          return { w, lo: Math.max(lo, d - fairH), hi: Math.min(hi, d + fairH) };
+        });
+        for (let i = 1; i < spans.length; i++) {
+          const a = spans[i - 1], b = spans[i];
+          if (a.hi > b.lo - GAP) {
+            const mid = (a.hi + b.lo) / 2;
+            a.hi = mid - GAP / 2;
+            b.lo = mid + GAP / 2;
+          }
+        }
+        for (const sp of spans) {
+          const c = (sp.lo + sp.hi) / 2, h = (sp.hi - sp.lo) / 2;
+          sp.w.zone = NS ? { x: c, z: (e === "N" ? -1 : 1) * (surface.halfD - depthNS), halfW: h, halfD: depthNS } : { x: (e === "W" ? -1 : 1) * (surface.halfW - depthWE), z: c, halfW: depthWE, halfD: h };
+        }
+      }
+    }
+  }
+  function bindAgentsForEffects(list) {
+    for (const e of PERSONAL_EFFECTS) {
+      const a = list.find((x) => x.n === e.owner);
+      if (a) (a.effects || (a.effects = [])).push(e);
+    }
+  }
+  function placeEffectsFor(a) {
+    if (!a.effects || !a.seat) return;
+    const ws = workstationForSeat(a.seat);
+    if (!ws) {
+      for (const e of a.effects) e.mesh.visible = false;
+      return;
+    }
+    const d = ws.surface, z = ws.zone;
+    for (const e of a.effects) {
+      const dx = z.x + Math.max(-z.halfW, Math.min(z.halfW, e.off.dx));
+      const dz = z.z + Math.max(-z.halfD, Math.min(z.halfD, e.off.dz));
+      e.mesh.position.set(
+        d.cx + dx * Math.cos(d.yaw) + dz * Math.sin(d.yaw),
+        d.topY + (e.off.lift || 0),
+        d.cz - dx * Math.sin(d.yaw) + dz * Math.cos(d.yaw)
+      );
+      e.mesh.rotation.y = d.yaw + (e.off.yaw || 0);
+      e.mesh.visible = true;
+    }
+  }
+  function packEffectsFor(a) {
+    if (!a.effects) return;
+    a.effects.forEach((e, k) => {
+      e.mesh.visible = true;
+      e.mesh.position.set(1.85 + a.i % 6 * 0.82, 0.62 + k * 0.16, 13.35);
+      e.mesh.rotation.y = 0;
+    });
   }
   function buildOffice() {
     beginStaticBatch();
@@ -21201,9 +21856,6 @@ void main() {
     box(0.18, 3.1, 0.2, 2762274, DOOR.x - 0.94, 1.55, DOOR.slabZ, null, false);
     box(0.18, 3.1, 0.2, 2762274, DOOR.x + 0.94, 1.55, DOOR.slabZ, null, false);
     box(2.06, 0.22, 0.2, 2762274, DOOR.x, 3.02, DOOR.slabZ, null, false);
-    box(1.7, 2.9, 0.1, 14209728, DOOR.x, 1.45, DOOR.slabZ, null, false);
-    box(0.16, 0.5, 0.05, 12162607, DOOR.x + 0.65, 1.45, DOOR.slabZ - 0.07, null, false);
-    box(0.16, 0.5, 0.05, 12162607, DOOR.x + 0.65, 1.45, DOOR.slabZ + 0.09, null, false);
     {
       const skyMat = new MeshBasicMaterial({ color: 8369380, toneMapped: false });
       for (let i = -2; i <= 2; i++) {
@@ -21239,12 +21891,14 @@ void main() {
         deskGroups.push(g);
         const wp = new Vector3(0, 0, 0.98).applyAxisAngle(new Vector3(0, 1, 0), rot);
         const wo = new Vector3(0, 0, 2.35).applyAxisAngle(new Vector3(0, 1, 0), rot);
-        deskSeats.push({
+        const seatRec = {
           x: px + ox + wp.x,
           z: pz + oz + wp.z,
           facing: rot,
           out: { x: px + ox + wo.x, z: pz + oz + wo.z }
-        });
+        };
+        deskSeats.push(seatRec);
+        addWorkstation(addSurface({ cx: px + ox, cz: pz + oz, yaw: rot, halfW: 1.1, halfD: 0.55, topY: 0.84 }), seatRec);
       });
     });
     coffeeSpot = { x: -16.9, z: 0.6 };
@@ -21278,9 +21932,16 @@ void main() {
     glassWall(3.4, 4.2, 0.15, -5.2, 2.1, -1);
     addObstacle(-14.6, -1, 8.6, 0.5);
     addObstacle(-5.2, -1, 3.4, 0.5);
-    box(0.5, 0.5, 0.35, 9071434, DOOR.x - 1.6, 1.15, DOOR.z + 0.25, null, false);
-    box(0.34, 0.03, 0.06, 2762274, DOOR.x - 1.6, 1.34, DOOR.z + 0.08, null, false);
-    box(0.08, 0.9, 0.08, 5521451, DOOR.x - 1.6, 0.45, DOOR.z + 0.25, null, false);
+    addObstacle(-18.95, 0.2, 0.3, 29.4);
+    addObstacle(18.95, 0.2, 0.3, 29.4);
+    addObstacle(0, -13.95, 38.2, 0.3);
+    addObstacle((-19.5 + (DOOR.x - 0.85)) / 2, 14.2, DOOR.x - 0.85 - -19.5, 0.5);
+    addObstacle(DOOR.x - 0.94, 13.9, 0.2, 0.4);
+    addObstacle(DOOR.x + 0.94, 13.9, 0.2, 0.4);
+    addObstacle((DOOR.x + 0.85 + 19.5) / 2, 14.2, 19.5 - (DOOR.x + 0.85), 0.5);
+    box(0.5, 0.5, 0.35, 9071434, -18.9, 1.15, 12, null, false);
+    box(0.34, 0.03, 0.06, 2762274, -18.72, 1.34, 12, null, false);
+    box(0.08, 0.9, 0.08, 5521451, -18.9, 0.45, 12, null, false);
     {
       const cv = document.createElement("canvas");
       cv.width = 1024;
@@ -21341,19 +22002,35 @@ void main() {
       // south pair faces the table (-z)
       { x: -10.2, z: -6.1, rot: Math.PI }
     ];
+    const boardSurface = addSurface({ cx: -11.5, cz: -8, yaw: 0, halfW: 3.5, halfD: 1.2, topY: 1.09 });
+    BOARD_SEATS.forEach((s) => addWorkstation(boardSurface, s));
+    finalizeWorkstations();
     doloresKettle = new Group();
-    const kbody = new Mesh(new CylinderGeometry(0.13, 0.16, 0.2, 10), MV);
-    kbody.geometry = kbody.geometry.toNonIndexed();
-    doloresKettle.add(new Mesh(new CylinderGeometry(0.13, 0.16, 0.2, 10), M(14209e3)));
-    const spout = new Mesh(new CylinderGeometry(0.03, 0.045, 0.16, 6), M(14209e3));
-    spout.rotation.z = Math.PI / 3;
-    spout.position.set(0.16, 0.06, 0);
-    doloresKettle.add(spout);
-    const kn = new Mesh(new SphereGeometry(0.035, 8, 6), M(9071518));
-    kn.position.y = 0.13;
+    const KETTLE = 15089250, LID = 15919320, KNOB = 3025446;
+    const belly = new Mesh(new SphereGeometry(0.17, 12, 10), M(KETTLE));
+    belly.scale.set(1, 0.82, 1);
+    belly.position.y = 0.13;
+    doloresKettle.add(belly);
+    const base = new Mesh(new CylinderGeometry(0.13, 0.145, 0.05, 10), M(KETTLE));
+    base.position.y = 0.025;
+    doloresKettle.add(base);
+    const lid = new Mesh(new CylinderGeometry(0.085, 0.1, 0.045, 10), M(LID));
+    lid.position.y = 0.265;
+    doloresKettle.add(lid);
+    const kn = new Mesh(new SphereGeometry(0.028, 8, 6), M(KNOB));
+    kn.position.y = 0.3;
     doloresKettle.add(kn);
-    doloresKettle.position.set(deskSeats[4].x + 0.55, 0.98, deskSeats[4].z - 0.7);
+    const spout = new Mesh(new CylinderGeometry(0.022, 0.05, 0.22, 8), M(KETTLE));
+    spout.rotation.z = -Math.PI / 2.6;
+    spout.position.set(0.17, 0.17, 0);
+    doloresKettle.add(spout);
+    const handle = new Mesh(new TorusGeometry(0.095, 0.02, 8, 14, Math.PI), M(KNOB));
+    handle.position.set(-0.04, 0.27, 0);
+    handle.rotation.z = -0.25;
+    doloresKettle.add(handle);
     sceneG.add(doloresKettle);
+    doloresKettle.visible = false;
+    PERSONAL_EFFECTS.push({ owner: "Dolores", mesh: doloresKettle, off: { dx: 0.8, dz: -0.34, yaw: 0.72 } });
     printerMesh = new Group();
     sceneG.add(printerMesh);
     box(1.3, 0.9, 1, 12169892, -2.2, 0.45, -12.7, printerMesh);
@@ -21417,18 +22094,18 @@ void main() {
     const cv = document.createElement("canvas");
     cv.width = 512;
     cv.height = 128;
-    const ctx = cv.getContext("2d");
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    if ("letterSpacing" in ctx) ctx.letterSpacing = "5px";
+    const ctx2 = cv.getContext("2d");
+    ctx2.textAlign = "center";
+    ctx2.textBaseline = "middle";
+    if ("letterSpacing" in ctx2) ctx2.letterSpacing = "5px";
     let fs = 96;
-    ctx.font = "bold " + fs + "px 'Courier New', monospace";
-    while (fs > 50 && ctx.measureText(name.toUpperCase()).width > 480) {
+    ctx2.font = "bold " + fs + "px 'Courier New', monospace";
+    while (fs > 50 && ctx2.measureText(name.toUpperCase()).width > 480) {
       fs -= 6;
-      ctx.font = "bold " + fs + "px 'Courier New', monospace";
+      ctx2.font = "bold " + fs + "px 'Courier New', monospace";
     }
-    ctx.fillStyle = "rgba(40,30,18,0.72)";
-    ctx.fillText(name.toUpperCase(), 256, 70);
+    ctx2.fillStyle = "rgba(40,30,18,0.72)";
+    ctx2.fillText(name.toUpperCase(), 256, 70);
     const tex = new CanvasTexture(cv);
     tex.anisotropy = 8;
     const plate = new Mesh(
@@ -21465,19 +22142,19 @@ void main() {
             return;
           }
           spin.visible = true;
-          const cv = plate.material.map.image, ctx = cv.getContext("2d");
-          ctx.clearRect(0, 0, cv.width, cv.height);
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          if ("letterSpacing" in ctx) ctx.letterSpacing = "5px";
+          const cv = plate.material.map.image, ctx2 = cv.getContext("2d");
+          ctx2.clearRect(0, 0, cv.width, cv.height);
+          ctx2.textAlign = "center";
+          ctx2.textBaseline = "middle";
+          if ("letterSpacing" in ctx2) ctx2.letterSpacing = "5px";
           let fs = 96;
-          ctx.font = "bold " + fs + "px 'Courier New', monospace";
-          while (fs > 50 && ctx.measureText(n.toUpperCase()).width > 480) {
+          ctx2.font = "bold " + fs + "px 'Courier New', monospace";
+          while (fs > 50 && ctx2.measureText(n.toUpperCase()).width > 480) {
             fs -= 6;
-            ctx.font = "bold " + fs + "px 'Courier New', monospace";
+            ctx2.font = "bold " + fs + "px 'Courier New', monospace";
           }
-          ctx.fillStyle = "rgba(40,30,18,0.72)";
-          ctx.fillText(n.toUpperCase(), 256, 70);
+          ctx2.fillStyle = "rgba(40,30,18,0.72)";
+          ctx2.fillText(n.toUpperCase(), 256, 70);
           plate.material.map.needsUpdate = true;
         }
       };
@@ -21485,64 +22162,53 @@ void main() {
   }
   function addTableNameplates(seats) {
     const CX = -11.5, CZ = -8, HX = 3.5, HZ = 1.2;
+    const handles = [];
     seats.forEach(({ x, z, rot, name }) => {
       const fx = Math.sin(rot), fz = Math.cos(rot);
       let t2 = Infinity;
       if (Math.abs(fx) > 0.5) t2 = (CX + Math.sign(fx) * (HX - 0.21) - x) / fx;
       if (Math.abs(fz) > 0.5) t2 = (CZ + Math.sign(fz) * (HZ - 0.21) - z) / fz;
       const px = x + fx * t2, pz = z + fz * t2;
-      spinnerAt(px, 1.105, pz, engravedPlate(name, 1.7, 0.42), 0, true);
+      const plate = engravedPlate(name, 1.7, 0.42);
+      const spin = spinnerAt(px, 1.105, pz, plate, 0, true);
+      handles.push({
+        setName(n) {
+          if (n == null) {
+            spin.visible = false;
+            return;
+          }
+          spin.visible = true;
+          const cv = plate.material.map.image, ctx2 = cv.getContext("2d");
+          ctx2.clearRect(0, 0, cv.width, cv.height);
+          ctx2.textAlign = "center";
+          ctx2.textBaseline = "middle";
+          if ("letterSpacing" in ctx2) ctx2.letterSpacing = "5px";
+          let fs = 96;
+          ctx2.font = "bold " + fs + "px 'Courier New', monospace";
+          while (fs > 50 && ctx2.measureText(n.toUpperCase()).width > 480) {
+            fs -= 6;
+            ctx2.font = "bold " + fs + "px 'Courier New', monospace";
+          }
+          ctx2.fillStyle = "rgba(40,30,18,0.72)";
+          ctx2.fillText(n.toUpperCase(), 256, 70);
+          plate.material.map.needsUpdate = true;
+        }
+      });
     });
+    return handles;
   }
   var NAMEPLATES = [];
   var plateFlip = 0;
   function updateNameplates(fwdX, fwdZ) {
     void fwdX;
-    const want = fwdZ > 0.12 ? Math.PI : fwdZ < -0.12 ? 0 : plateFlip;
-    if (want !== plateFlip) {
-      plateFlip = want;
+    const want2 = fwdZ > 0.12 ? Math.PI : fwdZ < -0.12 ? 0 : plateFlip;
+    if (want2 !== plateFlip) {
+      plateFlip = want2;
       NAMEPLATES.forEach((sp) => {
         sp.rotation.y = (sp.userData.baseYaw || 0) + plateFlip;
       });
     }
   }
-
-  // src/content/roster.js
-  var AGENTS_DATA = [
-    { n: "Ruth", role: "Senior Card Writer", arch: "veteran-cynic", ten: "veteran", note: "22 years. Wrote the bestselling sympathy line of 2009." },
-    { n: "Bernard", role: "Verse Metrist", arch: "veteran-idealist", ten: "veteran", note: "Believes a good couplet can save a marriage." },
-    { n: "Dolores", role: "Envelope QA", arch: "caretaker", ten: "veteran", note: "Two kids. Checks 400 envelopes a day by feel." },
-    { n: "Hank", role: "Foil-Stamp Operator", arch: "workhorse", ten: "veteran", note: "Hands like oven mitts. Heart like a card." },
-    { n: "Tia", role: "Birthday Div. Lead", arch: "striver", ten: "mid", note: "Wants Ruth's desk. Says so, cheerfully." },
-    { n: "Walt", role: "Glue Systems", arch: "coaster", ten: "mid", note: "Has perfected looking busy. It's an art." },
-    { n: "Ines", role: "Pun Department (dept. of 1)", arch: "idealist", ten: "mid", note: "Every pun is load-bearing." },
-    { n: "Gary", role: "Warehouse & Shipping", arch: "workhorse", ten: "mid", note: "Lifts with his legs and his grievances." },
-    { n: "Sandra", role: "Accounts", arch: "caretaker", ten: "mid", note: "Knows exactly what everyone earns. Says nothing." },
-    { n: "Kyle", role: "Junior Card Writer", arch: "striver", ten: "new", note: "Thinks 'grindset' unironically. Hired last month." },
-    { n: "Agnes", role: "Receptionist", arch: "idealist", ten: "veteran", note: "Remembers every birthday. Every single one." },
-    { n: "Theo", role: "Print Technician", arch: "mercenary", ten: "new", note: "Here for the r\xE9sum\xE9 line. Eighteen months, tops." }
-  ];
-  var ARCH_MOD = {
-    // sensitivity multipliers for negative deltas
-    "veteran-cynic": 1.25,
-    "veteran-idealist": 1.15,
-    "caretaker": 1.2,
-    "workhorse": 0.9,
-    "idealist": 1.1,
-    "cynic": 1.15,
-    "striver": 0.7,
-    "coaster": 0.95,
-    "mercenary": 0.8
-  };
-  var TEN_MOD = { veteran: 1.3, mid: 1, new: 0.6 };
-  var DIRECTOR_DATA = [
-    { n: "Doug", role: "CEO", color: 13214247, isCEO: true },
-    { n: "Frank", role: "Finance", color: 3754590 },
-    { n: "Dennis", role: "People", color: 6175308 },
-    { n: "Gordon", role: "Sales", color: 7223856 },
-    { n: "Kevin", role: "IT & Facilities", color: 3947594 }
-  ];
-  var NEWHIRE_NAMES = ["Jordan", "Sam", "Riley", "Casey", "Avery", "Quinn", "Rowan", "Skyler", "Emerson", "Blake"];
 
   // src/engine/characters.js
   var agents = [];
@@ -21568,7 +22234,40 @@ void main() {
   function removeBody(e) {
     if (e.mesh && e.mesh.parent) e.mesh.parent.remove(e.mesh);
   }
+  function gaitPose(p, moving, dt) {
+    if (p.seated) return;
+    const P = p.mesh && p.mesh.userData.parts || p;
+    if (!P.body || !P.head) return;
+    const dir = !!(p.isDir || p.isCEO);
+    const bodyBase = p.isCEO ? 0.95 : dir ? 0.98 : 0.95;
+    const headBase = p.isCEO ? 1.82 : dir ? 1.92 : 1.82;
+    if (!moving) {
+      if (p._gaitT === void 0) return;
+      p._gaitT = void 0;
+      P.body.position.y = bodyBase;
+      P.head.position.y = headBase;
+      p.mesh.rotation.z = 0;
+      p._lean = 0;
+      return;
+    }
+    p._stride = (p._stride || 0) + dt * 7.2;
+    p._gaitT = 1;
+    const bob = Math.abs(Math.sin(p._stride)) * 0.055;
+    const sway = Math.sin(p._stride) * 0.035;
+    const yaw = p.mesh.rotation.y;
+    let dYaw = yaw - (p._lastYaw === void 0 ? yaw : p._lastYaw);
+    while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+    while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+    p._lastYaw = yaw;
+    const yawRate = dt > 0 ? dYaw / dt : 0;
+    const leanTgt = Math.max(-0.16, Math.min(0.16, -yawRate * 0.055));
+    p._lean = (p._lean || 0) + (leanTgt - (p._lean || 0)) * Math.min(1, dt * 9);
+    P.body.position.y = bodyBase + bob;
+    P.head.position.y = headBase + bob * 1.15;
+    p.mesh.rotation.z = sway + p._lean;
+  }
   function setPose(a, seated) {
+    if (seated) a.mesh.rotation.z = 0;
     if (seated && a.standing) seated = false;
     const ch = a.mesh.children;
     if (seated) {
@@ -21683,13 +22382,13 @@ void main() {
         const cv = document.createElement("canvas");
         cv.width = 512;
         cv.height = 256;
-        const ctx = cv.getContext("2d");
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = "900 132px 'Arial Black', 'Arial', sans-serif";
-        if ("letterSpacing" in ctx) ctx.letterSpacing = "10px";
-        ctx.fillStyle = "rgba(16,14,12,0.92)";
-        ctx.fillText("CEO", 256, 128);
+        const ctx2 = cv.getContext("2d");
+        ctx2.textAlign = "center";
+        ctx2.textBaseline = "middle";
+        ctx2.font = "900 132px 'Arial Black', 'Arial', sans-serif";
+        if ("letterSpacing" in ctx2) ctx2.letterSpacing = "10px";
+        ctx2.fillStyle = "rgba(16,14,12,0.92)";
+        ctx2.fillText("CEO", 256, 128);
         const tex = new CanvasTexture(cv);
         tex.anisotropy = 8;
         tex.flipY = false;
@@ -21725,6 +22424,7 @@ void main() {
     return g;
   }
   function dirPose(d, seated) {
+    if (seated) d.mesh.rotation.z = 0;
     const p = d.mesh.userData.parts;
     if (d.isCEO) {
       if (seated) {
@@ -21817,6 +22517,12 @@ void main() {
     });
     directors.forEach((d) => dirPose(d, true));
     addDeskNameplates(agents.map((a, i) => ({ deskIx: SEAT_MAP[i] ?? i, name: a.n })));
+    agents.forEach((a, i) => {
+      const ws = workstationForSeat(a.seat);
+      if (ws) ws.plate = DESK_PLATES[SEAT_MAP[i] ?? i];
+    });
+    bindAgentsForEffects(agents);
+    agents.forEach((a) => placeEffectsFor(a));
     agents.forEach((a) => {
       a.mesh.visible = false;
     });
@@ -21824,7 +22530,12 @@ void main() {
       d.state = "dirHomeDone";
       d.mesh.visible = false;
     });
-    addTableNameplates(directors.filter((d) => !d.isCEO).map((d) => ({ x: d.seat.x, z: d.seat.z, rot: d.seat.rot, name: d.n })));
+    const tableDirs = directors.filter((d) => !d.isCEO);
+    const tablePlates = addTableNameplates(tableDirs.map((d) => ({ x: d.seat.x, z: d.seat.z, rot: d.seat.rot, name: d.n })));
+    tableDirs.forEach((d, i) => {
+      const ws = workstationForSeat(d.seat);
+      if (ws) ws.plate = tablePlates[i];
+    });
   }
 
   // src/engine/props.js
@@ -21834,7 +22545,7 @@ void main() {
   function hasMug(a) {
     return mugs.some((g) => g.a === a && !g.dying);
   }
-  function giveMug(a) {
+  function giveMug(a, esp = false) {
     a.mugCount = (a.mugCount || 0) + 1;
     const existing = mugs.find((g) => g.a === a);
     if (existing) {
@@ -21843,22 +22554,38 @@ void main() {
       existing.dying = 0;
       return;
     }
-    const mesh = new Mesh(
-      new CylinderGeometry(0.1, 0.088, 0.2, 8),
-      M(MUG_COLS[colIx++ % MUG_COLS.length])
-    );
+    let mesh;
+    if (esp) {
+      mesh = new Group();
+      const saucer = new Mesh(new CylinderGeometry(0.115, 0.09, 0.018, 10), M(15920610));
+      mesh.add(saucer);
+      const cup = new Mesh(new CylinderGeometry(0.062, 0.048, 0.085, 8), M(16249834));
+      cup.position.y = 0.055;
+      mesh.add(cup);
+      const rim = new Mesh(new CylinderGeometry(0.064, 0.062, 0.012, 8), M(13214271));
+      rim.position.y = 0.1;
+      mesh.add(rim);
+    } else {
+      mesh = new Mesh(
+        new CylinderGeometry(0.1, 0.088, 0.2, 8),
+        M(MUG_COLS[colIx++ % MUG_COLS.length])
+      );
+    }
     sceneG.add(mesh);
     mugs.push({ a, mesh, phase: "carry", life: 260, t: 0, sipCd: 14 + Math.random() * 14, sip: 0, dying: 0 });
+    pickUp(a, "mug");
   }
   function tickMugs(dt) {
     for (let i = mugs.length - 1; i >= 0; i--) {
       const g = mugs[i], a = g.a;
       if (!a || a.state === "gone") {
+        putDown(g.a, "mug");
         g.mesh.removeFromParent();
         mugs.splice(i, 1);
         continue;
       }
       if (g.phase === "carry" && (a.state === "home" || a.state === "dirHomeDone")) {
+        putDown(g.a, "mug");
         g.mesh.removeFromParent();
         mugs.splice(i, 1);
         continue;
@@ -21868,6 +22595,7 @@ void main() {
         g.dying += dt;
         const s = 1 - g.dying / 0.5;
         if (s <= 0) {
+          putDown(g.a, "mug");
           g.mesh.removeFromParent();
           mugs.splice(i, 1);
         } else g.mesh.scale.setScalar(s);
@@ -21875,6 +22603,7 @@ void main() {
       }
       if (g.phase === "carry") {
         if (a.mesh.visible === false) {
+          putDown(g.a, "mug");
           g.mesh.removeFromParent();
           mugs.splice(i, 1);
           continue;
@@ -21899,6 +22628,7 @@ void main() {
           };
           g.baseY = TABLE_Y;
           g.phase = "desk";
+          putDown(g.a, "mug");
           g.mesh.position.set(g.home.x, g.baseY, g.home.z);
           g.mesh.rotation.set(0, 0, 0);
         } else if (a.state === "work" && nearSeat) {
@@ -21908,6 +22638,7 @@ void main() {
           g.home = { x: a.seat.x - wx * 0.62 + lx, z: a.seat.z - wz * 0.62 + lz };
           g.baseY = 0.94;
           g.phase = "desk";
+          putDown(g.a, "mug");
           g.mesh.position.set(g.home.x, g.baseY, g.home.z);
           g.mesh.rotation.set(0, f, 0);
         }
@@ -21960,6 +22691,7 @@ void main() {
     mesh.add(sheet);
     sceneG.add(mesh);
     papers.push({ a, mesh, phase: "carry", life: 640, t: 0, dying: 0 });
+    pickUp(a, "paper");
   }
   function boardPapers() {
     return papers.filter((g) => g.a && g.a.isDir).length;
@@ -21968,11 +22700,13 @@ void main() {
     for (let i = papers.length - 1; i >= 0; i--) {
       const g = papers[i], a = g.a;
       if (!a || a.state === "gone") {
+        putDown(g.a, "paper");
         g.mesh.removeFromParent();
         papers.splice(i, 1);
         continue;
       }
       if (g.phase === "carry" && (a.state === "home" || a.state === "dirHomeDone")) {
+        putDown(g.a, "paper");
         g.mesh.removeFromParent();
         papers.splice(i, 1);
         continue;
@@ -21982,6 +22716,7 @@ void main() {
         g.dying += dt;
         const s = 1 - g.dying / 0.5;
         if (s <= 0) {
+          putDown(g.a, "paper");
           g.mesh.removeFromParent();
           papers.splice(i, 1);
         } else g.mesh.scale.setScalar(s);
@@ -21989,6 +22724,7 @@ void main() {
       }
       if (g.phase === "carry") {
         if (a.mesh.visible === false) {
+          putDown(g.a, "paper");
           g.mesh.removeFromParent();
           papers.splice(i, 1);
           continue;
@@ -22013,6 +22749,7 @@ void main() {
           g.mesh.position.set(px, 1.12, pz);
           g.mesh.rotation.set(0, a.seat.rot + (Math.random() - 0.5) * 0.12, 0);
           g.phase = "desk";
+          putDown(g.a, "paper");
         } else if (a.state === "work" && nearSeatP) {
           const f = a.seat.facing;
           const wx = Math.sin(f), wz = Math.cos(f);
@@ -22025,6 +22762,7 @@ void main() {
           );
           g.mesh.rotation.set(0, f + Math.PI + (Math.random() - 0.5) * 0.5, 0);
           g.phase = "desk";
+          putDown(g.a, "paper");
         }
       }
     }
@@ -22042,6 +22780,7 @@ void main() {
     g.add(body, trim, handle);
     sceneG.add(g);
     cases.push({ d, mesh: g });
+    pickUp(d, "case");
   }
   function tickCases() {
     for (let i = cases.length - 1; i >= 0; i--) {
@@ -22050,6 +22789,7 @@ void main() {
       if (!inTransit || d.mesh.visible === false) {
         c.mesh.removeFromParent();
         cases.splice(i, 1);
+        putDown(d, "case");
         continue;
       }
       const yaw = d.mesh.rotation.y;
@@ -22161,8 +22901,135 @@ void main() {
     }
   }
 
+  // src/engine/audio.js
+  var ctx = null;
+  var master = null;
+  var muted = false;
+  function ac() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = 0.16;
+      master.connect(ctx.destination);
+      const resume = () => {
+        if (ctx.state === "suspended") ctx.resume();
+      };
+      window.addEventListener("pointerdown", resume);
+      window.addEventListener("keydown", resume);
+    }
+    return ctx;
+  }
+  function toggleMute() {
+    muted = !muted;
+    if (master) master.gain.value = muted ? 0 : 0.16;
+    return muted;
+  }
+  function env(g, t0, a, d, peak) {
+    g.gain.setValueAtTime(1e-4, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + a);
+    g.gain.exponentialRampToValueAtTime(1e-4, t0 + a + d);
+  }
+  function sfxDoor(opening) {
+    const c = ac(), t2 = c.currentTime;
+    const len = 0.28, buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const f = c.createBiquadFilter();
+    f.type = "bandpass";
+    f.Q.value = 1.2;
+    f.frequency.setValueAtTime(opening ? 320 : 520, t2);
+    f.frequency.exponentialRampToValueAtTime(opening ? 620 : 240, t2 + len);
+    const g = c.createGain();
+    env(g, t2, 0.02, len - 0.02, 0.5);
+    src.connect(f).connect(g).connect(master);
+    src.start(t2);
+  }
+  var lastPop = 0;
+  function sfxPop() {
+    const c = ac(), t2 = c.currentTime;
+    if (t2 - lastPop < 0.09) return;
+    lastPop = t2;
+    const o = c.createOscillator();
+    o.type = "sine";
+    const f0 = 620 + Math.random() * 260;
+    o.frequency.setValueAtTime(f0, t2);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.6, t2 + 0.07);
+    const g = c.createGain();
+    env(g, t2, 4e-3, 0.07, 0.35);
+    o.connect(g).connect(master);
+    o.start(t2);
+    o.stop(t2 + 0.09);
+  }
+  var lastMurmur = 0;
+  function sfxPopSoft() {
+    const c = ac(), t2 = c.currentTime;
+    if (t2 - lastMurmur < 0.14) return;
+    lastMurmur = t2;
+    const o = c.createOscillator();
+    o.type = "triangle";
+    const f0 = 300 + Math.random() * 110;
+    o.frequency.setValueAtTime(f0, t2);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.7, t2 + 0.06);
+    const g = c.createGain();
+    env(g, t2, 6e-3, 0.06, 0.13);
+    o.connect(g).connect(master);
+    o.start(t2);
+    o.stop(t2 + 0.08);
+  }
+  function sfxChime() {
+    const c = ac(), t2 = c.currentTime;
+    for (const [freq, del, pk] of [[523.25, 0, 0.3], [784, 0.06, 0.2]]) {
+      const o = c.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = freq;
+      const g = c.createGain();
+      env(g, t2 + del, 0.01, 0.5, pk);
+      o.connect(g).connect(master);
+      o.start(t2 + del);
+      o.stop(t2 + del + 0.55);
+    }
+  }
+  function sfxFanfare() {
+    const c = ac(), t2 = c.currentTime;
+    [[523.25, 0, 0.22], [659.25, 0.09, 0.22], [783.99, 0.18, 0.26], [1046.5, 0.3, 0.3]].forEach(([f, del, pk]) => {
+      const o = c.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = f;
+      const g = c.createGain();
+      env(g, t2 + del, 0.012, 0.42, pk);
+      o.connect(g).connect(master);
+      o.start(t2 + del);
+      o.stop(t2 + del + 0.5);
+    });
+    const sp = c.createOscillator();
+    sp.type = "sine";
+    sp.frequency.setValueAtTime(2093, t2 + 0.42);
+    const g2 = c.createGain();
+    env(g2, t2 + 0.42, 8e-3, 0.5, 0.12);
+    sp.connect(g2).connect(master);
+    sp.start(t2 + 0.42);
+    sp.stop(t2 + 0.95);
+  }
+  function sfxWomp() {
+    const c = ac(), t2 = c.currentTime;
+    [[392, 0, 0.24], [311.13, 0.16, 0.28]].forEach(([f, del, pk]) => {
+      const o = c.createOscillator();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(f, t2 + del);
+      o.frequency.exponentialRampToValueAtTime(f * 0.94, t2 + del + 0.4);
+      const g = c.createGain();
+      env(g, t2 + del, 0.015, 0.5, pk);
+      o.connect(g).connect(master);
+      o.start(t2 + del);
+      o.stop(t2 + del + 0.6);
+    });
+  }
+
   // src/ui/toasts.js
   function toast(msg, holdMs) {
+    sfxChime();
     const t2 = document.createElement("div");
     t2.className = "toast";
     t2.textContent = msg;
@@ -23305,6 +24172,8 @@ void main() {
       "Rhymed 'eternity' with 'maternity.' Career highlight? Career highlight.",
       "Every emotion has a quota now. Even the sincere ones. Especially those.",
       "Envelope 214 whispered when I sealed it. Envelopes don't whisper. Noted.",
+      "They moved the suggestion box to the kitchen corner, behind the vending machine. Even hope got hot-desked.",
+      "Found the suggestion box today. By accident. Behind the vending machine, facing the wall of the fridge hum. It looked... at peace.",
       "There's a sheet of paper on my desk from three days ago. We've grown attached. I can't file him now.",
       "Watched the sky go grey to greyer today. The window is basically a mood ring for the building.",
       "The wall clock ticks like it's judging. It is 2:40. It is ALWAYS somehow 2:40."
@@ -23913,8 +24782,8 @@ void main() {
   };
   var MORNING_GREET = {
     helloTo: [
-      "Morning, {N}.",
-      "Hey {N}!",
+      "Morning, {N}. Lobby smells like toner and ambition again.",
+      "Hey {N}! The elevator played smooth jazz AT me.",
       "{N}! You made it.",
       "Morning, {N} - you look awake. Teach me.",
       "Hey {N}, grab coffee yet?",
@@ -23975,7 +24844,7 @@ void main() {
       "batch-cooked five meals. They are all, somehow, the same meal.",
       "took the kids to the lake. The car is now load-bearing sand.",
       "finally read on the porch. Half a book. The good half.",
-      "watched an entire series. No regrets. Some regrets.",
+      "binged all six seasons of 'Harbor Judge.' He solves crimes from a HOUSEBOAT. No regrets. Some regrets.",
       "cleaned the garage. Found three things I'd rebought.",
       "went fishing. Caught a mood, mostly.",
       "board game night got competitive. My sister isn't speaking to me. Worth it.",
@@ -24004,7 +24873,7 @@ void main() {
       "the garage sale circuit. I need nothing. I will return with a lamp.",
       "meal prep and a long walk. I'm forty, this is ecstasy.",
       "rec league playoffs. The stakes are imaginary and ENORMOUS.",
-      "a movie marathon. Curtains closed. Phone in a drawer.",
+      "a 'Detective Grandpa' marathon. All five. He forgets the case, never the grudge. Curtains closed.",
       "driving out to see my dad. He'll pretend he fixed the mower alone.",
       "bread. I'm making bread. The whole weekend is bread now.",
       "helping a friend move. So: pizza wages.",
@@ -24048,21 +24917,21 @@ void main() {
       "No promises."
     ],
     blurt: [
-      "Morning, everyone.",
+      "Morning, everyone. The bus driver called me chief, so. Big day already.",
       "We're doing this again, huh.",
       "Greetings, fellow inmates of commerce.",
       "The commute tried to kill me. Anyway, morning.",
       "Morning. I saw the sunrise today. On PURPOSE this time.",
       "Top of the morning. Bottom of the energy.",
-      "Morning, morning."
+      "Morning, morning. Two mornings. It's that kind of day."
     ],
     doug: [
-      "MORNING, COMMERCE.",
-      "Morning! I dreamt in quarterly increments again.",
-      "Good morning. The building missed me. I could tell.",
-      "Rise and GRIND. That's coffee wordplay. I invented it this morning.",
-      "Morning! My weekend? Synergistic. Next question.",
-      "Good morning! I've been thinking about margins since 5 A.M. The margins of GREATNESS.",
+      "MORNING, COMMERCE. I said it to the Bentley on the way in, too. It gets it.",
+      "Morning! I dreamt I was marginally less wealthy. Woke up mid-scream. The staff came running.",
+      "Good morning. The building missed me. Buildings do that. Mine do, anyway. All four.",
+      "Rise and GRIND. My grinder is Italian and cost more than a sedan. The beans respect it.",
+      "Morning! My weekend? Two islands. One underperformed. We won't discuss which.",
+      "Good morning! I've been thinking about margins since 5 A.M. Poolside. The HEATED pool. Thinking is where I do my best work.",
       "I drove the Bentley in today. The Rolls had a smudge on the tire. Some mornings you just battle through.",
       "Don't you hate when the club runs out of your caviar? Soured the whole weekend. Anyway - MOMENTUM.",
       "Hectic morning. They were OUT of fresh-squeezed and offered me bottled. Bottled! I nearly turned around.",
@@ -24137,11 +25006,11 @@ void main() {
   var BOARD_LINES = {
     Doug: [
       "Question. Can sincerity scale? Follow-up: can we franchise it?",
-      "I had a dream about the number. It was bigger. Let's chase the dream number.",
+      "I had a dream about the number. It was bigger. I woke my sleep specialist to confirm it. We chase the dream number.",
       "My executive coach says I have 'founder energy.' My father founded it, but ENERGY-wise\u2014",
       "What if condolences, but subscription.",
       "What if the cards were... bigger. Bigger card, bigger feelings, bigger price point.",
-      "I read that culture eats strategy for breakfast. So we bill for breakfast now, yes?",
+      "I read that culture eats strategy for breakfast. My breakfast was forty dollars. Culture can afford it. Bill culture.",
       "The consultant's numbers are UP. I don't ask how. Nobody ask how.",
       "Can we capitalize morale? Asset-wise. Frank. Morale.",
       "My father shook every hand on that floor. Different times. Slower times. Billable times."
@@ -24531,52 +25400,110 @@ void main() {
     return text.replace(CAST_RE, (m, name, poss) => {
       const live = agents.find((a) => a.n === name && a.state !== "gone");
       if (live && live !== speaker) return m;
-      const want = CAST_TRAITS[name] || {};
+      const want2 = CAST_TRAITS[name] || {};
       const pool = agents.filter((a) => a.state !== "gone" && a !== speaker);
       if (!pool.length) return m;
       const scored = pool.map((a) => {
         const t2 = CAST_TRAITS[a.n] || {};
-        return { a, s: (t2.arch === want.arch ? 2 : 0) + (t2.ten === want.ten ? 1 : 0) };
+        return { a, s: (t2.arch === want2.arch ? 2 : 0) + (t2.ten === want2.ten ? 1 : 0) };
       }).sort((x, y) => y.s - x.s);
       const best = scored.filter((x) => x.s === scored[0].s);
       const pick = best[dayHash(name) % best.length].a;
       return pick.n + (poss || "");
     });
   }
-  function say(agent, text, dark = false, hold = 6, force = false, prio = null) {
+  var CONVO_HUES = ["#1E6FFF", "#E1362C", "#12A05A"];
+  var CONVO_INK = { "#1E6FFF": "#1450E8", "#E1362C": "#CC0A1E", "#12A05A": "#0D9448" };
+  var CONVO_STROKE = { "#1E6FFF": "#071B4D", "#E1362C": "#3D020C", "#12A05A": "#03301A" };
+  var hueIx = 0;
+  function pairConvo(a, b, durMs) {
+    const hue = CONVO_HUES[hueIx++ % CONVO_HUES.length];
+    a._convoLock = b._convoLock = true;
+    simTimeout(() => {
+      a._convoLock = false;
+      b._convoLock = false;
+    }, durMs);
+    return hue;
+  }
+  var _hueOverride = null;
+  function sayIn(hue, ...args) {
+    _hueOverride = hue;
+    say(...args);
+    _hueOverride = null;
+  }
+  function say(agent, text, dark = false, hold = 6, force = false, prio = null, reply = null) {
+    if (agent && agent.mesh && agent.mesh.position.z > DOOR.z - 0.1) {
+      if (!reply || agent.mesh.visible === false || agent.mesh.position.z > DOOR.z + 4.6) return;
+    }
+    if (reply && reply.mesh && agent && agent.mesh) {
+      const rdx = reply.mesh.position.x - agent.mesh.position.x;
+      const rdz = reply.mesh.position.z - agent.mesh.position.z;
+      if (rdx * rdx + rdz * rdz > 7.8 * 7.8) return;
+    }
     text = resolveCast(text, agent);
     if (prio === null) prio = force ? 1 : 0;
+    if (agent._convoLock && !_hueOverride && !(prio > 0 || force)) return;
     if (!force) {
       const fluffEmp = activeBubbles.filter((x) => !x.prio && !x.agent.isDir).length;
       const fluffDir = activeBubbles.filter((x) => !x.prio && x.agent.isDir).length;
-      if (prio === 0 && (agent.isDir ? fluffDir >= 1 : fluffEmp >= bubbleCap())) return;
+      const empCap = flags.socialRush ? bubbleCap() + 4 : bubbleCap();
+      const dirCap = flags.socialRush ? 3 : 1;
+      if (prio === 0 && (agent.isDir ? fluffDir >= dirCap : fluffEmp >= empCap)) return;
       if (prio > 0 && activeBubbles.length >= 8) return;
     }
+    if (prio > 0) sfxPop();
+    else sfxPopSoft();
     hold += Math.min(6, text.length / 22);
+    hold += 1.5;
     if (prio > 0) hold += 3.5;
     BUB.recent.set(text, performance.now() / 1e3);
-    const el = document.createElement("div");
-    el.className = "bub" + (dark ? " dark" : "") + (prio ? " hot" : " fluff") + (agent.isCEO ? " ceo" : "") + (agent.isDir && !agent.isCEO ? " dir" : "");
+    const el2 = document.createElement("div");
+    el2.className = "bub" + (dark ? " dark" : "") + (prio ? " hot" : " fluff") + (agent.isCEO ? " ceo" : "") + (agent.isDir && !agent.isCEO ? " dir" : "");
     const who = agent.isDir && !agent.isCEO ? agent.n + " \xB7 " + agent.role : agent.n;
-    el.innerHTML = '<span class="who">' + who + "</span>" + text + '<i class="tail"></i>';
-    bubblesDiv.appendChild(el);
-    el.style.zIndex = (prio > 0 ? 1e3 : 100) + (BUB.seq = (BUB.seq || 0) + 1);
+    el2.innerHTML = '<span class="who">' + who + "</span>" + text + '<i class="tail"></i>';
+    let convoHue = null;
+    if (_hueOverride && !dark) {
+      convoHue = _hueOverride;
+      el2.style.color = CONVO_INK[convoHue] || convoHue;
+      el2.style.webkitTextStroke = "0.5px " + (CONVO_STROKE[convoHue] || convoHue);
+      el2.style.textShadow = "0 0 3px rgba(255,253,247,0.4), 0 1px 4px rgba(40,34,26,0.5)";
+      const ink = CONVO_INK[convoHue] || convoHue, edge = CONVO_STROKE[convoHue] || convoHue;
+      const wEl = el2.querySelector(".who");
+      if (wEl) {
+        wEl.style.color = ink;
+        wEl.style.webkitTextStroke = "0.3px " + edge;
+      }
+    } else if (!dark && !prio) {
+      el2.style.color = "#1C1915";
+      el2.style.webkitTextStroke = "0.25px #9C9890";
+      const wG = el2.querySelector(".who");
+      if (wG) {
+        wG.style.color = "#1C1915";
+        wG.style.webkitTextStroke = "0.2px #9C9890";
+      }
+      el2.style.textShadow = "0 1px 0 rgba(255,253,247,0.95), 0 0 5px rgba(255,253,247,0.7), 0 1px 4px rgba(40,34,26,0.45)";
+    }
+    bubblesDiv.appendChild(el2);
+    el2.style.zIndex = (prio > 0 ? 1e3 : 100) + (BUB.seq = (BUB.seq || 0) + 1);
     const b = {
-      el,
+      el: el2,
       agent,
       life: hold,
       prio,
       age: 0,
       sx: 0,
       sy: 0,
+      hue: convoHue,
+      len: text.length,
+      replyB: !!reply,
       ox: (Math.random() < 0.5 ? -1 : 1) * (22 + Math.random() * 34),
       oy: -(Math.random() * 10)
     };
     const v = agent.mesh.position.clone();
     v.y = 2.2;
     v.project(camera);
-    b.sx = (v.x * 0.5 + 0.5) * innerWidth;
-    b.sy = (-v.y * 0.5 + 0.5) * innerHeight - 8;
+    b.sx = (_projV.x * 0.5 + 0.5) * innerWidth;
+    b.sy = (-_projV.y * 0.5 + 0.5) * innerHeight - 8;
     const wN = 130, hN = 40;
     const spots = [];
     const s0 = b.ox < 0 ? -1 : 1;
@@ -24626,7 +25553,7 @@ void main() {
   function ambientBubbles(dt) {
     BUB.heat = Math.max(0, BUB.heat - dt * 0.05);
     const now = performance.now() / 1e3;
-    const minGap = BUB.heat > 0.2 ? 2.5 : 7;
+    const minGap = BUB.heat > 0.2 ? 2 : 4.5;
     let spokeThisStep = false;
     agents.forEach((a) => {
       if (a.state === "gone") return;
@@ -24645,20 +25572,26 @@ void main() {
       }
     });
   }
+  var _projV = new Vector3();
+  var _edgeCd = 0;
+  var _edgeCache = { bottomEdge: 0, dRect: null };
   function frameBubbles(dt) {
     for (let i = activeBubbles.length - 1; i >= 0; i--) {
       const b = activeBubbles[i];
-      const v = b.agent.mesh.position.clone();
-      v.y = 2.2;
-      v.project(camera);
-      b.sx = (v.x * 0.5 + 0.5) * innerWidth;
-      b.sy = (-v.y * 0.5 + 0.5) * innerHeight - 8;
+      _projV.copy(b.agent.mesh.position);
+      _projV.y = 2.2;
+      _projV.project(camera);
+      b.sx = (_projV.x * 0.5 + 0.5) * innerWidth;
+      b.sy = (-_projV.y * 0.5 + 0.5) * innerHeight - 8;
       const inEdge = b._edge ? 20 : 46;
       b._edge = b.sx < inEdge ? "L" : b.sx > innerWidth - inEdge ? "R" : b.sy < inEdge + 14 ? "T" : null;
       b.age += dt;
-      b.life -= dt * (sim.speed || 0.5);
-      const FADE = b.prio > 0 ? 3.2 : 2;
-      b.el.style.opacity = Math.max(0, Math.min(1, b.age / 0.25, b.life / FADE));
+      b.life -= dt * sim.speed;
+      const lenScale = Math.max(b.replyB ? 1 : 0.75, Math.min(1.6, (b.len || 56) / 56));
+      const FADE = (b.prio > 0 ? 4 : 3) * lenScale;
+      const ft = Math.max(0, Math.min(1, b.life / FADE));
+      const eased = ft * ft * (3 - 2 * ft);
+      b.el.style.opacity = Math.max(0, Math.min(1, b.age / 0.25, eased));
       if (b.life <= 0) {
         b.el.remove();
         activeBubbles.splice(i, 1);
@@ -24675,29 +25608,67 @@ void main() {
         const axc = clampScreenX(axr, wA / 2), ayc = A.sy + A.oy - hA / 2;
         const bxc = clampScreenX(bxr, wB / 2), byc = B.sy + B.oy - hB / 2;
         const aPinned = axc !== axr, bPinned = bxc !== bxr;
-        const needX = (wA + wB) / 2 + 8 - Math.abs(axc - bxc);
-        const needY = (hA + hB) / 2 + 6 - Math.abs(ayc - byc);
+        const sameHue = A.hue && A.hue === B.hue;
+        const M2 = sameHue ? 3 : 16;
+        const needX = (wA + wB) / 2 + M2 - Math.abs(axc - bxc);
+        const needY = (hA + hB) / 2 + M2 - 2 - Math.abs(ayc - byc);
         if (needX <= 2.5 || needY <= 2.5) continue;
-        const SETTLE = 0.4;
-        const aNew = A.age < SETTLE, bNew = B.age < SETTLE;
-        if (!aNew && !bNew) continue;
-        const mover = aNew && bNew ? A.age < B.age ? A : B : aNew ? A : B;
+        if (A._stacked && B._stacked) continue;
+        const mover = A._stacked && !B._stacked ? B : B._stacked && !A._stacked ? A : A.prio && !B.prio ? B : B.prio && !A.prio ? A : A.age < B.age ? A : B;
+        const other = mover === A ? B : A;
+        const moverY = mover === A ? ayc : byc, otherY = mover === A ? byc : ayc;
         const mc = mover === A ? axc : bxc, oc = mover === A ? bxc : axc;
         const moverPinned = mover === A ? aPinned : bPinned;
-        if (needX < needY && !moverPinned)
-          mover.ox += (mc <= oc ? -needX : needX) * 0.5;
-        else mover.oy -= needY * 0.5;
-        mover.ox = Math.max(-95, Math.min(95, mover.ox));
-        mover.oy = Math.max(-130, Math.min(15, mover.oy));
+        const relDir = moverY >= otherY ? 1 : -1;
+        if (needX < needY * 0.6 && !moverPinned)
+          mover.ox += mc <= oc ? -needX : needX;
+        else if (moverPinned && needX < needY) {
+          const inward = mc < innerWidth / 2 ? 1 : -1;
+          mover.ox += inward * needX;
+        } else
+          mover.oy += relDir * needY;
+        mover.ox = Math.max(-150, Math.min(150, mover.ox));
+        mover.oy = Math.max(-170, Math.min(190, mover.oy));
+      }
+    }
+    {
+      const groups = /* @__PURE__ */ new Map();
+      for (const bb of activeBubbles) {
+        bb._stacked = false;
+        if (bb.hue) {
+          (groups.get(bb.hue) || groups.set(bb.hue, []).get(bb.hue)).push(bb);
+        }
+      }
+      for (const [, g] of groups) {
+        if (g.length < 2) continue;
+        g.sort((p, q) => p.seq - q.seq);
+        const speakers = [...new Set(g.map((x) => x.agent))];
+        const first = g[0].agent;
+        const ax = speakers.reduce((s2, sp) => s2 + (g.findLast((x) => x.agent === sp) || g[0]).sx, 0) / speakers.length;
+        let yCur = Math.min(...g.map((x) => x.sy)) - 8;
+        for (const bb of g) {
+          const side = bb.agent === first ? -1 : 1;
+          const h = bb.el.offsetHeight || 34;
+          bb.ox = ax + side * 34 - bb.sx;
+          bb.oy = yCur - bb.sy;
+          yCur += h + 7;
+          bb._stacked = true;
+        }
       }
     }
     const topEdge = 46;
     const sheetEl = document.getElementById("sheet");
     const sheetOpen = sheetEl && sheetEl.classList.contains("open");
-    const bottomEdge = sheetOpen ? sheetEl.getBoundingClientRect().top - 6 : innerHeight - 78;
     const dossierEl = document.getElementById("dossier");
     const dOpen = dossierEl && dossierEl.style.display === "block";
-    const dRect = dOpen ? dossierEl.getBoundingClientRect() : null;
+    _edgeCd -= dt;
+    if (_edgeCd <= 0) {
+      _edgeCd = 0.1;
+      _edgeCache.bottomEdge = sheetOpen ? sheetEl.getBoundingClientRect().top - 6 : innerHeight - 78;
+      _edgeCache.dRect = dOpen ? dossierEl.getBoundingClientRect() : null;
+    }
+    const bottomEdge = _edgeCache.bottomEdge;
+    const dRect = _edgeCache.dRect;
     const edgeStacks = { L: [], R: [], T: [] };
     activeBubbles.forEach((b) => {
       if (b._edge && edgeStacks[b._edge]) edgeStacks[b._edge].push(b);
@@ -24741,6 +25712,8 @@ void main() {
       b.el.style.left = x + "px";
       b.el.style.top = y + "px";
       b._h = h;
+      b._fx = x;
+      b._fy = y;
       const tail = b.el.lastElementChild;
       if (tail) {
         const w = b.el.offsetWidth || 110;
@@ -24760,6 +25733,210 @@ void main() {
           tail.style.top = Math.max(9, Math.min(h - 20, syp - top - 4)) + "px";
         }
       }
+    });
+  }
+
+  // src/engine/door.js
+  var pivot = null;
+  var ang = 0;
+  var want = 0;
+  var heraldT = 0;
+  var expected = 0;
+  function buildDoor() {
+    pivot = new Group();
+    pivot.position.set(DOOR.x + 0.85, 0, DOOR.slabZ);
+    const mk = (w, h, d, c, x, y, z) => {
+      const m = new Mesh(new BoxGeometry(w, h, d), new MeshLambertMaterial({ color: c }));
+      m.position.set(x, y, z);
+      m.castShadow = false;
+      pivot.add(m);
+      return m;
+    };
+    const glass = new Mesh(
+      new BoxGeometry(1.7, 2.9, 0.06),
+      new MeshPhysicalMaterial({
+        color: 13623524,
+        transparent: true,
+        opacity: 0.22,
+        roughness: 0.08,
+        metalness: 0,
+        side: DoubleSide,
+        depthWrite: false
+      })
+    );
+    glass.position.set(-0.85, 1.45, 0);
+    glass.castShadow = false;
+    pivot.add(glass);
+    logoCanvas("etch", 256, (cv) => {
+      const tex = new CanvasTexture(cv);
+      const decal = new Mesh(
+        new PlaneGeometry(0.92, 0.92),
+        new MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.5,
+          side: DoubleSide,
+          depthWrite: false
+        })
+      );
+      decal.position.set(-0.85, 1.78, 0.036);
+      pivot.add(decal);
+    });
+    mk(0.16, 0.5, 0.05, 12162607, -1.5, 1.45, -0.07);
+    mk(0.16, 0.5, 0.05, 12162607, -1.5, 1.45, 0.09);
+    sceneG.add(pivot);
+  }
+  function heraldDoor() {
+    heraldT = Math.max(heraldT, 2.2);
+  }
+  function doorExpect(n) {
+    expected += n;
+  }
+  function doorArrived() {
+    expected = Math.max(0, expected - 1);
+  }
+  function tickDoor(dt) {
+    if (!pivot) return;
+    heraldT = Math.max(0, heraldT - dt);
+    const near = actors().some((p) => isActive(p) && Math.abs(p.mesh.position.x - DOOR.x) < 1.6 && Math.abs(p.mesh.position.z - DOOR.z) < 2.1);
+    const wantNow = near || heraldT > 0 || expected > 0 ? 1 : Math.max(0, want - dt * 0.9);
+    if (wantNow > 0.02 && want <= 0.02) sfxDoor(true);
+    if (wantNow <= 0.02 && want > 0.02) sfxDoor(false);
+    want = wantNow;
+    const target = want > 0.02 ? 1.85 : 0;
+    if (target !== 0) {
+      ang += (target - ang) * (1 - Math.exp(-dt * 1.7));
+    } else {
+      ang += (0 - ang) * (1 - Math.exp(-dt * 1.4));
+      const latch = 0.9 * dt;
+      if (Math.abs(ang) <= latch) ang = 0;
+      else ang -= Math.sign(ang) * latch * 0.5;
+    }
+    pivot.rotation.y = ang;
+  }
+
+  // src/sim/shift.js
+  var OUTSIDE = () => ({ x: DOOR.x + (Math.random() - 0.5) * 0.9, z: DOOR.z + 3.4 });
+  function beginExodus() {
+    flags.socialRush = true;
+    simTimeout(() => {
+      flags.socialRush = false;
+    }, 65e3);
+    hotClearShift();
+    agents.forEach((a) => {
+      if (a.state === "gone" || a.state === "home") return;
+      simTimeout(() => {
+        if (a.state === "gone" || a.state === "home") return;
+        if (a.social) endSocial(a);
+        if (binRitual()) startWalk(a, binSpot(a), "binEvening");
+        else startWalk(a, OUTSIDE(), "gohome");
+      }, 300 + Math.random() * 5200);
+    });
+    directors.forEach((d) => {
+      const delay = d.isCEO ? 100 + Math.random() * 700 : 4800 + Math.random() * 3400;
+      simTimeout(() => {
+        if (d.state === "dirHomeDone") return;
+        goDir(d, OUTSIDE(), "dirHome");
+        giveCase(d);
+      }, delay);
+    });
+  }
+  var HOT_REMOVED = 2;
+  var CAMPS = [
+    { x: 7.75, z: 12.55, facing: Math.PI },
+    { x: -15.5, z: 9.15, facing: 0 },
+    { x: 6, z: -13, facing: 0 }
+  ];
+  function hotAssignShift() {
+    if (!polOn("hotdesk")) return;
+    const pool = [...new Set(agents.map((_, i) => SEAT_MAP[i] ?? i))].slice(0, Math.max(0, agents.length - HOT_REMOVED)).sort(() => Math.random() - 0.5);
+    Object.values(DESK_PLATES).forEach((p) => p.setName(null));
+    agents.forEach((a) => {
+      if (a.state === "gone") return;
+      const ix = pool.pop();
+      if (ix != null) {
+        a.seat = deskSeats[ix];
+        a.deskIx = ix;
+        a.camping = false;
+        const ws = workstationForSeat(a.seat);
+        if (ws && ws.plate) ws.plate.setName(a.n);
+      } else {
+        const c = CAMPS[Math.floor(Math.random() * CAMPS.length)];
+        a.seat = { x: c.x, z: c.z, facing: c.facing, camp: true };
+        a.deskIx = null;
+        a.camping = true;
+      }
+    });
+  }
+  var binRitual = () => polOn("hotdesk") && flags.binsBuilt;
+  function binSpot(a) {
+    return { x: 1.85 + a.i % 6 * 0.82 + (Math.random() - 0.5) * 0.14, z: 13.05 };
+  }
+  function hotClearShift() {
+    if (!polOn("hotdesk")) return;
+    Object.values(DESK_PLATES).forEach((p) => p.setName(null));
+  }
+  function returnShift() {
+    flags.socialRush = true;
+    simTimeout(() => {
+      flags.socialRush = false;
+    }, 95e3);
+    hotAssignShift();
+    doorExpect(directors.filter((x) => x.state === "dirHomeDone").length + agents.filter((x) => x.state === "home").length);
+    directors.forEach((d, i) => {
+      if (d.state !== "dirHomeDone") return;
+      simTimeout(() => {
+        if (d.state !== "dirHomeDone") {
+          doorArrived();
+          return;
+        }
+        {
+          heraldDoor();
+          simTimeout(() => {
+            if (d.state !== "dirHomeDone") {
+              doorArrived();
+              return;
+            }
+            doorArrived();
+            const o = OUTSIDE();
+            spawn(d, o.x, o.z);
+            goDir(d, d.seat, "board");
+            giveCase(d);
+            faceFirstLeg(d);
+          }, 750 + Math.random() * 300);
+        }
+      }, 300 + i * 1300 + Math.random() * 700);
+    });
+    let tArr = 6500;
+    agents.forEach((a) => {
+      if (a.state !== "home") return;
+      tArr += 500 + Math.random() * 1400 + (Math.random() < 0.15 ? 2200 : 0);
+      simTimeout(
+        () => {
+          if (a.state !== "home") {
+            doorArrived();
+            return;
+          }
+          {
+            heraldDoor();
+            simTimeout(() => {
+              if (a.state !== "home") {
+                doorArrived();
+                return;
+              }
+              doorArrived();
+              const o = OUTSIDE();
+              spawn(a, o.x, o.z);
+              a.t = 0.1;
+              if (binRitual()) startWalk(a, binSpot(a), "binMorning");
+              else startWalk(a, a.seat, "home");
+              faceFirstLeg(a);
+            }, 750 + Math.random() * 300);
+          }
+        },
+        // greeting fires at the DOORFRAME, not on this timer
+        tArr
+      );
     });
   }
 
@@ -25069,12 +26246,56 @@ void main() {
       spots: [],
       build() {
         const ms = [];
-        ms.push(box(0.55, 0.65, 0.5, 13225940, -18.1, 1.35, 1.5));
+        const X = -18.1, Y = 0.98, Z = 1.5;
+        ms.push(box(0.55, 0.55, 0.44, 13225940, X, Y + 0.34, Z));
+        ms.push(box(0.59, 0.07, 0.48, 9344411, X, Y + 0.64, Z));
+        ms.push(box(0.2, 0.14, 0.16, 2763822, X + 0.1, Y + 0.16, Z + 0.26));
+        ms.push(box(0.05, 0.05, 0.22, 2763822, X + 0.1, Y + 0.1, Z + 0.44));
+        ms.push(box(0.44, 0.04, 0.2, 7239035, X, Y + 0.02, Z + 0.24));
+        ms.push(box(0.04, 0.26, 0.04, 12173252, X - 0.3, Y + 0.3, Z + 0.18));
+        ms.push(box(0.07, 0.07, 0.03, 13214271, X - 0.14, Y + 0.42, Z + 0.23));
+        ms.push(box(0.09, 0.08, 0.09, 15920610, X - 0.13, Y + 0.72, Z - 0.06));
+        ms.push(box(0.09, 0.08, 0.09, 15920610, X + 0.13, Y + 0.72, Z + 0.02));
         return ms;
       }
     }
   };
   Object.keys(AMEN).forEach((k) => AMEN[k].idKey = k);
+
+  // src/ui/award.js
+  var el = null;
+  var hideT = null;
+  var { setTimeout: setTimeout2, clearTimeout } = window;
+  function ensure() {
+    if (el) return;
+    el = document.createElement("div");
+    el.id = "award";
+    el.innerHTML = '<div class="card"><div class="shine"></div><div class="kind">CEO CONFIDENCE</div><div class="title"></div><div class="sub"></div><div class="stars">\u2726 \u2605 \u2726</div></div>';
+    document.body.appendChild(el);
+  }
+  function awardPop(title, sub, bad = false) {
+    ensure();
+    clearTimeout(hideT);
+    el.querySelector(".card").classList.toggle("bad", !!bad);
+    el.querySelector(".kind").textContent = bad ? "CEO CONFIDENCE \u2193" : "CEO CONFIDENCE";
+    el.querySelector(".title").textContent = title;
+    el.querySelector(".sub").textContent = sub || "";
+    el.classList.remove("out");
+    el.classList.remove("show");
+    void el.offsetWidth;
+    el.classList.add("show");
+    if (bad) sfxWomp();
+    else sfxFanfare();
+    hideT = setTimeout2(() => {
+      el.classList.add("out");
+      hideT = setTimeout2(() => {
+        el.classList.remove("show");
+        el.classList.remove("out");
+        el.style.display = "none";
+        el.style.display = "";
+      }, 600);
+    }, 4600);
+  }
 
   // src/core/runtime.js
   var runtime = {
@@ -25241,8 +26462,8 @@ void main() {
     spin();
     simTimeout(() => s.removeFromParent(), 42e4);
   }
-  function recolor(group, fn) {
-    group.traverse((m) => {
+  function recolor(group2, fn) {
+    group2.traverse((m) => {
       if (m.isMesh) {
         m.material = m.material.clone();
         fn(m);
@@ -30947,20 +32168,20 @@ void main() {
         const dmult = sim.directive ? sim.directive.payout : 1;
         const stretch = weekProfit >= target * ECON.stretchAt;
         const bonus = Math.round((ECON.milestoneBase + (weekProfit - target) * ECON.milestoneOvershoot) * dmult * (stretch ? ECON.stretchMult : 1));
-        if (stretch) toast("STRETCH GOAL HIT (\u2605 130% of target). Bonus multiplied x1.5. Doug texts you a rocket emoji and the word 'more.'");
         sim.cut += bonus;
         const newTarget = weekProfit * ECON.targetGrowth;
         sim.targetMult = newTarget / (sim.baselineDaily * TIME.weekDays);
         boardBanner("MILESTONE BONUS \u2726", "#6FA08E");
-        toast("Week " + sim.week + ": target beaten. Milestone bonus: " + fmt$(bonus) + (dmult > 1 ? " (x" + dmult + " directive)" : "") + ". Doug sets next week's target at " + fmt$(Math.round(newTarget)) + " \u2014 7% over what you just delivered.");
+        awardPop("DOUG\u2019S CONFIDENCE RISES" + (stretch ? " \u2605 STRETCH" : ""), "Milestone bonus " + fmt$(bonus) + (dmult > 1 ? " (x" + dmult + " directive)" : "") + " \xB7 next target " + fmt$(Math.round(weekProfit * ECON.targetGrowth)));
         if (sim.streak % 3 === 0) {
           sim.cut += ECON.streakBonus;
           sim.ceo = Math.min(100, sim.ceo + 4);
           boardBanner("STREAK x" + sim.streak + " \u2605", "#C97E45");
-          toast("Performance streak x" + sim.streak + "! Retainer bonus: " + fmt$(ECON.streakBonus) + ". Doug mentions you in an email to his golf group.");
+          awardPop("STREAK x" + sim.streak + " \u2014 DOUG IS DELIGHTED", "Retainer bonus " + fmt$(ECON.streakBonus));
         }
       } else {
         sim.ceo += ECON.ceoMiss;
+        awardPop("DOUG\u2019S CONFIDENCE SLIPS", "Week " + sim.week + " target missed", true);
         sim.streak = 0;
         const reAnchor = Math.max(weekProfit * 1.04, target * 0.88, sim.baselineDaily * TIME.weekDays * 0.8);
         sim.targetMult = reAnchor / (sim.baselineDaily * TIME.weekDays);
@@ -31584,6 +32805,297 @@ void main() {
     return e.profit * (e.pol.settle + (1 - e.pol.settle) * decay);
   }
 
+  // src/sim/actors.js
+  var _actorsCache = null;
+  function actors() {
+    return _actorsCache || (_actorsCache = [...agents, ...directors]);
+  }
+  function isActive(p) {
+    return p.mesh.visible !== false && p.state !== "gone" && p.state !== "home" && p.state !== "dirHomeDone";
+  }
+  function despawn(p, offState) {
+    if (polOn("hotdesk")) packEffectsFor(p);
+    p.path = [];
+    p.state = offState;
+    p.mesh.visible = false;
+    p.shiftTo = null;
+    p.yieldT = 0;
+    if (p.queue) p.queue.length = 0;
+    if (p.amenSpot) {
+      p.amenSpot.claims = Math.max(0, (p.amenSpot.claims || 1) - 1);
+      p.amenSpot = null;
+    }
+    p.visitAmen = null;
+    if (p.ppMate) {
+      p.ppMate.ppMate = null;
+      p.ppMate = null;
+    }
+    if (p._gameClaims) {
+      p._gameClaims.forEach((sp) => {
+        sp.claims = Math.max(0, (sp.claims || 1) - 1);
+      });
+      p._gameClaims = null;
+    }
+    if (p.social) {
+      p.social = null;
+    }
+    p.carried = {};
+  }
+  function spawn(p, x, z) {
+    p.mesh.visible = true;
+    p.mesh.position.set(x, 0, z);
+    p.state = "walk";
+    p.mesh.rotation.z = 0;
+    placeEffectsFor(p);
+    p.path = [];
+    p.shiftTo = null;
+    p.yieldT = 0;
+    p._stallN = 0;
+    p._wdBest = void 0;
+    p._wdT = 0;
+    p._aroundBlk = void 0;
+    p._aroundN = 0;
+    p.carried = {};
+  }
+
+  // src/sim/social.js
+  function fillG(t2, N, G) {
+    return t2.replaceAll("{N}", N).replaceAll("{G}", G);
+  }
+  var cycleUsed = /* @__PURE__ */ new Map();
+  function pickCycle(pool, a) {
+    let used = cycleUsed.get(pool);
+    if (!used) {
+      used = /* @__PURE__ */ new Set();
+      cycleUsed.set(pool, used);
+    }
+    let cands = pool.filter((t3) => !used.has(t3));
+    if (!cands.length) {
+      used.clear();
+      cands = pool.slice();
+    }
+    const t2 = cands[Math.floor(Math.random() * cands.length)];
+    used.add(t2);
+    if (a) a.lastLine = t2;
+    return t2;
+  }
+  var liveConvos = 0;
+  function convoFree() {
+    return liveConvos === 0;
+  }
+  function claimConvo(ms) {
+    liveConvos++;
+    simTimeout(() => {
+      liveConvos = Math.max(0, liveConvos - 1);
+    }, ms + 8e3);
+  }
+  function morningGreet(who, isDir) {
+    const G = MORNING_GREET;
+    if (who.isCEO) {
+      say(who, pickFrom(G.doug), false, 5);
+      return;
+    }
+    const phase0 = sim.day % WEEKDAYS.length;
+    if (isDir && (phase0 === 0 || phase0 === WEEKDAYS.length - 1) && Math.random() < 0.5) {
+      const pool0 = phase0 === 0 ? G.recapDir : G.planDir;
+      say(who, "Morning. " + pickFrom(pool0).charAt(0).toUpperCase() + pickFrom(pool0).slice(1), false, 5.5);
+      return;
+    }
+    if (who._convoLock) {
+      return;
+    }
+    const near = agents.filter((x) => x !== who && present(x) && !x._convoLock && Math.hypot(x.mesh.position.x - who.mesh.position.x, x.mesh.position.z - who.mesh.position.z) < 7);
+    if (!near.length) {
+      if (Math.random() < 0.6) say(who, pickCycle(G.blurt, who), false, 4.5);
+      return;
+    }
+    if (Math.random() < 0.1) {
+      say(who, pickCycle(G.blurt, who), false, 4.5);
+      return;
+    }
+    if (liveConvos >= 1) {
+      if (Math.random() < 0.25) say(who, pickCycle(G.blurt, who), false, 4.5);
+      return;
+    }
+    near.sort((a2, b2) => Math.hypot(a2.mesh.position.x - who.mesh.position.x, a2.mesh.position.z - who.mesh.position.z) - Math.hypot(b2.mesh.position.x - who.mesh.position.x, b2.mesh.position.z - who.mesh.position.z));
+    const t2 = near[Math.floor(Math.random() * Math.min(3, near.length))];
+    const phase = phase0;
+    const contextDay = phase === 0 || phase === WEEKDAYS.length - 1;
+    const asking = contextDay && Math.random() < 0.6;
+    const beat = (fn, ms) => simTimeout(() => {
+      if (!present(who) || !present(t2)) return;
+      if (Math.hypot(who.mesh.position.x - t2.mesh.position.x, who.mesh.position.z - t2.mesh.position.z) > 8) return;
+      fn();
+    }, ms);
+    if (!asking) {
+      const gHue = pairConvo(who, t2, 10500);
+      claimConvo(17500);
+      sayIn(gHue, who, fillG(pickCycle(G.helloTo, who), t2.n, who.n), false, 4.5);
+      beat(() => sayIn(gHue, t2, fillG(pickCycle(G.replyHello, t2), t2.n, who.n), false, 4.5), 2100 + Math.random() * 1200);
+      return;
+    }
+    const askPool = phase === 0 ? G.askWkndTo : G.askPlansTo;
+    const answerRaw = phase === 0 ? G.recapStaff : G.planStaff;
+    const aHue = pairConvo(who, t2, 13500);
+    claimConvo(20500);
+    sayIn(aHue, who, fillG(pickCycle(askPool, who), t2.n, who.n), false, 5);
+    beat(() => {
+      sayIn(aHue, t2, fillG(pickCycle(G.recapOpen, t2), t2.n, who.n) + pickCycle(answerRaw, null), false, 5.5);
+      beat(() => {
+        say(who, fillG(pickFrom(G.followUp), t2.n, who.n), false, 4.5);
+        if (Math.random() < 0.7) beat(() => say(t2, pickFrom(G.quip), false, 4), 1500 + Math.random() * 800);
+      }, 2400 + Math.random() * 1200);
+    }, 1800 + Math.random() * 1e3);
+  }
+  var ECHO_TOPICS = [
+    [/bentley|rolls|aston|driver|car\b|drove|traffic|test-drove|seat massager/i, [
+      "The Bentley DESERVES better roads, Doug!",
+      "Doug, your car stories get me through the week!",
+      "They don't make drivers like they used to, Doug \u2014 you deserve better!",
+      "You suffer that commute so gracefully, Doug!"
+    ]],
+    [/caviar|breakfast|grapefruit|toast|smoothie|eggs|chef|forty dollars|espresso|grinder|beans|barista|foam/i, [
+      "You deserve the GOOD caviar, Doug. Always!",
+      "Doug, your palate is a gift to this company!",
+      "Breakfast wrongs you like that and you STILL show up. Hero, Doug!",
+      "Forty-dollar eggs and worth every penny of you, Doug!"
+    ]],
+    [/bottled|squeezed|juice/i, [
+      "BOTTLED?! For YOU, Doug?! Unacceptable!",
+      "You drink fresh-squeezed because you ARE fresh-squeezed, Doug!",
+      "I'll find who did that, Doug. I mean it!"
+    ]],
+    [/club|valet|golf|senator|gala|sommelier|marina|hull|boat|yacht|jet|fly|island/i, [
+      "The club doesn't deserve you, Doug!",
+      "Doors, Doug! You OPEN them! For all of us!",
+      "Two hulls is the RIGHT number, Doug. Visionary fleet thinking!",
+      "That valet will remember your name forever now, Doug!"
+    ]],
+    [/house|mattress|pool|driveway|gate|towel|housekeeper|gardener|fence|dock|sunrise|vineyard|toaster|home gym|portrait|winter house|lake house|heated|building|staff/i, [
+      "You endure SO much at home, Doug, and still lead us!",
+      "The estate is lucky to have you, Doug. We all are!",
+      "Perennials, Doug! You think in DECADES!",
+      "A sunrise room, Doug. You OWN the morning. Literally!"
+    ]],
+    [/margin|quarter|market|q3|commerce|momentum|sales|grind|money|wealthy|mortgage|accountant|philanthropy|dollar|paid extra/i, [
+      "Margins of GREATNESS, Doug! I'm putting it on the board!",
+      "That's Q3 thinking, Doug! In a Q1 world!",
+      "The market listens to YOU, Doug, I'm sure of it!",
+      "MOMENTUM, Doug! Say the word and we RUN!"
+    ]],
+    [/father|memoir|nephew|family|hartman|genes/i, [
+      "The Hartman line, Doug! Greatness is hereditary!",
+      "Your father would be SO proud, Doug. Is. IS proud!",
+      "Vision runs in the family, Doug \u2014 and it PEAKED with you!"
+    ]],
+    [/watch|cologne|tailor|ties|blazer|trainer|core|shoulders|horoscope|journal|massage|stairs/i, [
+      "Once a generation, Doug! Your tailor is RIGHT!",
+      "You took the STAIRS, Doug?! Inspirational!",
+      "The formula, Doug! You SOLVED cologne! Write it down? I FRAMED it!",
+      "That core, Doug. That's a leadership core!"
+    ]],
+    [/gas station|own coffee|making his OWN/i, [
+      "You WITNESSED that, Doug, and carried on. Braver than the man himself!",
+      "Doug, you see how the world lives and it only sharpens you!",
+      "Haunting is right, Doug. Your empathy is limitless!"
+    ]],
+    [/roommate|made partner/i, [
+      "Partner at SOMEWHERE, Doug \u2014 you OWN somewheres!",
+      "Generous of you to even remember him, Doug!",
+      "He peaked, Doug. You're still climbing!"
+    ]],
+    [/dog walker|unionized/i, [
+      "One man against Doug Hartman \u2014 bold and doomed, Doug!",
+      "The audacity keeps you sharp and you keep US sharp, Doug!",
+      "Renegotiate him brilliantly, Doug. You will. You always do!"
+    ]],
+    [/caterer|doug day|cake/i, [
+      "Cake but MORE, Doug \u2014 that's a whole philosophy!",
+      "Doug Day can't come soon enough, Doug!",
+      "Spell it out for them, Doug. Vision needs translators!"
+    ]]
+  ];
+  var ECHO_FALLBACK = [
+    "Incredible, Doug. Truly incredible.",
+    "Yes, Doug! That's exactly it!",
+    "Say it again, Doug \u2014 I want to hear it twice!",
+    "Doug, I got chills. Actual chills.",
+    "How do you DO it, Doug?",
+    "Couldn't have said it better, Doug. Couldn't have said it at all!"
+  ];
+  function echoPoolFor(line) {
+    const hit = ECHO_TOPICS.find(([re]) => re.test(line));
+    return hit ? hit[1] : ECHO_FALLBACK;
+  }
+  function enterOffice(p) {
+    if (p.isCEO) {
+      const dougLine = pickFrom(MORNING_GREET.doug, p);
+      say(p, dougLine, false, 5, true);
+      const echoes = echoPoolFor(dougLine);
+      const spokeAt = { mesh: { position: p.mesh.position.clone() } };
+      const yesMen = directors.filter((d) => !d.isCEO);
+      const n = Math.min(yesMen.length, 2);
+      for (let i = 0; i < n; i++) {
+        const d = yesMen.splice(Math.floor(Math.random() * yesMen.length), 1)[0];
+        simTimeout(() => {
+          if (d.mesh.visible !== false) say(d, pickFrom(echoes, d), false, 6, false, null, spokeAt);
+        }, 2800 + i * 2300 + Math.random() * 1200);
+      }
+      return;
+    }
+    if (p.isDir) return;
+    if (Math.random() < 0.4) morningGreet(p, false);
+  }
+
+  // src/sim/recreation.js
+  function dougGameEvent(doug2) {
+    const pong = AMEN.pingpong.owned, dart = AMEN.darts.owned;
+    if (!pong && !dart) return false;
+    const usePong = pong && (!dart || Math.random() < 0.6);
+    const key = usePong ? "pingpong" : "darts";
+    const spots = AMEN[key].spots;
+    const claims = spots.map((sp) => claimSpot([sp])).filter(Boolean);
+    if (!claims.length) {
+      return false;
+    }
+    const others = directors.filter((x) => x !== doug2 && x.state !== "dirHomeDone" && x.mesh.visible !== false);
+    const opp = usePong ? others[Math.floor(Math.random() * others.length)] : null;
+    const crowd = others.filter((x) => x !== opp);
+    doug2._gameClaims = claims;
+    goDir(doug2, spots[0], "dougGame");
+    if (opp && spots[1]) goDir(opp, spots[1], "dougGame");
+    const f = FACE_OF(key);
+    crowd.forEach((c, i) => {
+      goDir(c, { x: f.x - 1.7 + (i % 2 ? 0.9 : 0), z: f.z - 1.1 + Math.floor(i / 2) * 1.1 }, "dougGame");
+    });
+    const everyone = [doug2, ...opp ? [opp] : [], ...crowd];
+    let t2 = 2600;
+    for (let i = 0; i < 7; i++) {
+      const doDoug = i % 2 === 0;
+      simTimeout(() => {
+        if (doug2.state !== "dougGame") return;
+        if (doDoug) say(doug2, pickFrom(DOUG_GAME_BRAG), false, 5);
+        else {
+          const c = crowd[Math.floor(Math.random() * crowd.length)] || opp;
+          if (c) say(c, pickFrom(DIR_PRAISE), false, 4.5);
+        }
+      }, t2);
+      t2 += 2600 + Math.random() * 1500;
+    }
+    simTimeout(() => {
+      (doug2._gameClaims || []).forEach(releaseClaim2);
+      doug2._gameClaims = null;
+      everyone.forEach((e) => {
+        if (e.state === "dougGame") goDir(e, e.seat, "board");
+      });
+    }, t2 + 2e3);
+    return true;
+  }
+  var FACE_OF = (k) => k === "pingpong" ? { x: 14.9, z: 1 } : { x: 11, z: -13.95 };
+  var releaseClaim2 = (sp) => {
+    sp.claims = Math.max(0, (sp.claims || 1) - 1);
+  };
+
   // src/sim/stations.js
   var PRINTER_SPOTS = [{ x: -2.2, z: -11.6 }, { x: -1.35, z: -11.6 }];
   var DOG_SPOT = [{}];
@@ -31616,7 +33128,7 @@ void main() {
     // the Hydration Curve: the bottom of the bell goes thirsty
     coffee: (a) => hasMug(a) ? 0 : a.stats.band < 45 ? 3.5 : 2.2,
     // one live coffee per person
-    lunch: (a, ctx) => ctx.lunchtime ? 4 : 0.5,
+    lunch: (a, ctx2) => ctx2.lunchtime ? 4 : 0.5,
     couch: (a) => a.stats.band < 40 ? 3 : 1,
     zen: (a) => a.stats.lib < 45 ? 2.5 : 0.8,
     arcade: (a) => a.ten === "new" ? 2 : 1
@@ -31650,7 +33162,8 @@ void main() {
     // the output tray
   };
   var AMEN_CARRY = {
-    coffee: (a) => giveMug(a)
+    coffee: (a) => giveMug(a, AMEN.espresso.owned)
+    // upgrade owned: demitasse on a saucer
   };
   var SIT = {
     couch: (sp) => ({ x: sp.x, z: 13.25, yaw: Math.PI })
@@ -31660,14 +33173,14 @@ void main() {
     couch: () => 6 + Math.random() * 5
     // you don't sit down for four seconds
   };
-  function stationList(ctx) {
+  function stationList(ctx2) {
     const out = [];
     Object.keys(AMEN).forEach((k) => {
       const d = AMEN[k];
       if (!d.owned || !d.spots || !d.spots.length) return;
       out.push({
         key: k,
-        weight: (a) => AMEN_WEIGHT[k] ? AMEN_WEIGHT[k](a, ctx) : 1,
+        weight: (a) => AMEN_WEIGHT[k] ? AMEN_WEIGHT[k](a, ctx2) : 1,
         spots: () => d.spots,
         target: (sp) => ({ x: sp.x + (Math.random() - 0.5) * 0.1, z: sp.z + (Math.random() - 0.5) * 0.1 }),
         face: FACE[k],
@@ -31684,8 +33197,8 @@ void main() {
     });
     return out;
   }
-  function stationByKey(key, ctx) {
-    return stationList(ctx || {}).find((s) => s.key === key) || null;
+  function stationByKey(key, ctx2) {
+    return stationList(ctx2 || {}).find((s) => s.key === key) || null;
   }
 
   // src/sim/dirvoice.js
@@ -31732,14 +33245,24 @@ void main() {
       a.amenSpot = null;
     }
   }
+  var present = isActive;
+  function allHome() {
+    return actors().every((p) => !isActive(p));
+  }
+  function tickDoorframe(p) {
+    const inside = p.mesh.position.z <= DOOR.z - 0.1;
+    if (p._wasOut && inside && p.mesh.visible !== false) {
+      p._wasOut = false;
+      enterOffice(p);
+    } else if (!inside) p._wasOut = true;
+  }
   function agentTick(a, dt) {
     if (a.state === "gone" || a.state === "home") return;
+    tickDoorframe(a);
+    if (a.state !== "walk") gaitPose(a, false, dt);
     if (a.dest === "gohome") {
-      const dd = Math.hypot(a.mesh.position.x - DOOR.x, a.mesh.position.z - DOOR.z);
-      if (dd < REACH.doorArrive) {
-        a.path = [];
-        a.state = "home";
-        a.mesh.visible = false;
+      if (a.mesh.position.z > DOOR.z + 3) {
+        despawn(a, "home");
         return;
       }
     }
@@ -31760,8 +33283,8 @@ void main() {
         const roll = Math.random();
         const goChance = flags.tethered ? 0.04 : 0.3;
         if (roll < goChance) {
-          const ctx = { lunchtime: isLunchtime() };
-          const stations = stationList(ctx);
+          const ctx2 = { lunchtime: isLunchtime() };
+          const stations = stationList(ctx2);
           if (!stations.length) {
             a.t = 8 + Math.random() * 20;
             return;
@@ -31856,7 +33379,7 @@ void main() {
         }
         if (a.binPhase === "binEvening") {
           a.binPhase = null;
-          startWalk(a, { x: DOOR.x + (Math.random() - 0.5) * 2.4, z: DOOR.z + Math.random() * 0.6 }, "gohome");
+          startWalk(a, OUTSIDE(), "gohome");
           return;
         }
         if (a.dest === "home") {
@@ -31895,197 +33418,9 @@ void main() {
     }
     return maxRun <= 6;
   }
-  function beginExodus() {
-    hotClearShift();
-    agents.forEach((a) => {
-      if (a.state === "gone" || a.state === "home") return;
-      simTimeout(() => {
-        if (a.state === "gone" || a.state === "home") return;
-        if (a.social) endSocial(a);
-        if (binRitual()) startWalk(a, binSpot(a), "binEvening");
-        else startWalk(a, { x: DOOR.x + (Math.random() - 0.5) * 2.4, z: DOOR.z + Math.random() * 0.6 }, "gohome");
-      }, 300 + Math.random() * 5200);
-    });
-    directors.forEach((d) => {
-      const delay = d.isCEO ? 100 + Math.random() * 700 : 4800 + Math.random() * 3400;
-      simTimeout(() => {
-        if (d.state === "dirHomeDone") return;
-        goDir(d, { x: DOOR.x + (Math.random() - 0.5) * 2.4, z: DOOR.z + Math.random() * 0.6 }, "dirHome");
-        giveCase(d);
-      }, delay);
-    });
-  }
-  function present(a) {
-    return a.state !== "gone" && a.state !== "home" && a.mesh.visible !== false;
-  }
-  function allHome() {
-    const absent = (e) => e.state === "gone" || e.state === "home" || e.mesh.visible === false;
-    return agents.every(absent) && directors.every((d) => d.state === "dirHomeDone" || d.mesh.visible === false);
-  }
-  var HOT_REMOVED = 2;
-  var CAMPS = [
-    { x: 7.75, z: 12.55, facing: Math.PI },
-    { x: -15.5, z: 9.15, facing: 0 },
-    { x: 6, z: -13, facing: 0 }
-  ];
-  function hotAssignShift() {
-    if (!polOn("hotdesk")) return;
-    const pool = [...new Set(agents.map((_, i) => SEAT_MAP[i] ?? i))].slice(0, Math.max(0, agents.length - HOT_REMOVED)).sort(() => Math.random() - 0.5);
-    Object.values(DESK_PLATES).forEach((p) => p.setName(null));
-    agents.forEach((a) => {
-      if (a.state === "gone") return;
-      const ix = pool.pop();
-      if (ix != null) {
-        a.seat = deskSeats[ix];
-        a.deskIx = ix;
-        a.camping = false;
-        if (DESK_PLATES[ix]) DESK_PLATES[ix].setName(a.n);
-      } else {
-        const c = CAMPS[Math.floor(Math.random() * CAMPS.length)];
-        a.seat = { x: c.x, z: c.z, facing: c.facing, camp: true };
-        a.deskIx = null;
-        a.camping = true;
-      }
-    });
-  }
-  var binRitual = () => polOn("hotdesk") && flags.binsBuilt;
-  function binSpot(a) {
-    return { x: 1.85 + a.i % 6 * 0.82 + (Math.random() - 0.5) * 0.14, z: 13.05 };
-  }
-  function hotClearShift() {
-    if (!polOn("hotdesk")) return;
-    Object.values(DESK_PLATES).forEach((p) => p.setName(null));
-  }
-  function fillG(t2, N, G) {
-    return t2.replaceAll("{N}", N).replaceAll("{G}", G);
-  }
-  function morningGreet(who, isDir) {
-    const G = MORNING_GREET;
-    if (who.isCEO) {
-      say(who, pickFrom(G.doug), false, 5);
-      return;
-    }
-    const phase0 = sim.day % WEEKDAYS.length;
-    if (isDir && (phase0 === 0 || phase0 === WEEKDAYS.length - 1) && Math.random() < 0.5) {
-      const pool0 = phase0 === 0 ? G.recapDir : G.planDir;
-      say(who, "Morning. " + pickFrom(pool0).charAt(0).toUpperCase() + pickFrom(pool0).slice(1), false, 5.5);
-      return;
-    }
-    const near = agents.filter((x) => x !== who && present(x) && Math.hypot(x.mesh.position.x - who.mesh.position.x, x.mesh.position.z - who.mesh.position.z) < 7);
-    if (!near.length || Math.random() < 0.18) {
-      say(who, pickFrom(G.blurt), false, 4.5);
-      return;
-    }
-    near.sort((a2, b2) => Math.hypot(a2.mesh.position.x - who.mesh.position.x, a2.mesh.position.z - who.mesh.position.z) - Math.hypot(b2.mesh.position.x - who.mesh.position.x, b2.mesh.position.z - who.mesh.position.z));
-    const t2 = near[Math.floor(Math.random() * Math.min(3, near.length))];
-    const phase = phase0;
-    const contextDay = phase === 0 || phase === WEEKDAYS.length - 1;
-    const asking = contextDay && Math.random() < 0.6;
-    const beat = (fn, ms) => simTimeout(() => {
-      if (!present(who) || !present(t2)) return;
-      if (Math.hypot(who.mesh.position.x - t2.mesh.position.x, who.mesh.position.z - t2.mesh.position.z) > 8) return;
-      fn();
-    }, ms);
-    if (!asking) {
-      say(who, fillG(pickFrom(G.helloTo), t2.n, who.n), false, 4.5);
-      beat(() => say(t2, fillG(pickFrom(G.replyHello), t2.n, who.n), false, 4.5), 1600 + Math.random() * 900);
-      return;
-    }
-    const askPool = phase === 0 ? G.askWkndTo : G.askPlansTo;
-    const answerRaw = phase === 0 ? G.recapStaff : G.planStaff;
-    say(who, fillG(pickFrom(askPool), t2.n, who.n), false, 5);
-    beat(() => {
-      say(t2, fillG(pickFrom(G.recapOpen), t2.n, who.n) + pickFrom(answerRaw), false, 5.5);
-      beat(() => {
-        say(who, fillG(pickFrom(G.followUp), t2.n, who.n), false, 4.5);
-        if (Math.random() < 0.7) beat(() => say(t2, pickFrom(G.quip), false, 4), 1500 + Math.random() * 800);
-      }, 2400 + Math.random() * 1200);
-    }, 1800 + Math.random() * 1e3);
-  }
-  function dougGameEvent(doug2) {
-    const pong = AMEN.pingpong.owned, dart = AMEN.darts.owned;
-    if (!pong && !dart) return false;
-    const usePong = pong && (!dart || Math.random() < 0.6);
-    const key = usePong ? "pingpong" : "darts";
-    const spots = AMEN[key].spots;
-    const claims = spots.map((sp) => claimSpot([sp])).filter(Boolean);
-    if (!claims.length) {
-      return false;
-    }
-    const others = directors.filter((x) => x !== doug2 && x.state !== "dirHomeDone" && x.mesh.visible !== false);
-    const opp = usePong ? others[Math.floor(Math.random() * others.length)] : null;
-    const crowd = others.filter((x) => x !== opp);
-    doug2._gameClaims = claims;
-    goDir(doug2, spots[0], "dougGame");
-    if (opp && spots[1]) goDir(opp, spots[1], "dougGame");
-    const f = FACE_OF(key);
-    crowd.forEach((c, i) => {
-      goDir(c, { x: f.x - 1.7 + (i % 2 ? 0.9 : 0), z: f.z - 1.1 + Math.floor(i / 2) * 1.1 }, "dougGame");
-    });
-    const everyone = [doug2, ...opp ? [opp] : [], ...crowd];
-    let t2 = 2600;
-    for (let i = 0; i < 7; i++) {
-      const doDoug = i % 2 === 0;
-      simTimeout(() => {
-        if (doug2.state !== "dougGame") return;
-        if (doDoug) say(doug2, pickFrom(DOUG_GAME_BRAG), false, 5);
-        else {
-          const c = crowd[Math.floor(Math.random() * crowd.length)] || opp;
-          if (c) say(c, pickFrom(DIR_PRAISE), false, 4.5);
-        }
-      }, t2);
-      t2 += 2600 + Math.random() * 1500;
-    }
-    simTimeout(() => {
-      (doug2._gameClaims || []).forEach(releaseClaim2);
-      doug2._gameClaims = null;
-      everyone.forEach((e) => {
-        if (e.state === "dougGame") goDir(e, e.seat, "board");
-      });
-    }, t2 + 2e3);
-    return true;
-  }
-  var FACE_OF = (k) => k === "pingpong" ? { x: 14.9, z: 1 } : { x: 11, z: -13.95 };
-  var releaseClaim2 = (sp) => {
-    sp.claims = Math.max(0, (sp.claims || 1) - 1);
-  };
-  function returnShift() {
-    hotAssignShift();
-    directors.forEach((d, i) => {
-      if (d.state !== "dirHomeDone") return;
-      simTimeout(() => {
-        if (d.state === "dirHomeDone") {
-          d.mesh.visible = true;
-          d.mesh.position.set(DOOR.x + (Math.random() - 0.5) * 0.8, 0, DOOR.z);
-          goDir(d, d.seat, "board");
-          giveCase(d);
-          if (Math.random() < 0.6) simTimeout(() => {
-            if (d.mesh.visible !== false) morningGreet(d, true);
-          }, 900 + Math.random() * 1800);
-        }
-      }, 300 + i * 1300 + Math.random() * 700);
-    });
-    let tArr = 6500;
-    agents.forEach((a) => {
-      if (a.state !== "home") return;
-      tArr += 500 + Math.random() * 1400 + (Math.random() < 0.15 ? 2200 : 0);
-      simTimeout(
-        () => {
-          if (a.state === "home") {
-            a.mesh.visible = true;
-            a.mesh.position.set(DOOR.x + (Math.random() - 0.5) * 0.8, 0, DOOR.z);
-            a.state = "pause";
-            a.t = 0.1;
-            if (binRitual()) startWalk(a, binSpot(a), "binMorning");
-            else startWalk(a, a.seat, "home");
-            if (Math.random() < 0.6) simTimeout(() => {
-              if (present(a)) morningGreet(a, false);
-            }, 800 + Math.random() * 2200);
-          }
-        },
-        tArr
-      );
-    });
+  function faceFirstLeg(p) {
+    const wp = p.path && p.path[0];
+    if (wp) p.mesh.rotation.y = Math.atan2(wp.x - p.mesh.position.x, wp.z - p.mesh.position.z);
   }
   function startWalk(a, to, dest) {
     if (a.amenSpot && dest !== "amen" && dest !== "dog") releaseClaim(a);
@@ -32142,7 +33477,7 @@ void main() {
         }
       }
       if (st && st.effect) st.effect(a);
-      const mate = a.visitAmen && agents.find((x) => x !== a && present(x) && x.visitAmen === a.visitAmen && x.state === "pause" && !x.spotChatCd && !a.spotChatCd && Math.hypot(x.mesh.position.x - a.mesh.position.x, x.mesh.position.z - a.mesh.position.z) < 3.5);
+      const mate = a.visitAmen && !a._convoLock && agents.find((x) => x !== a && present(x) && !x._convoLock && x.visitAmen === a.visitAmen && x.state === "pause" && !x.spotChatCd && !a.spotChatCd && Math.hypot(x.mesh.position.x - a.mesh.position.x, x.mesh.position.z - a.mesh.position.z) < 3.5);
       if (mate && Math.random() < 0.4) {
         a.spotChatCd = mate.spotChatCd = 20;
         runConvo(a, mate, st);
@@ -32238,7 +33573,33 @@ void main() {
       runConvo(a, b, AMEN[a.social.spot]);
     }
   }
+  function tickWalkChat(dt) {
+    for (const a of agents) {
+      if (a._walkChatCd > 0) a._walkChatCd -= dt;
+    }
+    for (let i = 0; i < agents.length; i++) {
+      const a = agents[i];
+      if (a.state !== "walk" || !present(a) || a._walkChatCd > 0 || a._convoLock) continue;
+      if (a.mesh.position.z > DOOR.z - 1.6) continue;
+      for (let j = i + 1; j < agents.length; j++) {
+        const b2 = agents[j];
+        if (b2.state !== "walk" || !present(b2) || b2._walkChatCd > 0 || b2._convoLock) continue;
+        if (b2.mesh.position.z > DOOR.z - 1.6) continue;
+        const dx = b2.mesh.position.x - a.mesh.position.x, dz = b2.mesh.position.z - a.mesh.position.z;
+        if (dx * dx + dz * dz > 2.2 * 2.2) continue;
+        const ha = a.mesh.rotation.y, hb = b2.mesh.rotation.y;
+        const dot = Math.sin(ha) * Math.sin(hb) + Math.cos(ha) * Math.cos(hb);
+        if (dot < 0.5) continue;
+        if (Math.random() < 0.5) {
+          a._walkChatCd = b2._walkChatCd = 45 + Math.random() * 30;
+          runConvo(a, b2, null);
+        }
+        break;
+      }
+    }
+  }
   function runConvo(a, b, def) {
+    if (!convoFree()) return;
     let pool = def && CONVOS[def.chat] && Math.random() < 0.55 ? CONVOS[def.chat] : null;
     if (!pool) {
       const avg = ["align", "band", "teth", "lib", "faith"].reduce((s, k) => s + a.stats[k] + b.stats[k], 0) / 10;
@@ -32256,11 +33617,13 @@ void main() {
     } else {
       lines = pickFrom(pool, null);
     }
+    const cHue = pairConvo(a, b, 500 + lines.length * 2600 + 4500);
+    claimConvo(500 + lines.length * 2600 + 9e3);
     lines.forEach((line, ix) => {
       simTimeout(() => {
         const sp = ix % 2 ? b : a;
-        if (sp.state !== "social") return;
-        say(sp, line.split("{P}").join(label).split("{X}").join(randOtherName(a, b)), dark, 3.2, true, prio);
+        if (sp.state !== "social" && sp.state !== "walk") return;
+        sayIn(cHue, sp, line.split("{P}").join(label).split("{X}").join(randOtherName(a, b)), dark, 3.2, true, prio);
       }, 500 + ix * 2600);
     });
   }
@@ -32323,17 +33686,17 @@ void main() {
     huddleCd = 110 + Math.random() * 90;
     const free = directors.filter((x) => !x.isCEO && (x.state === "floorStand" || x.state === "pause"));
     if (free.length < 2) return;
-    const group = free.sort(() => Math.random() - 0.5).slice(0, 2 + (Math.random() < 0.4 && free.length > 2 ? 1 : 0));
+    const group2 = free.sort(() => Math.random() - 0.5).slice(0, 2 + (Math.random() < 0.4 && free.length > 2 ? 1 : 0));
     const spot = HUDDLE_SPOTS[Math.floor(Math.random() * HUDDLE_SPOTS.length)];
-    group.forEach((g, i) => {
-      const ang = i / group.length * Math.PI * 2 + Math.random() * 0.6;
+    group2.forEach((g, i) => {
+      const ang2 = i / group2.length * Math.PI * 2 + Math.random() * 0.6;
       g.huddleFocus = spot;
-      goDir(g, { x: spot.x + Math.cos(ang) * 0.95, z: spot.z + Math.sin(ang) * 0.95 }, "huddle");
+      goDir(g, { x: spot.x + Math.cos(ang2) * 0.95, z: spot.z + Math.sin(ang2) * 0.95 }, "huddle");
     });
     const convo = pickFrom(huddleDeck(DIR_HUDDLES), null);
     convo.forEach((line, ix) => {
       simTimeout(() => {
-        const sp = group[ix % group.length];
+        const sp = group2[ix % group2.length];
         if (sp && sp.state === "huddle") say(sp, line, false, 4, true, 0);
       }, 6500 + ix * 3600);
     });
@@ -32349,13 +33712,13 @@ void main() {
     const s = d.seat;
     const atSeat = s && Math.hypot(d.mesh.position.x - s.x, d.mesh.position.z - s.z) < 0.6;
     const out = s && { x: s.x - Math.sin(s.rot) * 1.6, z: s.z - Math.cos(s.rot) * 1.6 };
-    const outOk = out && losClearThroughOwnChair(d.mesh.position, out);
-    if (destState === "board" && out && (() => {
+    const egressOk = out && (() => {
       const c = toCell(out.x, out.z);
       return !cellBlocked(c[0], c[1]);
-    })()) {
+    })();
+    if (destState === "board" && egressOk) {
       d.path = buildPath(d.mesh.position, out);
-    } else if (atSeat && outOk) {
+    } else if (atSeat && egressOk) {
       d.path = [{ x: out.x, z: out.z }, ...buildPath(out, { x: to.x, z: to.z })];
     } else {
       d.path = buildPath(d.mesh.position, { x: to.x, z: to.z });
@@ -32386,14 +33749,13 @@ void main() {
     const phase = dirPhase();
     directors.forEach((d) => {
       if (d.state === "dirHomeDone") return;
+      tickDoorframe(d);
+      if (d.state !== "walk") gaitPose(d, false, dt);
       if (d.state === "dougGame" && !d.path.length) {
       }
       if (d.destState === "dirHome") {
-        const dd = Math.hypot(d.mesh.position.x - DOOR.x, d.mesh.position.z - DOOR.z);
-        if (dd < REACH.doorArrive) {
-          d.path = [];
-          d.state = "dirHomeDone";
-          d.mesh.visible = false;
+        if (d.mesh.position.z > DOOR.z + 3) {
+          despawn(d, "dirHomeDone");
           return;
         }
       }
@@ -32412,8 +33774,7 @@ void main() {
         const tgt = d.path[0];
         if (!tgt) {
           if (d.destState === "dirHome") {
-            d.state = "dirHomeDone";
-            d.mesh.visible = false;
+            despawn(d, "dirHomeDone");
             return;
           }
           if (d.destState === "dirCoffee") {
@@ -32461,7 +33822,7 @@ void main() {
         d.t -= dt;
         if (d.t <= 0) {
           releaseClaim(d);
-          giveMug(d);
+          giveMug(d, AMEN.espresso.owned);
           goDir(d, d.seat, "board");
         }
         return;
@@ -32595,9 +33956,9 @@ void main() {
   function ring(f, r, n) {
     const pts = [];
     for (let i = 0; i < n; i++) {
-      const ang = i / n * Math.PI * 2 + Math.random() * 0.5;
+      const ang2 = i / n * Math.PI * 2 + Math.random() * 0.5;
       const rr2 = r * (0.85 + Math.random() * 0.35);
-      pts.push({ x: f.x + Math.cos(ang) * rr2, z: f.z + Math.sin(ang) * rr2 });
+      pts.push({ x: f.x + Math.cos(ang2) * rr2, z: f.z + Math.sin(ang2) * rr2 });
     }
     return pts;
   }
@@ -33061,15 +34422,15 @@ void main() {
       ep.style.display = "none";
       return;
     }
-    const ang = Math.atan2(_v.y, _v.x);
+    const ang2 = Math.atan2(_v.y, _v.x);
     const hw = innerWidth / 2 - 26, hh = innerHeight / 2 - 26;
-    const kx = Math.cos(ang), ky = Math.sin(ang);
+    const kx = Math.cos(ang2), ky = Math.sin(ang2);
     const s = Math.min(hw / Math.abs(kx || 1e-6), hh / Math.abs(ky || 1e-6));
     const sx = innerWidth / 2 + kx * s, sy = innerHeight / 2 - ky * s;
     ep.style.display = "block";
     ep.style.left = sx - 13 + "px";
     ep.style.top = sy - 13 + "px";
-    ep.style.transform = "rotate(" + (90 - ang * 180 / Math.PI) + "deg)";
+    ep.style.transform = "rotate(" + (90 - ang2 * 180 / Math.PI) + "deg)";
   }
 
   // src/engine/daylight.js
@@ -33119,6 +34480,7 @@ void main() {
     sun.intensity = base * dim;
     hemi.intensity = 3 * (1 - dimT * 0.65);
     hemi.color.multiplyScalar(1 - dimT * 0.25);
+    WORLD_FOG.value.setHex(2893342).multiplyScalar(1 - dimT * 0.55);
   }
 
   // src/engine/wallclock.js
@@ -33135,13 +34497,13 @@ void main() {
     back.position.z = -0.04;
     g.add(back);
     const mkHand = (len, w, thick, col) => {
-      const pivot = new Group();
+      const pivot2 = new Group();
       const m = new Mesh(new BoxGeometry(w, len, thick), M(col));
       m.position.y = len / 2;
-      pivot.add(m);
-      pivot.position.z = 0.055;
-      g.add(pivot);
-      return pivot;
+      pivot2.add(m);
+      pivot2.position.z = 0.055;
+      g.add(pivot2);
+      return pivot2;
     };
     hourHand = mkHand(0.24, 0.05, 0.02, 2499615);
     minHand = mkHand(0.4, 0.03, 0.02, 2499615);
@@ -33156,6 +34518,126 @@ void main() {
     const hour = sim.shiftStart + (simMin + sim.clockSkew) / 60;
     hourHand.rotation.z = -(hour % 12 / 12) * Math.PI * 2;
     minHand.rotation.z = -(simMin % 60 / 60) * Math.PI * 2;
+  }
+
+  // src/engine/debug.js
+  var DBG = { on: false };
+  var group = new Group();
+  group.visible = false;
+  var built = false;
+  var panel = null;
+  var statsEl = null;
+  var pathLines = /* @__PURE__ */ new Map();
+  var rings = /* @__PURE__ */ new Map();
+  var obsCount = -1;
+  var obsGroup = null;
+  var ringGeo = (() => {
+    const pts = [];
+    for (let i = 0; i <= 32; i++) {
+      const a = i / 32 * Math.PI * 2;
+      pts.push(new Vector3(Math.sin(a), 0, Math.cos(a)));
+    }
+    return new BufferGeometry().setFromPoints(pts);
+  })();
+  var lineMat = new LineBasicMaterial({ color: 5231045 });
+  var ringMat = new LineBasicMaterial({ color: 16166229 });
+  var obsMat = new LineBasicMaterial({ color: 16548225 });
+  function ensure2() {
+    if (built) return;
+    built = true;
+    sceneG.add(group);
+    panel = document.createElement("div");
+    statsEl = document.createElement("div");
+    panel.appendChild(statsEl);
+    panel.style.cssText = "position:fixed;top:8px;left:8px;z-index:99;background:rgba(20,16,12,.85);color:#E7DFD2;font:11px/1.5 monospace;padding:8px 10px;border:1px solid #4a4036;border-radius:4px;white-space:pre;display:none;pointer-events:none";
+    panel.style.pointerEvents = "auto";
+    document.body.appendChild(panel);
+    const row = document.createElement("div");
+    row.style.cssText = "margin-top:6px;display:flex;gap:6px";
+    const mk = (label, fn) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = "font:11px monospace;background:#2E2820;color:#E7DFD2;border:1px solid #5a4f42;border-radius:3px;padding:2px 8px;cursor:pointer";
+      b.onclick = fn;
+      row.appendChild(b);
+    };
+    mk("CONF +1", () => {
+      sim.ceo = Math.min(100, sim.ceo + 1);
+      awardPop("DOUG'S CONFIDENCE RISES", "debug poke \xB7 confidence " + sim.ceo);
+    });
+    mk("CONF -1", () => {
+      sim.ceo = Math.max(0, sim.ceo - 1);
+      awardPop("DOUG'S CONFIDENCE SLIPS", "debug poke \xB7 confidence " + sim.ceo, true);
+    });
+    panel.appendChild(row);
+  }
+  function rebuildObstacles() {
+    if (obsGroup) group.remove(obsGroup);
+    obsGroup = new Group();
+    for (const o of obstacles) {
+      const g = new BufferGeometry().setFromPoints([
+        new Vector3(o.x - o.w / 2, 0.03, o.z - o.d / 2),
+        new Vector3(o.x + o.w / 2, 0.03, o.z - o.d / 2),
+        new Vector3(o.x + o.w / 2, 0.03, o.z + o.d / 2),
+        new Vector3(o.x - o.w / 2, 0.03, o.z + o.d / 2),
+        new Vector3(o.x - o.w / 2, 0.03, o.z - o.d / 2)
+      ]);
+      obsGroup.add(new Line(g, obsMat));
+    }
+    obsCount = obstacles.length;
+    group.add(obsGroup);
+  }
+  function toggleDebug() {
+    ensure2();
+    DBG.on = !DBG.on;
+    group.visible = DBG.on;
+    panel.style.display = DBG.on ? "block" : "none";
+  }
+  var fpsAcc = 0;
+  var fpsN = 0;
+  var fpsShown = 0;
+  function tickDebug(dt) {
+    if (!DBG.on) return;
+    fpsAcc += dt;
+    fpsN++;
+    if (fpsAcc >= 0.5) {
+      fpsShown = Math.round(fpsN / fpsAcc);
+      fpsAcc = 0;
+      fpsN = 0;
+    }
+    if (obsCount !== obstacles.length) rebuildObstacles();
+    const seen = /* @__PURE__ */ new Set();
+    const states = {};
+    for (const p of actors()) {
+      states[p.state] = (states[p.state] || 0) + 1;
+      if (p.mesh.visible === false) continue;
+      seen.add(p);
+      let ln = pathLines.get(p);
+      if (!ln) {
+        ln = new Line(new BufferGeometry(), lineMat);
+        group.add(ln);
+        pathLines.set(p, ln);
+      }
+      const pts = [new Vector3(p.mesh.position.x, 0.06, p.mesh.position.z)];
+      if (p.path) for (const w of p.path) pts.push(new Vector3(w.x, 0.06, w.z));
+      ln.geometry.setFromPoints(pts);
+      ln.visible = pts.length > 1;
+      let rg = rings.get(p);
+      if (!rg) {
+        rg = new Line(ringGeo, ringMat);
+        group.add(rg);
+        rings.set(p, rg);
+      }
+      const r = colliderRadius(p);
+      rg.position.set(p.mesh.position.x, 0.05, p.mesh.position.z);
+      rg.scale.setScalar(r);
+    }
+    for (const [p, ln] of pathLines) if (!seen.has(p)) {
+      ln.visible = false;
+      const rg = rings.get(p);
+      if (rg) rg.visible = false;
+    }
+    statsEl.textContent = "fps " + fpsShown + "   draws " + renderer.info.render.calls + "   tris " + (renderer.info.render.triangles / 1e3 | 0) + "k\ndpr " + devicePixelRatio + " -> render " + renderer.getPixelRatio() + "   canvas " + renderer.domElement.width + "x" + renderer.domElement.height + "\nspeed x" + sim.speed + "   day " + (sim.day + 1) + "  min " + Math.floor(sim.min) + "\nactors: " + Object.entries(states).map(([k, v]) => k + ":" + v).join(" ") + "\nobstacles: " + obstacles.length + "   [F3] hide";
   }
 
   // src/core/rng.js
@@ -33317,8 +34799,8 @@ void main() {
     return '<div class="dsRow"><div class="dsHead"><span>' + LABELS[k] + '</span><b style="color:' + col + '">' + Math.round(v) + '</b></div><div class="dsBar"><i class="t25"></i><i class="t50"></i><i class="t75"></i><div class="dsFill" style="width:' + Math.max(2, Math.round(v)) + "%;background:" + col + '"></div></div><div class="dsCap">' + cap + "</div></div>";
   }
   function openDossier(a) {
-    const el = document.getElementById("dossier");
-    el.style.display = "block";
+    const el2 = document.getElementById("dossier");
+    el2.style.display = "block";
     const p = persona(a);
     const pay = Math.round(ECON.wagePerDay * sim.payroll);
     const sev = a.ten === "veteran" ? 3600 : a.ten === "mid" ? 2200 : 900;
@@ -33373,16 +34855,16 @@ void main() {
   var lastCeo = null;
   function ceoAch(delta, val) {
     const up = delta > 0;
-    const el = document.createElement("div");
-    el.className = "ach " + (up ? "up" : "down");
+    const el2 = document.createElement("div");
+    el2.className = "ach " + (up ? "up" : "down");
     const pool = up ? ACH_UP : ACH_DOWN;
     const sub = !up && val <= 25 ? "The engagement is in danger." : pool[Math.floor(Math.random() * pool.length)];
-    el.innerHTML = '<span class="ai">' + (up ? "\u25B2" : "\u25BC") + "</span><div><b>CEO CONFIDENCE " + (up ? "+" : "") + delta + "</b><i>" + sub + "</i></div>";
-    document.getElementById("achv").appendChild(el);
-    requestAnimationFrame(() => el.classList.add("in"));
+    el2.innerHTML = '<span class="ai">' + (up ? "\u25B2" : "\u25BC") + "</span><div><b>CEO CONFIDENCE " + (up ? "+" : "") + delta + "</b><i>" + sub + "</i></div>";
+    document.getElementById("achv").appendChild(el2);
+    requestAnimationFrame(() => el2.classList.add("in"));
     setTimeout(() => {
-      el.classList.remove("in");
-      setTimeout(() => el.remove(), 400);
+      el2.classList.remove("in");
+      setTimeout(() => el2.remove(), 400);
     }, 4200);
   }
   function updateHUD() {
@@ -33444,27 +34926,27 @@ void main() {
     document.getElementById("clock").textContent = sim.night ? WEEKDAYS[sim.day % WEEK_DAYS] + " \xB7 Wk " + (Math.floor(sim.day / WEEK_DAYS) + 1) + " \xB7 after hours" : WEEKDAYS[sim.day % WEEK_DAYS] + " \xB7 Wk " + (Math.floor(sim.day / WEEK_DAYS) + 1) + " \xB7 review in " + reviewCountdown().text;
   }
   function drawSpark() {
-    const cv = document.getElementById("spark"), ctx = cv.getContext("2d");
-    ctx.clearRect(0, 0, cv.width, cv.height);
+    const cv = document.getElementById("spark"), ctx2 = cv.getContext("2d");
+    ctx2.clearRect(0, 0, cv.width, cv.height);
     const h = sim.history.slice(-20);
     if (!h.length) return;
     const max = Math.max(...h, sim.baselineDaily * 1.2), min = Math.min(...h, sim.baselineDaily * 0.8);
     const X = (i) => 8 + (cv.width - 16) * i / Math.max(1, h.length - 1);
     const Y = (v) => cv.height - 6 - (cv.height - 14) * (v - min) / (max - min || 1);
-    ctx.strokeStyle = "#C9C0A8";
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(0, Y(sim.baselineDaily));
-    ctx.lineTo(cv.width, Y(sim.baselineDaily));
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.strokeStyle = h[h.length - 1] >= sim.baselineDaily ? "#177E76" : "#D64545";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
+    ctx2.strokeStyle = "#C9C0A8";
+    ctx2.setLineDash([3, 3]);
+    ctx2.beginPath();
+    ctx2.moveTo(0, Y(sim.baselineDaily));
+    ctx2.lineTo(cv.width, Y(sim.baselineDaily));
+    ctx2.stroke();
+    ctx2.setLineDash([]);
+    ctx2.strokeStyle = h[h.length - 1] >= sim.baselineDaily ? "#177E76" : "#D64545";
+    ctx2.lineWidth = 2;
+    ctx2.beginPath();
     h.forEach((v, i) => {
-      i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v));
+      i ? ctx2.lineTo(X(i), Y(v)) : ctx2.moveTo(X(i), Y(v));
     });
-    ctx.stroke();
+    ctx2.stroke();
   }
   function renderPolicies() {
     const list = document.getElementById("polList");
@@ -33520,11 +35002,14 @@ void main() {
       b.onclick = () => enact(b.getAttribute("data-id"));
     });
   }
+  function fillIntroLogo() {
+    const el2 = document.getElementById("introLogo");
+    if (el2) el2.innerHTML = logoSVG("gold");
+  }
   function startGame() {
     document.getElementById("intro").style.display = "none";
     sim.started = true;
     sim.min = Math.max(sim.min, 0);
-    toast("Doug Hartman Jr.: 'Do whatever it takes. Within reason. Or, you know. Whatever it takes.'");
     const a = agents[0];
     setTimeout(() => {
       a.queue.push({ t: "A consultant. Doug hired a *consultant*.", dark: true });
@@ -33620,9 +35105,9 @@ void main() {
   }
   function initHUD() {
     initSheetDrag();
-    document.querySelectorAll("[data-open]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const which = el.getAttribute("data-open");
+    document.querySelectorAll("[data-open]").forEach((el2) => {
+      el2.addEventListener("click", () => {
+        const which = el2.getAttribute("data-open");
         sheetOpenAs === which ? closeSheet() : openSheet(which);
       });
     });
@@ -33777,9 +35262,9 @@ void main() {
     renderAmenities();
   }
   function renderAmenities() {
-    const el = document.getElementById("amenList");
-    if (!el) return;
-    el.innerHTML = "";
+    const el2 = document.getElementById("amenList");
+    if (!el2) return;
+    el2.innerHTML = "";
     Object.keys(AMEN).forEach((k) => {
       const d = AMEN[k];
       const div = document.createElement("div");
@@ -33788,9 +35273,9 @@ void main() {
       if (d.owned) btn = d.removable ? '<button data-am="' + k + '" data-act="rm">REMOVE (+' + fmt$(Math.round(d.cost * 0.4)) + ")</button>" : "<button disabled>LOAD-BEARING</button>";
       else btn = '<button data-am="' + k + '" data-act="buy">BUY \u2014 ' + fmt$(d.cost) + "</button>";
       div.innerHTML = "<h3>" + d.name + '<span class="tag">' + (d.owned ? "OWNED" : "SHOP") + "</span></h3><p>" + d.desc + '</p><div class="fx">' + d.fxTxt + "</div>" + btn;
-      el.appendChild(div);
+      el2.appendChild(div);
     });
-    el.querySelectorAll("button[data-am]").forEach((b) => {
+    el2.querySelectorAll("button[data-am]").forEach((b) => {
       b.onclick = () => {
         const k = b.getAttribute("data-am");
         if (b.getAttribute("data-act") === "buy") buyAmenity(k);
@@ -33822,13 +35307,15 @@ void main() {
   document.getElementById("scene").appendChild(renderer.domElement);
   buildOffice();
   buildWallClock();
+  buildDoor();
   buildCharacters();
   initAmenities();
   initInput();
+  fillIntroLogo();
   initHUD();
   ["sheetBody", "mCard", "introCard"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) attachScrollHint(el);
+    const el2 = document.getElementById(id);
+    if (el2) attachScrollHint(el2);
   });
   renderPolicies();
   renderAmenities();
@@ -33842,7 +35329,7 @@ void main() {
   function rebuildBlockers() {
     BLOCKERS.length = 0;
     agents.forEach((a) => {
-      if (a.state === "gone") return;
+      if (!isActive(a)) return;
       a.nudgeCd = (a.nudgeCd || 0) - STEP * sim.speed;
       const NUDGE_FREE = (s) => s !== "walk" && s !== "settle" && s !== "home" && s !== "gone";
       BLOCKERS.push({
@@ -33857,6 +35344,7 @@ void main() {
       });
     });
     directors.forEach((d, i) => {
+      if (!isActive(d)) return;
       d.nudgeCd = (d.nudgeCd || 0) - STEP * sim.speed;
       BLOCKERS.push({
         cid: 100 + i,
@@ -33891,7 +35379,9 @@ void main() {
     tickCases();
     tickCeoHat();
     tickScenes(scaled);
+    tickDoor(scaled);
     tickHuddles(scaled);
+    tickWalkChat(scaled);
     dogTick(scaled);
     dirTick(scaled);
     ambientBubbles(scaled);
@@ -33902,8 +35392,12 @@ void main() {
     }
   }
   function frame(now) {
-    requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1e3);
+    if (renderer.getPixelRatio() !== devicePixelRatio) {
+      renderer.setPixelRatio(devicePixelRatio);
+      renderer.setSize(innerWidth, innerHeight);
+      sizeCamera();
+    }
+    const dt = Math.min(0.25, (now - last) / 1e3);
     last = now;
     setPerfNow(now / 1e3);
     if (sim.started && sim.speed > 0) {
@@ -33937,12 +35431,35 @@ void main() {
       tickDaylight(solar, allHome());
     }
     tickWallClock(sim.min);
+    tickDebug(dt);
     renderer.render(sceneG, camera);
+    requestAnimationFrame(frame);
   }
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "F3" || e.key === "`") {
+      e.preventDefault();
+      toggleDebug();
+    }
+    if (e.key === "m" || e.key === "M") {
+      toggleMute();
+    }
+  });
   addEventListener("resize", () => {
     renderer.setSize(innerWidth, innerHeight);
     sizeCamera();
   });
+  function warmUpPrograms() {
+    const restore = [];
+    for (const p of actors()) {
+      if (p.mesh.visible === false) {
+        restore.push(p.mesh);
+        p.mesh.visible = true;
+      }
+    }
+    renderer.compile(sceneG, camera);
+    for (const msh of restore) msh.visible = false;
+  }
+  warmUpPrograms();
   requestAnimationFrame(frame);
 })();
 /*! Bundled license information:
