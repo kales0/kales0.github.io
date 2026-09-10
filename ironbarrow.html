@@ -76,6 +76,7 @@ window.addEventListener('resize', resize);
 // beat before innerWidth/innerHeight settle
 if(window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=>{ setTimeout(resize, 250); setTimeout(resize, 800); });
+setTimeout(resize, 60); setTimeout(resize, 450);   // boot dims settle late on mobile
 
 // ---------- canvas helpers (texture factory only — never in the page) ----------
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return [c, c.getContext('2d')]; }
@@ -4662,7 +4663,7 @@ function syncMenu(){
     midTitle.mesh.position.set(0,4,1);
     mbDescend.cx=0; mbDescend.cy=-64;
     mbOptionsT.cx=0; mbOptionsT.cy=-144;
-    mbFull.cx=0; mbFull.cy=-204;
+    mbFull.cx=0; mbFull.cy=-220;   // same edge gap (~23) as descend->options
     mbFull.hidden=!touchMode;   // desktop has F11; the button is touch-only
   } else if(s==='pause'){
     midTitle.mesh.position.set(0,34,1);
@@ -6623,7 +6624,19 @@ function setIcons(){ icoH.material.map=TEX.hpotUI; icoM.material.map=TEX.mpotUI;
   for(const s of keyIcos){ s.material.map=TEX.key; s.material.needsUpdate=true; if(!s.parent) hud.add(s); } }
 
 let last=performance.now(), acc=0;
+// DIMENSION WATCHDOG: mobile browsers (Samsung especially) change the window
+// - URL bar collapse, rotation, zoom - without reliably firing resize or
+// visualViewport events. A missed resize leaves the scene rendering into a
+// stale-sized sub-rect with ghost buffer content beside it. Cheap per-frame
+// check: if reality disagrees with the last layout, force a full resize.
+function dimWatchdog(){
+  if(W!==window.innerWidth || H!==window.innerHeight ||
+     canvas.width!==Math.max(2,(W*DPR)|0) || canvas.height!==Math.max(2,(H*DPR)|0)){
+    resize();
+  }
+}
 function stepSim(rdt){
+  dimWatchdog();
   lockGraceT=Math.max(0, lockGraceT-rdt);
   // fixed 60 Hz simulation regardless of render rate: identical feel at 5, 22, or 60 fps
   acc+=Math.min(rdt,0.4);
@@ -6773,7 +6786,10 @@ const PHONE_UI=Math.min(window.innerWidth,window.innerHeight)<=500;
 const btnAtk=mkBtn(weaponTex,PHONE_UI?96:88,()=>tryMelee(),true);
 // the weapon texture is 96x162 - forced square it rendered SQUISHED. True
 // aspect, sized so the blade tip clears the plate's top rim a touch.
-{ const aw=btnAtk.w*0.5; btnAtk.ico.scale.set(aw, aw*162/96, 1); btnAtk.icoDY=btnAtk.w*0.10; }
+// uiSprite geometry is PRE-SIZED (btnAtk.w*0.62 square): scale is a
+// MULTIPLIER, not pixels. Absolute values here made a ~2600-unit quad -
+// the invisible sword, the gray smear, the buried potion bottles.
+{ btnAtk.ico.scale.set(0.5/0.62, (0.5*162/96)/0.62, 1); btnAtk.icoDY=btnAtk.w*0.10; }
 const btnSpell=mkBtn(null,PHONE_UI?78:72,()=>trySpell(),true);
 const btnUse=mkBtn(null,PHONE_UI?72:68,()=>interact(),true);
 const btnHP=mkBtn(null,74,()=>drink('h')); btnHP.noPlate=true; btnHP.ico.scale.set(2.05,2.05,1);
