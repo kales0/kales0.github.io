@@ -40,7 +40,9 @@ const cam = new THREE.PerspectiveCamera(75, 1, 0.05, 60);
 
 const hud = new THREE.Scene();
 let W = 2, H = 2;
-const hudCam = new THREE.OrthographicCamera(-1,1,1,-1,-10,10);
+const hudCam = new THREE.OrthographicCamera(-1,1,1,-1,-1000,1000);
+// depth range must swallow tilted hud planes: a 556px weapon leaned ~9deg
+// spans ~44 units of depth - the old -10..10 box CLIPPED the hilt clean off
 
 function resize(){
   W = window.innerWidth; H = window.innerHeight;
@@ -597,27 +599,42 @@ function fireWhoosh(){
     if(amp<=0) return;
     const rate=0.94+Math.random()*0.14;
     // 1) ignition roar: fire's voice
-    beastVoice({amp:0.26, dur:0.72*rate, attack:0.032, holdT:0.14,
+    beastVoice({amp:0.19, dur:0.72*rate, attack:0.024, holdT:0.14,
       f0:98+Math.random()*14, f1:40, diveT:0.5, subMix:0.68, sub0:52, sub1:30,
       flutHz:24, flutDepth:0.75, bp0:470, bp1:150, bpQ:1.6,
-      gravel:0.52, lp0:880, lp1:200});
+      gravel:0.52, lp0:880, lp1:250});
     // 2) boom through synthesized-space convolver
     { const ir=a.createBuffer(1, SR*1.0|0, SR), ird=ir.getChannelData(0);
       let lpv=0;
       for(let k=0;k<ird.length;k++){ const t=k/ird.length;
-        lpv+=((Math.random()*2-1)-lpv)*0.095;             // one-pole darkening
+        lpv+=((Math.random()*2-1)-lpv)*0.12;              // one-pole darkening (kept airy)
         ird[k]=lpv*Math.pow(1-t,2.6);                     // long dying tail
       }
       const cv=a.createConvolver(); cv.buffer=ir;
       const bn=SR*0.32|0, bb=a.createBuffer(1,bn,SR), bd2=bb.getChannelData(0);
       for(let k=0;k<bn;k++) bd2[k]=(Math.random()*2-1)*Math.pow(1-k/bn,1.1);
       const s=a.createBufferSource(); s.buffer=bb;
-      const lp=a.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=920;
-      const dry=a.createGain(); dry.gain.value=Math.max(0.001,0.24*amp);
-      const wet=a.createGain(); wet.gain.value=Math.max(0.001,0.22*amp);
+      const lp=a.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.setValueAtTime(1350,t0);                 // warm leading edge - a
+      lp.frequency.exponentialRampToValueAtTime(380,t0+0.3);  // fireball whoomph, not
+                                                              // a whip crack
+      const dry=a.createGain(); dry.gain.value=Math.max(0.001,0.175*amp);
+      const wet=a.createGain(); wet.gain.value=Math.max(0.001,0.165*amp);
       s.connect(lp); lp.connect(dry); dry.connect(a.destination);
-      lp.connect(cv); cv.connect(wet); wet.connect(a.destination);
+      const whp=a.createBiquadFilter(); whp.type='highpass'; whp.frequency.value=180;
+      // the reverb doubling the lows is what smears the blast - low-cut the
+      // WET path only; the dry bass keeps its full weight
+      lp.connect(cv); cv.connect(whp); whp.connect(wet); wet.connect(a.destination);
       s.start(t0); }
+    // the SEAR: ~100ms of high-passed noise on the attack. Clarity lives in
+    // the top octaves - the ear reads this as definition, not loudness.
+    { const sd=0.11; const n=SR*sd|0, sb2=a.createBuffer(1,n,SR), sdd=sb2.getChannelData(0);
+      for(let k=0;k<n;k++) sdd[k]=(Math.random()*2-1)*Math.pow(1-k/n,1.3);
+      const s2=a.createBufferSource(); s2.buffer=sb2;
+      const hp2=a.createBiquadFilter(); hp2.type='highpass'; hp2.frequency.value=2600;
+      const g2=a.createGain(); g2.gain.setValueAtTime(Math.max(0.001,0.055*amp),t0);
+      g2.gain.exponentialRampToValueAtTime(0.0001,t0+sd);
+      s2.connect(hp2); hp2.connect(g2); g2.connect(a.destination); s2.start(t0); }
     // electric arc over the detonation: a dense crackle burst + one square
     // snap tearing downward (the summonBurst zap school, scaled to the cast)
     { const zd2=0.24*rate, n=SR*zd2|0, zb=a.createBuffer(1,n,SR), zdd=zb.getChannelData(0);
@@ -630,7 +647,7 @@ function fireWhoosh(){
       }
       const zs=a.createBufferSource(); zs.buffer=zb;
       const zf=a.createBiquadFilter(); zf.type='bandpass'; zf.Q.value=2; zf.frequency.value=3200;
-      const zg2=a.createGain(); zg2.gain.setValueAtTime(Math.max(0.001,0.16*amp),t0);
+      const zg2=a.createGain(); zg2.gain.setValueAtTime(Math.max(0.001,0.18*amp),t0);
       zg2.gain.exponentialRampToValueAtTime(0.0001,t0+zd2);
       zs.connect(zf); zf.connect(zg2); zg2.connect(a.destination); zs.start(t0); zs.stop(t0+zd2); }
     // the BRZZ: a falling square-buzz carrier mixed with noise, chopped by
@@ -647,11 +664,80 @@ function fireWhoosh(){
       }
       const s2=a.createBufferSource(); s2.buffer=bb2;
       const bf2=a.createBiquadFilter(); bf2.type='bandpass'; bf2.Q.value=0.7; bf2.frequency.value=1700;
-      const bg2=a.createGain(); bg2.gain.setValueAtTime(Math.max(0.001,0.13*amp),t0);
+      const bg2=a.createGain(); bg2.gain.setValueAtTime(Math.max(0.001,0.145*amp),t0);
       bg2.gain.exponentialRampToValueAtTime(0.0001,t0+bz);
       s2.connect(bf2); bf2.connect(bg2); bg2.connect(a.destination); s2.start(t0); s2.stop(t0+bz); }
     // (flight audio now rides the projectile itself - see attachBoltFly)
 
+  }catch(e){}
+}
+function stoneStrike(delay){
+  // sword meets dungeon stone: the accidental v1 'pick on rock' sound, kept
+  // deliberately - struck inharmonic partials (deepened ~12%, quickened) +
+  // a clipped scrape. Values ported verbatim from the tuned preview page.
+  try{
+    const a=audio(), t0=a.currentTime+(delay||0), SR=a.sampleRate;
+    const amp=OPT.master*OPT.sfx;
+    if(amp<=0) return;
+    const base=1+((Math.random()-0.5)*0.06);
+    let dly=0;
+    for(const [f,pv] of [[2340,0.16],[3560,0.12],[4920,0.09]]){
+      const o=a.createOscillator(); o.type='sine'; o.frequency.value=f*base;
+      const g=a.createGain(), v=Math.max(0.001,pv*0.34*amp), ts=t0+dly;
+      g.gain.setValueAtTime(0.0001,ts);
+      g.gain.exponentialRampToValueAtTime(v,ts+0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001,ts+0.08);
+      o.connect(g); g.connect(a.destination); o.start(ts); o.stop(ts+0.09);
+      dly+=0.004;
+    }
+    const n=SR*0.04|0, buf=a.createBuffer(1,n,SR), d=buf.getChannelData(0);
+    for(let k=0;k<n;k++) d[k]=(Math.random()*2-1)*(1-k/n);
+    const s=a.createBufferSource(); s.buffer=buf;
+    const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2850;
+    const g=a.createGain(); g.gain.value=Math.max(0.001,0.05*amp);
+    s.connect(hp); hp.connect(g); g.connect(a.destination); s.start(t0);
+  }catch(e){}
+}
+function swordShing(){
+  // audition winner F, ported verbatim: arc whoosh (brightness follows the
+  // blade) + schwing (resonant noise sweeping up - metal without whistle)
+  // + a small effort thump under it. Rides over the original air.
+  try{
+    const a=audio(), t0=a.currentTime, SR=a.sampleRate;
+    const amp=OPT.master*OPT.sfx*sfxDist;
+    if(amp<=0) return;
+    // arc whoosh (F: 0.1)
+    { const wd=0.17, n=SR*wd|0, buf=a.createBuffer(1,n,SR), d=buf.getChannelData(0);
+      for(let k=0;k<n;k++) d[k]=(Math.random()*2-1);
+      const s=a.createBufferSource(); s.buffer=buf;
+      const bp=a.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.9;
+      bp.frequency.setValueAtTime(650,t0);
+      bp.frequency.exponentialRampToValueAtTime(2500+Math.random()*500,t0+0.07);
+      bp.frequency.exponentialRampToValueAtTime(750,t0+wd);
+      const g=a.createGain(), v=Math.max(0.001,0.1*amp);
+      g.gain.setValueAtTime(0.0001,t0);
+      g.gain.exponentialRampToValueAtTime(v,t0+0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+wd);
+      s.connect(bp); bp.connect(g); g.connect(a.destination); s.start(t0); s.stop(t0+wd); }
+    // schwing (F: 0.08)
+    { const wd=0.12, n=SR*wd|0, buf=a.createBuffer(1,n,SR), d=buf.getChannelData(0);
+      for(let k=0;k<n;k++) d[k]=(Math.random()*2-1)*Math.pow(1-k/n,0.5);
+      const s=a.createBufferSource(); s.buffer=buf;
+      const bp=a.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=3.5;
+      bp.frequency.setValueAtTime(2300,t0);
+      bp.frequency.exponentialRampToValueAtTime(4300,t0+0.09);
+      const g=a.createGain(), v=Math.max(0.001,0.08*amp);
+      g.gain.setValueAtTime(0.0001,t0);
+      g.gain.exponentialRampToValueAtTime(v,t0+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+wd);
+      s.connect(bp); bp.connect(g); g.connect(a.destination); s.start(t0); s.stop(t0+wd); }
+    // effort thump (F: 0.06)
+    { const n=SR*0.06|0, buf=a.createBuffer(1,n,SR), d=buf.getChannelData(0);
+      for(let k=0;k<n;k++) d[k]=(Math.random()*2-1)*(1-k/n);
+      const s=a.createBufferSource(); s.buffer=buf;
+      const lp=a.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=190;
+      const g=a.createGain(); g.gain.value=Math.max(0.001,0.06*amp);
+      s.connect(lp); lp.connect(g); g.connect(a.destination); s.start(t0); }
   }catch(e){}
 }
 let _shaperCurve=null;
@@ -860,7 +946,7 @@ function roarSynth(){
     gravel:0.45, lp0:560, lp1:150});
 }
 const SFX={
-  swing:()=>noiseHit(0.12,0.16,1600),
+  swing:()=>{noiseHit(0.12,0.16,1600);swordShing();},   // original air + audition winner F
   hit:()=>{noiseHit(0.08,0.14,600);beep(90,0.08,'square',0.06,-40);},
   hurt:()=>{beep(140,0.2,'sawtooth',0.1,-90);},
   pickup:()=>{beep(660,0.07,'square',0.06);setTimeout(()=>beep(990,0.09,'square',0.06),60);},
@@ -2678,6 +2764,7 @@ function syncFlames(){
   fGeo.attributes.iPh.needsUpdate=true;
   fGeo.attributes.iHue.needsUpdate=true;
   fMat.uniforms.uTime.value=performance.now()*0.001;
+  wMat.uniforms.uTime.value=performance.now()*0.001;
   fMat.uniforms.fogNear.value=scene.fog?scene.fog.near:1.5;
   fMat.uniforms.fogFar.value=scene.fog?scene.fog.far:10.5;
 }
@@ -3369,6 +3456,268 @@ function tryKeyUse(){
 function tryMelee(){
   if(P.atkCool>0||P.swing>=0||P.keySwing>=0) return;
   P.swing=0; P.atkCool=Math.max(0.25, 0.45-P.dex*0.012); SFX.swing();
+  // predict a wall strike NOW so the stone lands at 50ms into the swing sound
+  // (the hit frame at 100-160ms is too late to keep the tuned lineup). Same
+  // reach and arc the hit frame will use: wall ahead, no target in the arc,
+  // not a door, not the stairwell.
+  {
+    const reach=0.95+P.swordTier*0.09;
+    const fx3=P.x+Math.sin(P.yaw)*reach, fz3=P.z+Math.cos(P.yaw)*reach;
+    let flesh=false;
+    for(const e of enemies){
+      if(e.hp<=0) continue;
+      const ex=e.x-P.x, ez=e.z-P.z, d2=Math.hypot(ex,ez);
+      if(d2<1.35+P.swordTier*0.09){
+        let da=Math.atan2(ex,ez)-P.yaw;
+        while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
+        if(Math.abs(da)<0.95){ flesh=true; break; }
+      }
+    }
+    let stairsAhead=false;
+    for(let t2=0; t2<=reach+0.7; t2+=0.22)
+      if(tileAt(P.x+Math.sin(P.yaw)*t2, P.z+Math.cos(P.yaw)*t2)===T_STAIRS){ stairsAhead=true; break; }
+    if(!flesh && !stairsAhead && !doors[(fx3|0)+','+(fz3|0)]
+       && tileAt(fx3,fz3)===T_WALL){
+      stoneStrike(0.05);
+      // sparks fly at the same 50ms beat, ON the wall face: raymarch to the
+      // first solid sample and step back - a fixed sword-reach point sits
+      // INSIDE the wall whenever the player stands close to it
+      let tFace=reach;
+      for(let t2=0.1;t2<=reach;t2+=0.05)
+        if(tileAt(P.x+Math.sin(P.yaw)*t2, P.z+Math.cos(P.yaw)*t2)===T_WALL){ tFace=t2; break; }
+      // bias the impact toward the SWORD: the blade rides the right half of
+      // the screen, so a dead-center spawn disowns it. Slide right along the
+      // wall face (backing off if that lands in stone at a corner).
+      const rxD=-Math.cos(P.yaw), rzD=Math.sin(P.yaw);   // screen-right of facing (sign fixed)
+      let off=0.1;
+      while(off>0 && solid(P.x+Math.sin(P.yaw)*(tFace-0.1)+rxD*off,
+                           P.z+Math.cos(P.yaw)*(tFace-0.1)+rzD*off)) off-=0.08;
+      const sx4=P.x+Math.sin(P.yaw)*(tFace-0.1)+rxD*off, sz4=P.z+Math.cos(P.yaw)*(tFace-0.1)+rzD*off;
+      sparkPend={x:sx4, y:0.5, z:sz4, nx:-Math.sin(P.yaw), nz:-Math.cos(P.yaw)};
+      sparkPendT=0.05;
+    }
+  }
+}
+// ---------- arcane impact: ring ripple + crawling arc traces ----------
+let _ringTex=null;
+function ringTex(){
+  if(_ringTex) return _ringTex;
+  const [c,x]=cnv(64,64);
+  x.strokeStyle='#ffffff'; x.lineWidth=6; x.shadowColor='#ffffff'; x.shadowBlur=9;
+  x.beginPath(); x.arc(32,32,21,0,Math.PI*2); x.stroke();
+  x.lineWidth=2; x.shadowBlur=3;
+  x.beginPath(); x.arc(32,32,13,0,Math.PI*2); x.stroke();   // inner echo ring
+  _ringTex=toTex(c); return _ringTex;
+}
+const impactRings=[], impactArcs=[];
+// ---------- the CASTING CIRCLE: layered spinning arcane glyphwork ----------
+// Three crisp layers (hard strokes, no blur), spinning in opposing directions:
+//  outer - ring bearing procedural arcane symbols (arcs/chevrons/crosses/ticks)
+//  mid   - geometry: hexagram of counter-triangles with vertex nodes
+//  inner - dashed rune-tick circle around a diamond
+let _castTex=null;
+function castTexes(){
+  if(_castTex) return _castTex;
+  const mk=(draw)=>{ const [c,x]=cnv(256,256); x.strokeStyle='#ffffff'; x.fillStyle='#ffffff';
+    x.lineWidth=7; x.lineCap='round'; draw(x); return toTex(c); };   // chonky: reads at range
+  const glyph=(x,cx,cy,s)=>{ // one arcane symbol: 2-3 random strokes in a cell
+    const k=(Math.random()*5)|0;
+    x.beginPath();
+    if(k===0){ x.arc(cx,cy,s*0.5,Math.random()*3,Math.random()*3+2); }
+    else if(k===1){ x.moveTo(cx-s/2,cy+s/2); x.lineTo(cx,cy-s/2); x.lineTo(cx+s/2,cy+s/2); }          // chevron
+    else if(k===2){ x.moveTo(cx-s/2,cy); x.lineTo(cx+s/2,cy); x.moveTo(cx,cy-s/2); x.lineTo(cx,cy+s/2); } // cross
+    else if(k===3){ x.moveTo(cx-s/2,cy-s/2); x.lineTo(cx+s/2,cy+s/2); x.arc(cx,cy,s*0.28,0,6.28); }
+    else { x.moveTo(cx,cy-s/2); x.lineTo(cx,cy+s/2); x.moveTo(cx-s*0.3,cy-s*0.2); x.lineTo(cx+s*0.3,cy-s*0.2); }
+    x.stroke();
+  };
+  _castTex=[
+    mk((x)=>{ // outer: glyph-bearing ring
+      x.beginPath(); x.arc(128,128,116,0,6.28); x.stroke();
+      x.beginPath(); x.arc(128,128,92,0,6.28); x.stroke();
+      const N=12;
+      for(let i=0;i<N;i++){ const a=i/N*6.28;
+        x.save(); x.translate(128+Math.cos(a)*104,128+Math.sin(a)*104); x.rotate(a+1.57);
+        glyph(x,0,0,17); x.restore(); }
+    }),
+    mk((x)=>{ // mid: hexagram + vertex nodes
+      const tri=(off)=>{ x.beginPath();
+        for(let i=0;i<=3;i++){ const a=off+i/3*6.28;
+          const px=128+Math.cos(a)*82, py=128+Math.sin(a)*82;
+          i?x.lineTo(px,py):x.moveTo(px,py); } x.stroke(); };
+      tri(0); tri(3.14159/3? Math.PI : 3.14159);   // counter-triangles
+      for(let i=0;i<6;i++){ const a=i/6*6.28;
+        x.beginPath(); x.arc(128+Math.cos(a)*82,128+Math.sin(a)*82,9,0,6.28); x.stroke(); }
+    }),
+    mk((x)=>{ // inner: dashed rune-ticks + diamond
+      const N=24;
+      for(let i=0;i<N;i++){ const a=i/N*6.28, r0=52, r1=(i%3===0)?38:44;
+        x.beginPath(); x.moveTo(128+Math.cos(a)*r0,128+Math.sin(a)*r0);
+        x.lineTo(128+Math.cos(a)*r1,128+Math.sin(a)*r1); x.stroke(); }
+      x.beginPath(); x.moveTo(128,102); x.lineTo(154,128); x.lineTo(128,154); x.lineTo(102,128); x.closePath(); x.stroke();
+    }),
+  ];
+  return _castTex;
+}
+const castCircles=[];
+// ---------- flesh lightning: crackle ACROSS the struck body ----------
+// Jagged filaments radiating from the impact point in the enemy's billboard
+// plane, every vertex clamped inside the body extents (quad is ~0.78*sc wide,
+// ~1*sc tall). They ride the enemy as it moves, flicker, and die in ~0.2s.
+const fleshArcs=[];
+function spawnFleshLightning(e,hitX,hitY,hitZ){
+  if(!_sparkGeo) spawnSparks(0,-99,0,0,1,{n:0});
+  const rXx=-Math.cos(P.yaw), rXz=Math.sin(P.yaw);           // screen-right in world
+  let ox0=(hitX-e.x)*rXx+(hitZ-e.z)*rXz, oy0=hitY;
+  const HX=0.36*e.sc, HY0=0.06, HY1=1.02*e.sc;
+  ox0=Math.max(-HX,Math.min(HX,ox0)); oy0=Math.max(HY0,Math.min(HY1,oy0));
+  const parts=[];
+  const chain=(sx,sy,segN,baseAng)=>{
+    let cx3=sx, cy3=sy, ang=baseAng;
+    for(let s2=0;s2<segN;s2++){
+      const len=(0.16+Math.random()*0.14)*e.sc;
+      ang+=(Math.random()-0.5)*1.5;
+      let ex3=cx3+Math.cos(ang)*len, ey3=cy3+Math.sin(ang)*len;
+      ex3=Math.max(-HX,Math.min(HX,ex3)); ey3=Math.max(HY0,Math.min(HY1,ey3));
+      if(Math.hypot(ex3-cx3,ey3-cy3)<0.02*e.sc) break;       // pinned at the edge
+      const m=new THREE.Mesh(_sparkGeo,_sparkBaseMat.clone());
+      m.material.color.setHex(0xdff2ff);
+      m.scale.set(2.6,2.6,1);
+      worldGroup.add(m);
+      parts.push({m, ax:cx3,ay:cy3, bx:ex3,by:ey3});
+      if(Math.random()<0.4 && s2<segN-1) chain(ex3,ey3,1,ang+(Math.random()<0.5?1.6:-1.6));  // branch
+      cx3=ex3; cy3=ey3;
+    }
+  };
+  const N=3;
+  for(let c2=0;c2<N;c2++) chain(ox0,oy0,2+(Math.random()*2|0), c2/N*6.28+Math.random());
+  if(parts.length) fleshArcs.push({e, parts, life:0.16+Math.random()*0.05, maxLife:0.21});
+}
+function spawnCastCircle(x,y,z,nx,ny,nz,sizeMul,life,alpha,follow){
+  // the arcane circle, stamped wherever the spell BITES: flush on struck
+  // stone, or flat on the ground at a struck creature's feet.
+  sizeMul=sizeMul===undefined?1:sizeMul; life=life===undefined?0.5:life;
+  const texes=castTexes();
+  const spec=[[0x3a63d9, 0.27, 2.2],    // color, size, spin rad/s
+              [0x6fa3ff, 0.21,-3.4],    // opposing
+              [0xbfe0ff, 0.15, 4.8]];
+  const layers=[];
+  for(let i=0;i<3;i++){
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+      new THREE.MeshBasicMaterial({map:texes[i], transparent:true, depthWrite:false,
+        blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false, color:spec[i][0]}));
+    m.position.set(x+nx*(0.03+i*0.012), y+ny*(0.03+i*0.012), z+nz*(0.03+i*0.012));
+    if(Math.abs(ny)>0.9) m.rotation.x=-Math.PI/2*Math.sign(ny);   // ground/ceiling: lie flat
+    else m.lookAt(x+nx, y, z+nz);
+    m.rotateZ(Math.random()*6.28);
+    m.scale.setScalar(spec[i][1]*sizeMul);
+    worldGroup.add(m);
+    layers.push({m, w:spec[i][2], s0:spec[i][1]*sizeMul});
+  }
+  castCircles.push({layers, life:life, maxLife:life, alpha:alpha===undefined?0.38:alpha, follow:follow||null, ny:ny});
+}
+function spawnImpactRing(x,y,z,nx,ny,nz,color,s0){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+    new THREE.MeshBasicMaterial({map:ringTex(), transparent:true, depthWrite:false,
+      blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false, color:color===undefined?0x9adcff:color}));
+  m.position.set(x+nx*0.03, y+ny*0.03, z+nz*0.03);
+  m.lookAt(x+nx, y+ny, z+nz);
+  worldGroup.add(m);
+  impactRings.push({m, life:0.28, maxLife:0.28, s0:s0===undefined?0.22:s0});
+}
+function spawnImpactArcs(x,y,z,nx,ny,nz){
+  // 2 jagged cyan filaments crawling outward IN the wall plane - the visual
+  // twin of the brzz in the impact sound
+  if(!_sparkGeo) spawnSparks(x,-99,z,0,1,{n:0});   // ensure shared geo exists
+  // in-plane basis
+  let ux=0,uy=1,uz=0;
+  if(Math.abs(ny)>0.7){ ux=1; uy=0; uz=0; }
+  let tx=uy*nz-uz*ny, ty=uz*nx-ux*nz, tz=ux*ny-uy*nx;
+  for(let a2=0;a2<2;a2++){
+    const parts=[]; const dirA=Math.random()*Math.PI*2;
+    let px3=x+nx*0.02, py3=y+ny*0.02, pz3=z+nz*0.02, ang=dirA;
+    for(let s2=0;s2<3;s2++){
+      const len=0.08+Math.random()*0.07, jig=ang+(Math.random()-0.5)*1.3;
+      const dx3=(tx*Math.cos(jig)+ux*Math.sin(jig)), dy3=(ty*Math.cos(jig)+uy*Math.sin(jig)), dz3=(tz*Math.cos(jig)+uz*Math.sin(jig));
+      const m=new THREE.Mesh(_sparkGeo, _sparkBaseMat.clone());
+      m.material.color.setHex(0x9adcff);
+      m.position.set(px3+dx3*len/2, py3+dy3*len/2, pz3+dz3*len/2);
+      m.lookAt(px3+dx3, py3+dy3, pz3+dz3);
+      m.scale.set(1.4,1.4,len);
+      worldGroup.add(m); parts.push(m);
+      px3+=dx3*len; py3+=dy3*len; pz3+=dz3*len; ang=jig;
+    }
+    impactArcs.push({parts, life:0.1+Math.random()*0.06, maxLife:0.16});
+  }
+}
+// damage split: ~45% of a bolt's damage is an AOE pulse emitted from the
+// arcane circle; the rest is impact, direct-hit only. A struck enemy takes
+// BOTH (exactly the old total); a led shot into the ground deals the pulse.
+// the mark is the hazard: bolt AOE is a LINGERING FIELD at the arcane circle,
+// ticking 3 times over ~0.8s. The field total is the bolt's full 45% AOE
+// share - so a marked target's SUM (impact + all ticks) equals EXACTLY the
+// original damage. The balance cost is the time-gating itself: what used to
+// land instantly now takes ~0.7s of standing in the glyph, and scattering
+// forfeits the remaining ticks. Fields on a struck creature RIDE them like
+// their circle does; ground/wall fields anchor.
+// THE RULE stands: field ticks carry RAW damage only - riders (witchfire burn,
+// any future on-hit effect) belong to the direct impact alone. Aggro from
+// being ticked and xp/gold from field kills are deliberate keeps.
+const boltFieldTicks=(p)=>{
+  const total=Math.max(1,Math.round(p.dmg*0.45));
+  const b2=Math.floor(total/3), r2=total-b2*3;
+  return [b2+(r2>0?1:0), b2+(r2>1?1:0), b2];
+};
+const aoeFields=[];
+function spawnBoltField(x,z,ticks,follow){
+  aoeFields.push({x,z, follow:follow||null, ticks:ticks.slice(), idx:0, t:0, interval:0.35});
+}
+function simBoltFields(dt){
+  for(let i=aoeFields.length-1;i>=0;i--){
+    const f=aoeFields[i];
+    f.t-=dt;
+    if(f.t<=0){
+      if(f.follow && f.follow.hp>0 && enemies.indexOf(f.follow)>=0){ f.x=f.follow.x; f.z=f.follow.z; }
+      const d2=f.ticks[f.idx];
+      if(d2>0) for(const e2 of enemies.slice()){
+        if(e2.hp<=0) continue;
+        if(Math.hypot(e2.x-f.x,e2.z-f.z)<0.95) damageEnemy(e2,d2);
+      }
+      f.idx++; f.t=f.interval;
+      if(f.idx>=f.ticks.length) aoeFields.splice(i,1);
+    }
+  }
+}
+function boltImpactFX(x,y,z,bx2,bz2,opt){
+  // arc-bolt impact: an arcane RING RIPPLE flush with the surface, crawling
+  // arc traces, a blooming pop and a real light flash. No steel sparks -
+  // magic answers stone with magic.
+  const bl=Math.hypot(bx2,bz2)||1;
+  let nx=-bx2/bl, ny=0, nz=-bz2/bl;
+  if(opt && opt.ny!==undefined){ nx=0; ny=opt.ny; nz=0; }
+  else if(solid(x+Math.sign(bx2)*0.14, z)){ nx=-Math.sign(bx2)||nx; nz=0; }
+  else if(solid(x, z+Math.sign(bz2)*0.14)){ nx=0; nz=-Math.sign(bz2)||nz; }
+  if(opt && opt.flesh){
+    // a body doesn't ripple like stone - and it doesn't throw SPARKS either:
+    // ballistic speed reads as metal. Magic DISPERSES. An instant shattered
+    // shell of shimmering wake motes, a few floaty fragments that puff out
+    // and stop (heavy drag, near-zero gravity), and a double bloom.
+    for(let i2=0;i2<12;i2++){
+      const th=Math.random()*6.28, phi=Math.acos(2*Math.random()-1), rr=0.1+Math.random()*0.26;
+      wakeEmit(x+Math.sin(phi)*Math.cos(th)*rr, y+Math.cos(phi)*rr*0.8, z+Math.sin(phi)*Math.sin(th)*rr,
+        WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.03+Math.random()*0.026);
+    }
+    spawnSparks(x,y,z,0,0,{radial:true, n:5, slow:true, shadeHexes:[0x4073ff,0x80c7ff,0xccefff]});
+    spawnImpactPop(x,y,z, 0x9adcff, 0.68);
+    spawnImpactPop(x,y,z, 0xccefff, 0.4, 0.05);
+    dynLights.push({x,y,z, r:0.55,g:0.85,b:1, i:2.4, life:0.2});
+    return;
+  }
+  // ground-lying stamps match the victim's mark; walls stay tighter since
+  // face-on viewing already reads larger
+  spawnCastCircle(x,y,z,nx,ny,nz, Math.abs(ny)>0.9?1.9:1.1, Math.abs(ny)>0.9?1.15:0.9, 0.95);
+  spawnImpactArcs(x,y,z,nx,ny,nz);
+  spawnImpactPop(x,y,z, 0x9adcff, 0.55);
+  dynLights.push({x,y,z, r:0.55,g:0.85,b:1, i:2.0, life:0.18});
 }
 function attachBoltFly(p){
   // the bolt carries its own burn: a looping turbulence source whose volume is
@@ -3434,8 +3783,10 @@ function trySpell(){
       cruiseAt:vl/9});                                   // this bolt's exact ray-crossing time
     if(Math.abs(sp)<0.01) attachBoltFly(projectiles[projectiles.length-1]);
   }
-  // muzzle flash at the casting hand
-  burst(P.x+Math.sin(P.yaw)*0.5, 0.2, P.z+Math.cos(P.yaw)*0.5, 0x9adcff, 5, 1.1);
+  // muzzle: hanging slivers only - the arcane circle appears where the
+  // spell BITES (on the struck wall, or under the struck creature)
+  { const mx=P.x+Math.sin(P.yaw)*0.5, mz=P.z+Math.cos(P.yaw)*0.5;
+    wakePuff(mx, 0.24, mz, 5, 0.13); }
   dynLights.push({x:P.x+Math.sin(P.yaw)*0.5, y:0.3, z:P.z+Math.cos(P.yaw)*0.5, r:0.55,g:0.85,b:1, i:1.1, life:0.15});
 }
 function spawnNovaWave(x,z){
@@ -4720,6 +5071,11 @@ function update(dt){
     }
   }
   P.hurtFlash=Math.max(0,P.hurtFlash-dt*1.6);
+  simBoltFields(dt);
+  if(sparkPendT>=0){
+    sparkPendT-=dt;
+    if(sparkPendT<0 && sparkPend){ spawnSparks(sparkPend.x,sparkPend.y,sparkPend.z,sparkPend.nx,sparkPend.nz); sparkPend=null; }
+  }
   if(P.swing>=0){
     P.swing+=dt;
     if(P.swing>0.10 && P.swing<0.16){
@@ -5135,9 +5491,10 @@ function update(dt){
         else if(!solid(p.x,nz2)) p.dx=-p.dx;
         else { p.dx=-p.dx; p.dz=-p.dz; }
         p.life=Math.min(p.life+0.6,2.8);
-        burst(p.x,p.y,p.z,0x9adcff,5,1.2); SFX.hit();
-      } else { dead=true; burst(p.x,p.y,p.z, p.hostile?(p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0):0x9adcff, 6, 1.4);
-        if(!p.hostile) sfxAt(p.x,p.z,SFX.boltHit); }
+        wakePuff(p.x,p.y,p.z,4,0.1); SFX.hit();
+      } else { dead=true;
+        if(!p.hostile){ spawnBoltField(p.x,p.z,boltFieldTicks(p),null); boltImpactFX(p.x,p.y,p.z,p.dx,p.dz); wakePuff(p.x,p.y,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit); }
+        else burst(p.x,p.y,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); }
     }
     else {
       p.x=nx2; p.z=nz2;
@@ -5150,12 +5507,13 @@ function update(dt){
             burst(p.x,p.y,p.z,0x9adcff,5,1.2); SFX.hit();
           } else {
             dead=true;
-            burst(p.x,Math.max(0.1,Math.min(wallH-0.1,p.y)),p.z, p.hostile?(p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0):0xff7ab0, 6, 1.4);
-            if(!p.hostile) sfxAt(p.x,p.z,SFX.boltHit);
+            { const iy=Math.max(0.1,Math.min(wallH-0.1,p.y));
+              if(!p.hostile){ spawnBoltField(p.x,p.z,boltFieldTicks(p),null); boltImpactFX(p.x,iy,p.z,p.dx,p.dz,{ny:p.dy>0?-1:1}); wakePuff(p.x,iy,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit); }
+              else burst(p.x,iy,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); }
           }
         }
       }
-      if(p.fly) p.fly.g.gain.value=Math.max(0.0001, 0.075*OPT.master*OPT.sfx*distVol(p.x,p.z));
+      if(p.fly) p.fly.g.gain.value=Math.max(0.0001, 0.085*OPT.master*OPT.sfx*distVol(p.x,p.z));
       p.spr.position.set(p.x,p.y,p.z);
       if(p.kind==='hex'){
         // hex orbs weave: the sprite serpentines around its true path and pulses
@@ -5207,7 +5565,21 @@ function update(dt){
         else if(p.kind==='doom'){ if(Math.random()<0.85) spawnTrail(p.x,p.y-0.03,p.z, 1,0.42,0.12); }
         else if(Math.random()<0.45) spawnTrail(p.x,p.y,p.z, 1,0.45,0.7);
       }
-      else spawnTrail(p.x,p.y,p.z, 0.5,0.85,1);
+      else {
+        // double spiral around the flight axis; motes hang and dissolve behind
+        p.hxPh=(p.hxPh===undefined? Math.random()*6.28 : p.hxPh)+dt*24;
+        const vl3=Math.hypot(p.dx,p.dy,p.dz)||1;
+        const ax=p.dx/vl3, ay=p.dy/vl3, az=p.dz/vl3;
+        let rx=-az, rz=ax; const rl2=Math.hypot(rx,rz)||1; rx/=rl2; rz/=rl2;
+        const ux=ay*rz, uy=az*rx-ax*rz, uz=-ay*rx;   // axis x right
+        const R=0.035;   // hug the bolt
+        for(const ss of [0,Math.PI]){
+          const c2=Math.cos(p.hxPh+ss), sn2=Math.sin(p.hxPh+ss);
+          wakeEmit(p.x+(rx*c2+ux*sn2)*R, p.y+(uy*sn2)*R, p.z+(rz*c2+uz*sn2)*R,
+            WAKE_SHADES[(Math.random()*3)|0], p.hxPh+ss, 0.034+Math.random()*0.02);
+        }
+        dynLights.push({x:p.x,y:p.y,z:p.z, r:0.45,g:0.75,b:1, i:0.5, life:0.05});
+      }
     }
     if(!dead){
       if(p.hostile){
@@ -5216,9 +5588,15 @@ function update(dt){
       } else {
         for(const e of enemies){
           const d=Math.hypot(e.x-p.x,e.z-p.z);
-          if(d<e.r+0.2 && p.y>0 && p.y<1.15*e.sc){ damageEnemy(e,p.dmg);
-            if(P.fireLvl>0 && e.hp>0){ e.burnT=1.5+P.fireLvl; }
-            dead=true; burst(p.x,0.5,p.z,0x9adcff,10,1.8); break; }
+          if(d<e.r+0.2 && p.y>0 && p.y<1.15*e.sc){
+            if(!p.hostile){
+              const tk=boltFieldTicks(p);
+              damageEnemy(e, p.dmg-(tk[0]+tk[1]+tk[2]));   // impact = D minus the ticks:
+              spawnBoltField(p.x,p.z,tk,e);                // marked target sums to EXACTLY D
+              boltImpactFX(p.x,p.y,p.z,p.dx,p.dz,{flesh:true}); spawnCastCircle(e.x,0.05,e.z,0,1,0,1.9,1.15,1.0,e); if(e.hp>0) spawnFleshLightning(e,p.x,p.y,p.z);
+            } else damageEnemy(e,p.dmg);
+            if(!p.hostile && P.fireLvl>0 && e.hp>0){ e.burnT=1.5+P.fireLvl; }   // rider: IMPACT-ONLY, struck enemy only - the pulse never ignites
+            dead=true; if(!p.hostile) wakePuff(p.x,0.55,p.z,7,0.16); else burst(p.x,0.5,p.z,0x9adcff,10,1.8); break; }
         }
       }
     }
@@ -5518,6 +5896,7 @@ function update(dt){
   if(msgTime>0) msgTime-=dt;
 }
 function simParticles(dt,grav){
+  simSparks(dt);
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i];
     p.life-=dt;
@@ -5532,6 +5911,131 @@ function spawnP(o){
   if(particles.length>=PMAX) particles.shift();
   particles.push(o);
 }
+let sparkPendT=-1, sparkPend=null;
+// sword-on-stone sparks v2: point-sprites read as blurry circles, so each
+// spark is a tiny STRETCHED additive mesh aimed along its velocity - a solid
+// bright streak that elongates with speed - plus a real dynLight so the
+// strike momentarily lights the stone.
+const sparks=[];
+let _sparkGeo=null, _sparkBaseMat=null;
+const impactPops=[];
+function spawnImpactPop(x,y,z,color,scale,delay){
+  // the impact BODY: one additive glow that blooms and dies in ~150ms.
+  // This is the 'pop' that a handful of dots can never sell.
+  const g=makeSprite(TEX.glow, scale||0.5);
+  g.material.blending=THREE.AdditiveBlending; g.material.depthWrite=false; g.material.fog=false;
+  if(g.material.color) g.material.color.setHex(color===undefined?0x9adcff:color);
+  g.material.opacity=0.9;
+  g.position.set(x,y,z);
+  worldGroup.add(g);
+  if(delay) g.visible=false;
+  impactPops.push({spr:g, life:0.16, maxLife:0.16, s0:(scale||0.5)*0.5, delay:delay||0});
+}
+function spawnSparks(x,y,z,nx,nz,opt){
+  opt=opt||{};
+  if(!_sparkGeo){
+    _sparkGeo=new THREE.BoxGeometry(0.0045,0.0045,1); // unit length: scaled per frame
+    _sparkBaseMat=new THREE.MeshBasicMaterial({color:0xffedb8, transparent:true,
+      blending:THREE.AdditiveBlending, depthWrite:false, fog:false});
+  }
+  const n=opt.n!==undefined? opt.n : 2+(Math.random()<0.5?1:0);
+  const SHADES=opt.shadeHexes;
+  for(let i=0;i<n;i++){
+    if(opt.radial){
+      // full detonation: velocities on a sphere, biased upward
+      const th=Math.random()*6.28, phi=Math.acos(2*Math.random()-1);
+      const sp2=opt.slow? 0.6+Math.random()*0.5 : 1.8+Math.random()*1.7;
+      const m=new THREE.Mesh(_sparkGeo, _sparkBaseMat.clone());
+      m.material.color.setHex(SHADES? SHADES[(Math.random()*SHADES.length)|0] : (opt.color!==undefined?opt.color:0xffedb8));
+      worldGroup.add(m);
+      sparks.push({m, x,y,z,
+        vx:Math.sin(phi)*Math.cos(th)*sp2, vy:Math.cos(phi)*sp2*(opt.slow?0.6:0.8)+(opt.slow?0.1:0.4), vz:Math.sin(phi)*Math.sin(th)*sp2,
+        life:(opt.slow?0.26:0.16)+Math.random()*0.12, maxLife:0.38,
+        grav:opt.slow?0.6:undefined, drag:opt.slow?6:undefined});
+      continue;
+    }
+    // spray mostly ALONG the wall, not at the camera: head-on sparks are a
+    // dot; in profile the streak reads. Small kick off the wall, big lateral.
+    const lat=(Math.random()<0.5?-1:1)*(1.4+Math.random()*1.6);
+    const m=new THREE.Mesh(_sparkGeo, _sparkBaseMat.clone());
+    if(opt.color!==undefined) m.material.color.setHex(opt.color);
+    worldGroup.add(m);
+    sparks.push({m,
+      x:x+(Math.random()-0.5)*0.05, y:y+(Math.random()-0.5)*0.08, z:z+(Math.random()-0.5)*0.05,
+      vx:nx*(0.7+Math.random()*0.7)+(-nz)*lat,
+      vy:1.0+Math.random()*1.4,
+      vz:nz*(0.7+Math.random()*0.7)+(nx)*lat,
+      life:0.15+Math.random()*0.1, maxLife:0.25});
+  }
+  dynLights.push({x,y:y,z, r:1,g:0.78,b:0.42, i:1.5, life:0.22});
+}
+function simSparks(dt){
+  for(let i=castCircles.length-1;i>=0;i--){
+    const o=castCircles[i]; o.life-=dt;
+    if(o.life<=0){ for(const L of o.layers){ worldGroup.remove(L.m); L.m.material.dispose(); L.m.geometry.dispose(); } castCircles.splice(i,1); continue; }
+    const t=1-o.life/o.maxLife;
+    if(o.follow && o.follow.hp>0 && enemies.indexOf(o.follow)>=0){
+      for(const L of o.layers){ L.m.position.x=o.follow.x; L.m.position.z=o.follow.z; }
+    }
+    for(const L of o.layers){
+      L.m.rotateZ(L.w*dt);                         // each layer spins its own way
+      // blooms open a touch, then draws IN as it dies - the mark closing
+      L.m.scale.setScalar(L.s0*(t<0.15? 0.9+t*(0.2/0.15)*0.5 : 1.0-((t-0.15)/0.85)*0.35));
+      L.m.material.opacity=Math.pow(1-t,1.2)*o.alpha; // fades, never blurs
+    }
+  }
+  for(let i=fleshArcs.length-1;i>=0;i--){
+    const o=fleshArcs[i]; o.life-=dt;
+    const gone=o.life<=0 || o.e.hp<=0 || enemies.indexOf(o.e)<0;
+    if(gone){ for(const s2 of o.parts){ worldGroup.remove(s2.m); s2.m.material.dispose(); } fleshArcs.splice(i,1); continue; }
+    const rXx=-Math.cos(P.yaw), rXz=Math.sin(P.yaw);
+    const fl=0.5+Math.random()*0.5;
+    for(const s2 of o.parts){
+      const ax=o.e.x+rXx*s2.ax, az=o.e.z+rXz*s2.ax, ay=s2.ay+(o.e.hopY||0);
+      const bx3=o.e.x+rXx*s2.bx, bz3=o.e.z+rXz*s2.bx, by3=s2.by+(o.e.hopY||0);
+      s2.m.position.set((ax+bx3)/2,(ay+by3)/2,(az+bz3)/2);
+      s2.m.lookAt(bx3,by3,bz3);
+      s2.m.scale.z=Math.hypot(bx3-ax,by3-ay,bz3-az);
+      s2.m.material.opacity=fl*(o.life/o.maxLife+0.35);
+    }
+  }
+  for(let i=impactRings.length-1;i>=0;i--){
+    const o=impactRings[i]; o.life-=dt;
+    if(o.life<=0){ worldGroup.remove(o.m); o.m.material.dispose(); o.m.geometry.dispose(); impactRings.splice(i,1); continue; }
+    const t=1-o.life/o.maxLife;
+    o.m.scale.setScalar(o.s0*(0.5+t*3.2));
+    o.m.material.opacity=Math.pow(1-t,1.5);
+  }
+  for(let i=impactArcs.length-1;i>=0;i--){
+    const o=impactArcs[i]; o.life-=dt;
+    if(o.life<=0){ for(const m of o.parts){ worldGroup.remove(m); m.material.dispose(); } impactArcs.splice(i,1); continue; }
+    const fl=0.45+Math.random()*0.55;             // crackle flicker
+    for(const m of o.parts) m.material.opacity=fl*(o.life/o.maxLife+0.3);
+  }
+  for(let i=impactPops.length-1;i>=0;i--){
+    const o=impactPops[i];
+    if(o.delay>0){ o.delay-=dt; if(o.delay<=0) o.spr.visible=true; else continue; }
+    o.life-=dt;
+    if(o.life<=0){ worldGroup.remove(o.spr); o.spr.material.dispose(); impactPops.splice(i,1); continue; }
+    const t=1-o.life/o.maxLife;
+    o.spr.scale.setScalar(o.s0*(1+t*2.6));
+    o.spr.material.opacity=0.9*(1-t)*(1-t);
+  }
+  for(let i=sparks.length-1;i>=0;i--){
+    const s=sparks[i];
+    s.life-=dt; s.vy-=dt*(s.grav!==undefined?s.grav:6.5);
+    const k=Math.max(0,1-(s.drag!==undefined?s.drag:1.1)*dt); s.vx*=k; s.vy*=k; s.vz*=k;
+    s.x+=s.vx*dt; s.y+=s.vy*dt; s.z+=s.vz*dt;
+    if(s.life<=0 || s.y<0.02){
+      worldGroup.remove(s.m); s.m.material.dispose(); sparks.splice(i,1); continue;
+    }
+    const sp=Math.hypot(s.vx,s.vy,s.vz)||0.001;
+    s.m.position.set(s.x,s.y,s.z);
+    s.m.lookAt(s.x+s.vx/sp, s.y+s.vy/sp, s.z+s.vz/sp);   // streak along velocity
+    s.m.scale.set(1,1, Math.min(0.19, 0.04+sp*0.035));   // longer when faster
+    s.m.material.opacity=Math.min(1, s.life/ (s.maxLife*0.55));
+  }
+}
 function spawnSmoke(x,y,z){
   spawnP({x,y,z, vx:(Math.random()-0.5)*0.12, vy:0.28+Math.random()*0.15, vz:(Math.random()-0.5)*0.12,
     life:1.4+Math.random()*0.8, r:0.16,g:0.15,b:0.14, size:0.06, growth:0.14, grav:-0.05, drag:0.6});
@@ -5541,6 +6045,71 @@ function spawnEmber(x,y,z,r,g,b){
     life:0.7+Math.random()*0.7,
     r:r!==undefined?r:1, g:g!==undefined?g:0.5+Math.random()*0.3, b:b!==undefined?b:0.12,
     size:0.042, grav:-0.15, drag:0.9});
+}
+// ---------- the ARC-WAKE: instanced spiral trail for player bolts ----------
+// A double helix of small motes left hanging behind the bolt, one draw call.
+// Shader does the magic: each mote wobbles subtly (more as it dissolves),
+// sparkles, and fades over WAKE_LIFE. Three shades of blue per cast.
+const WMAX=256, WAKE_LIFE=0.55;
+const wGeo=new THREE.InstancedBufferGeometry();
+wGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5,-0.5,0, 0.5,-0.5,0, 0.5,0.5,0, -0.5,0.5,0]),3));
+wGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0,0, 1,0, 1,1, 0,1]),2));
+wGeo.setIndex([0,1,2, 0,2,3]);
+const wOff=new Float32Array(WMAX*3), wCol=new Float32Array(WMAX*3),
+      wBirth=new Float32Array(WMAX).fill(-1e9), wPh=new Float32Array(WMAX), wScl=new Float32Array(WMAX);
+wGeo.setAttribute('iOff', new THREE.InstancedBufferAttribute(wOff,3));
+wGeo.setAttribute('iCol', new THREE.InstancedBufferAttribute(wCol,3));
+wGeo.setAttribute('iBirth', new THREE.InstancedBufferAttribute(wBirth,1));
+wGeo.setAttribute('iPh', new THREE.InstancedBufferAttribute(wPh,1));
+wGeo.setAttribute('iScl', new THREE.InstancedBufferAttribute(wScl,1));
+wGeo.instanceCount=WMAX;
+const wMat=new THREE.ShaderMaterial({
+  uniforms:{ uTime:{value:0}, fogNear:{value:1.5}, fogFar:{value:10.5} },
+  vertexShader:
+'attribute vec3 iOff; attribute vec3 iCol; attribute float iBirth; attribute float iPh; attribute float iScl;\n'+
+'varying vec2 vUv; varying vec3 vCol; varying float vAge; varying float vPh; varying float vFog;\n'+
+'uniform float uTime; uniform float fogNear; uniform float fogFar;\n'+
+'void main(){ vUv=uv; vCol=iCol; vPh=iPh;\n'+
+'  vAge=clamp((uTime-iBirth)/'+WAKE_LIFE+', 0.0, 1.0);\n'+
+'  vec3 right=vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);\n'+
+'  vec3 up=vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);\n'+
+'  vec3 wob=(right*sin(uTime*9.0+iPh)+up*cos(uTime*7.3+iPh*1.7))*(0.016*vAge);\n'+
+'  vec3 wp=iOff+wob + (right*position.x + up*position.y)*iScl;\n'+
+'  vec4 mv=viewMatrix*vec4(wp,1.0);\n'+
+'  vFog=clamp((-mv.z-fogNear)/(fogFar-fogNear),0.0,1.0);\n'+
+'  gl_Position=projectionMatrix*mv; }',
+  fragmentShader:
+'uniform float uTime;\n'+
+'varying vec2 vUv; varying vec3 vCol; varying float vAge; varying float vPh; varying float vFog;\n'+
+'void main(){ if(vAge>=1.0) discard;\n'+
+'  vec2 q=vUv-0.5;\n'+
+'  float cA=cos(vPh), sA=sin(vPh);\n'+
+'  vec2 rq=vec2(q.x*cA-q.y*sA, q.x*sA+q.y*cA);\n'+
+'  float d=length(vec2(rq.x*3.1, rq.y))*2.0;   // thin sliver, rotated per-mote\n'+
+'  float core=pow(max(0.0,1.0-d),1.3);\n'+
+'  float pin=pow(max(0.0,1.0-d),6.0);          // hot center line\n'+
+'  float spark=0.85+0.15*sin(uTime*26.0+vPh*7.0);\n'+
+'  float a=min(1.0,(core*1.9+pin*0.9))*pow(1.0-vAge,1.4)*spark*(1.0-vFog*0.45);\n'+
+'  gl_FragColor=vec4(vCol*(1.2+0.9*pin)*a, a); }',
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending });
+const wMesh=new THREE.Mesh(wGeo,wMat); wMesh.frustumCulled=false; worldGroup.add(wMesh);
+let wCursor=0;
+const WAKE_SHADES=[[0.25,0.45,1],[0.5,0.78,1],[0.8,0.94,1]];
+function wakeEmit(x,y,z,shade,ph,scl){
+  const i=wCursor; wCursor=(wCursor+1)%WMAX;
+  wOff[i*3]=x; wOff[i*3+1]=y; wOff[i*3+2]=z;
+  wCol[i*3]=shade[0]; wCol[i*3+1]=shade[1]; wCol[i*3+2]=shade[2];
+  wBirth[i]=performance.now()*0.001; wPh[i]=ph; wScl[i]=scl;
+  wGeo.attributes.iOff.needsUpdate=true; wGeo.attributes.iCol.needsUpdate=true;
+  wGeo.attributes.iBirth.needsUpdate=true; wGeo.attributes.iPh.needsUpdate=true;
+  wGeo.attributes.iScl.needsUpdate=true;
+}
+function wakePuff(x,y,z,n,spread){
+  // a scatter of hanging wake slivers: magic residue that dissolves in place.
+  // The replacement for every circle burst the arc bolt used to throw.
+  for(let i=0;i<n;i++)
+    wakeEmit(x+(Math.random()-0.5)*spread*2, y+(Math.random()-0.5)*spread*1.6, z+(Math.random()-0.5)*spread*2,
+      WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.03+Math.random()*0.024);
 }
 function spawnTrail(x,y,z,r,g,b){
   spawnP({x,y,z, vx:(Math.random()-0.5)*0.5, vy:(Math.random()-0.5)*0.5, vz:(Math.random()-0.5)*0.5,
@@ -5776,14 +6345,30 @@ function syncHUD(){
     keyHand.position.set(kx2, ky2, 0.04);
   }
   let wx=VW*0.24, wy=-VH/2+132+bob, rot=0.1;
+  let swingS=0;
   if(P.swing>=0){
-    const t=P.swing/0.3;
-    rot=0.1+Math.sin(t*Math.PI)*1.15;
-    wx-=Math.sin(t*Math.PI)*200; wy+=Math.sin(t*Math.PI)*70;
+    // a STRONG slash is asymmetric: strike to full extension in the first 28%
+    // (~84ms - and right on the 100-160ms damage window), hang there a beat
+    // (cosine's zero slope), then ease back home. The old symmetric sine went
+    // out and returned at the same speed - a wave, not a cut.
+    const t=Math.min(1,P.swing/0.3);
+    swingS = t<0.28 ? Math.sin((t/0.28)*Math.PI/2)
+                    : Math.cos(((t-0.28)/0.72)*Math.PI/2);
+    // aim the strike AT the target: modest roll (heavy roll lays the blade
+    // flat-left instead of pointing it at what's in front of us), travel
+    // toward screen center, and a subtle foreshortening stretch - longer
+    // along the blade, slightly narrower - to sell the forward lunge. The
+    // old uniform 16% shrink read as pulling AWAY at the moment of impact.
+    rot=0.1+swingS*0.6;
+    wx-=swingS*250; wy+=swingS*120;
   }
   weapon.position.set(wx,wy,0.05); weapon.rotation.z=rot;
-  const wsc = 1 - (P.swing>=0 ? Math.sin(Math.min(1,P.swing/0.3)*Math.PI)*0.16 : 0);
-  weapon.scale.set(wsc,wsc,1);
+  // a SUBTLE lean away from the camera through the strike. Order 'ZYX' tilts
+  // in the blade's own rolled frame - default order sheared the rolled sprite
+  // into a keystone. 0.16 rad (~9 deg): a suggestion of depth, not a fold.
+  weapon.rotation.order='ZYX';
+  weapon.rotation.x=swingS*1.1;   // the committed lunge: blade lays deep into the scene at full extension (~63deg, player-approved by eye)
+  weapon.scale.set(1-swingS*0.05, 1+swingS*0.1, 1);
   weapon.visible = state.mode==='play' && !shopOpen;
   crossV.visible=crossH.visible= state.mode==='play' && !shopOpen && !bigMap;
   bigMapQuad.visible = bigMap && state.mode==='play' && !shopOpen;
