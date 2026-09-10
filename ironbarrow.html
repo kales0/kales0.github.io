@@ -5761,6 +5761,7 @@ function update(dt){
     const d=Math.hypot(P.x-pk.x,P.z-pk.z);
     if(d<0.5){
       let took=true;
+      haptic(8);   // every collected pickup taps the hand (Android only)
       if(pk.kind==='hpb'){
         const h=4+((P.lvl*0.5)|0);
         P.hp=Math.min(P.maxhp, P.hp+h);
@@ -6780,17 +6781,27 @@ const btnMP=mkBtn(null,74,()=>drink('m')); btnMP.noPlate=true; btnMP.ico.scale.s
 const btnPause=mkBtn(spriteTex(drawPauseIco,32),42,()=>{ if(state.mode==='play') enterPause(); });
 function layoutTouch(){
   const R=VW/2-16-SAFE.r, B2=-VH/2+16+SAFE.b;   // clear the notch and home bar
-  // TABLET: thumbs pivot at the held corners with limited reach - the action
-  // cluster arcs around the right pivot (sword nearest, spell inward along
-  // the arc, interact above), radii sized for tablet thumb travel
-  if(PHONE_UI){
+  const PORT=VH>VW;   // orientation is dynamic - rotation re-runs this layout
+  // thumbs pivot at the held corners with limited reach - the action cluster
+  // arcs around the right pivot (sword nearest, spell inward along the arc,
+  // interact above). Portrait holds are one-handed and lower: the arc drops
+  // and tightens so everything stays inside the resting thumb's sweep.
+  if(PHONE_UI && !PORT){
     btnAtk.cx=R-64;  btnAtk.cy=B2+160;
     btnUse.cx=R-64;  btnUse.cy=B2+240;
     btnSpell.cx=R-160; btnSpell.cy=B2+110;
-  } else {
+  } else if(PHONE_UI){          // phone PORTRAIT: low tight one-thumb arc
+    btnAtk.cx=R-62;   btnAtk.cy=B2+150;
+    btnSpell.cx=R-168; btnSpell.cy=B2+116;
+    btnUse.cx=R-98;   btnUse.cy=B2+252;
+  } else if(!PORT){
     btnAtk.cx=R-72;   btnAtk.cy=B2+130;
     btnSpell.cx=R-190; btnSpell.cy=B2+102;
     btnUse.cx=R-108;  btnUse.cy=B2+242;
+  } else {                      // tablet PORTRAIT: arc rides a bit higher
+    btnAtk.cx=R-76;   btnAtk.cy=B2+170;
+    btnSpell.cx=R-198; btnSpell.cy=B2+138;
+    btnUse.cx=R-112;  btnUse.cy=B2+286;
   }
   // phone vs tablet: on a phone the thumbs anchor at the screen corners, so
   // the potions climb higher and ANGLE INWARD along the left thumb's natural
@@ -6799,12 +6810,18 @@ function layoutTouch(){
   // both devices get the inward potion arc (two diagonal targets along the
   // left thumb's sweep); tablet radii are larger, and the arc clears the
   // joystick below so drinking never means hunting over the stick
-  if(PHONE_UI){
+  if(PHONE_UI && !PORT){
     btnHP.cx=-VW/2+SAFE.l+64;  btnHP.cy=B2+300;
     btnMP.cx=-VW/2+SAFE.l+126; btnMP.cy=B2+372;   // upper one tips toward center
-  } else {
+  } else if(PHONE_UI){          // phone portrait: arc hugs lower, tighter
+    btnHP.cx=-VW/2+SAFE.l+60;  btnHP.cy=B2+286;
+    btnMP.cx=-VW/2+SAFE.l+118; btnMP.cy=B2+352;
+  } else if(!PORT){
     btnHP.cx=-VW/2+SAFE.l+68;  btnHP.cy=B2+312;
     btnMP.cx=-VW/2+SAFE.l+142; btnMP.cy=B2+390;
+  } else {                      // tablet portrait
+    btnHP.cx=-VW/2+SAFE.l+72;  btnHP.cy=B2+330;
+    btnMP.cx=-VW/2+SAFE.l+148; btnMP.cy=B2+404;
   }
   btnPause.cx=VW/2-186; btnPause.cy=VH/2-90;   // tucked just left of the minimap plate, vertically centered on it
   joyBase.position.set(-VW/2+SAFE.l+112, B2+150, 0.4);
