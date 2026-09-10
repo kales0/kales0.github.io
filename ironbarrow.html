@@ -4746,12 +4746,16 @@ for(const t of smallLines) hud.add(t.mesh);
 
 function layoutHUD(){
   const L=-VW/2+16, B=-VH/2+16, R=VW/2-16, T=VH/2-16;
-  hpBg.position.set(L+102,B+42,0); hpFill.position.set(L+2,B+42,0.1);
-  txtHP.mesh.position.set(L+214,B+34,0.2);
-  mpBg.position.set(L+77,B+16,0); mpFill.position.set(L+2,B+16,0.1);
-  txtMP.mesh.position.set(L+164,B+8,0.2);
-  xpBg.position.set(L+102,B+64,0); xpFill.position.set(L+2,B+64,0.1);
-  txtLV.mesh.position.set(L+214,B+57,0.2);
+  // vitals cluster anchor: desktop lives bottom-left; on touch the left hand
+  // COVERS that corner, so the bars move to top-center where nothing rests
+  const bL = touchMode ? -115 : L;
+  const bB = touchMode ? VH/2-100 : B;
+  hpBg.position.set(bL+102,bB+42,0); hpFill.position.set(bL+2,bB+42,0.1);
+  txtHP.mesh.position.set(bL+214,bB+34,0.2);
+  mpBg.position.set(bL+77,bB+16,0); mpFill.position.set(bL+2,bB+16,0.1);
+  txtMP.mesh.position.set(bL+164,bB+8,0.2);
+  xpBg.position.set(bL+102,bB+64,0); xpFill.position.set(bL+2,bB+64,0.1);
+  txtLV.mesh.position.set(bL+214,bB+57,0.2);
   icoH.position.set(-108,B+42,0.2); icoM.position.set(-46,B+42,0.2);
   txtPots.mesh.position.set(L+316,B+32,0.2);
   icoK.position.set(L+300,B+12,0.2); txtKeys.mesh.position.set(L+316,B+4,0.2);
@@ -6473,6 +6477,9 @@ function syncHUD(){
   const hudVis = state.mode==='play';
   for(const el of [hpBg,hpFill,mpBg,mpFill,xpBg,xpFill,txtHP.mesh,txtMP.mesh,txtLV.mesh,
                    txtGold.mesh,txtFloor.mesh,txtPots.mesh,icoH,icoM,mmQuad]) el.visible=hudVis;
+  if(touchMode){ icoH.visible=icoM.visible=false; }   // mobile: the touch potion
+  // buttons (with their own counts and glows) own this - the desktop bottle
+  // cluster duplicating them bottom-center was pure clutter
   hpFill.scale.x=Math.max(0.001,P.hp/P.maxhp);
   hpFill.material.color.setHex(P.poisonT>0 ? 0x57c96a : 0xc0392b);
   mpFill.scale.x=Math.max(0.001,P.mp/P.maxmp);
@@ -6493,7 +6500,7 @@ function syncHUD(){
   txtFloor.set('FLOOR '+floorNum+' / 5');
   txtPots.mesh.visible=false;
   cntH.set(''+P.hpots); cntM.set(''+P.mpots);
-  const cvis = state.mode==='play' && !shopOpen;
+  const cvis = state.mode==='play' && !shopOpen && !touchMode;
   cntH.mesh.visible=cntM.mesh.visible=cvis;
   cntH.mesh.position.set(icoH.position.x, icoH.position.y-8, 0.4);
   cntM.mesh.position.set(icoM.position.x, icoM.position.y-8, 0.4);
@@ -6503,9 +6510,10 @@ function syncHUD(){
   icoHGlow.position.set(icoH.position.x, icoH.position.y, 0.14);
   icoMGlow.position.set(icoM.position.x, icoM.position.y, 0.14);
   if(touchMode){
-    txtKeys.set('  '+P.keys);
-    txtKeys.mesh.visible = P.keys>0;
-    icoK.visible = P.keys>0 && hudVis;
+    // mobile shows NO key counter: the key held in hand at a locked door is
+    // the whole interface - less chrome on a small screen
+    txtKeys.mesh.visible=false;
+    icoK.visible=false;
     for(const s of keyIcos) s.visible=false;
   } else {
     // one big key per key held: the pile IS the counter
@@ -6710,8 +6718,8 @@ renderer.clearDepth();
 // ---------- touch controls (all GL, activates on first touch) ----------
 let touchMode=false, joyId=-1, lookId=-1, joyAX=0, joyAY=0, joyVX=0, joyVY=0, lastLX=0, lastLY=0;
 const touchButtons=[];
-function mkBtn(iconTex,size,fx){
-  const plate=uiSprite(texPlate(size,size,11),size,size); plate.renderOrder=24; plate.material.opacity=0.72;
+function mkBtn(iconTex,size,fx,round){
+  const plate=uiSprite(round?texPlateRound(size):texPlate(size,size,11),size,size); plate.renderOrder=24; plate.material.opacity=0.72;
   const ico=uiSprite(iconTex,size*0.62,size*0.62); ico.renderOrder=25;
   hud.add(plate); hud.add(ico);
   const b={w:size,h:size,fx,mesh:plate,ico,cx:0,cy:0};
@@ -6727,9 +6735,13 @@ touchCntH.mesh.renderOrder=touchCntM.mesh.renderOrder=32;
 hud.add(touchCntH.mesh); hud.add(touchCntM.mesh);
 const joyBase=uiQuad(124,124,0x1a1a26,0.35), joyNub=uiQuad(48,48,0x8890a0,0.55);
 joyBase.renderOrder=24; joyNub.renderOrder=25; hud.add(joyBase); hud.add(joyNub);
-const btnAtk=mkBtn(weaponTex,80,()=>tryMelee());
-const btnSpell=mkBtn(null,62,()=>trySpell());
-const btnUse=mkBtn(null,62,()=>interact());
+const PHONE_UI=Math.min(window.innerWidth,window.innerHeight)<=500;
+const btnAtk=mkBtn(weaponTex,PHONE_UI?96:80,()=>tryMelee(),true);
+// the weapon texture is 96x162 - forced square it rendered SQUISHED. True
+// aspect, sized so the blade tip clears the plate's top rim a touch.
+{ const aw=btnAtk.w*0.5; btnAtk.ico.scale.set(aw, aw*162/96, 1); btnAtk.icoDY=btnAtk.w*0.10; }
+const btnSpell=mkBtn(null,PHONE_UI?78:62,()=>trySpell(),true);
+const btnUse=mkBtn(null,PHONE_UI?72:62,()=>interact(),true);
 const btnHP=mkBtn(null,74,()=>drink('h')); btnHP.noPlate=true; btnHP.ico.scale.set(2.05,2.05,1);
 const btnMP=mkBtn(null,74,()=>drink('m')); btnMP.noPlate=true; btnMP.ico.scale.set(2.05,2.05,1);
 const btnPause=mkBtn(spriteTex(drawPauseIco,32),42,()=>{ if(state.mode==='play') enterPause(); });
@@ -6738,9 +6750,19 @@ function layoutTouch(){
   btnAtk.cx=R-64;  btnAtk.cy=B2+160;
   btnUse.cx=R-64;  btnUse.cy=B2+240;
   btnSpell.cx=R-160; btnSpell.cy=B2+110;
-  btnHP.cx=-VW/2+56; btnHP.cy=B2+256;
-  btnMP.cx=-VW/2+56; btnMP.cy=B2+336;
-  btnPause.cx=-VW/2+42; btnPause.cy=VH/2-96;
+  // phone vs tablet: on a phone the thumbs anchor at the screen corners, so
+  // the potions climb higher and ANGLE INWARD along the left thumb's natural
+  // arc - two distinct diagonal targets instead of a vertical stack. Tablets
+  // keep the stack (hands float freer on a big slab).
+  const phone=Math.min(window.innerWidth,window.innerHeight)<=500;
+  if(phone){
+    btnHP.cx=-VW/2+64;  btnHP.cy=B2+300;
+    btnMP.cx=-VW/2+126; btnMP.cy=B2+372;   // upper one tips toward center
+  } else {
+    btnHP.cx=-VW/2+56; btnHP.cy=B2+256;
+    btnMP.cx=-VW/2+56; btnMP.cy=B2+336;
+  }
+  btnPause.cx=VW/2-186; btnPause.cy=VH/2-90;   // tucked just left of the minimap plate, vertically centered on it
   joyBase.position.set(-VW/2+112, B2+150, 0.4);
 }
 function syncTouchUI(){
@@ -6748,7 +6770,7 @@ function syncTouchUI(){
   const show=touchMode && state.mode==='play' && !shopOpen;
   if(TEX.bolt && !btnSpell.ico.material.map){
     btnSpell.ico.material.map=TEX.bolt;
-    btnUse.ico.material.map=TEX.door; btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
+    btnUse.ico.material.map=TEX.handUI;   // the same hand the door prompt shows btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
     tGlowH.material.map=TEX.glow; tGlowH.material.color.setHex(0xff5a5a); tGlowH.material.needsUpdate=true;
     tGlowM.material.map=TEX.glow; tGlowM.material.color.setHex(0x7ab0ff); tGlowM.material.needsUpdate=true;
     for(const b of touchButtons){ b.ico.material.needsUpdate=true; }
@@ -6757,7 +6779,7 @@ function syncTouchUI(){
     const vis = show;
     b.active=vis;   // hit-testing honors THIS: a hidden button must never eat a touch
     b.mesh.visible=vis && !b.noPlate; b.ico.visible=vis && !!b.ico.material.map;
-    b.mesh.position.set(b.cx,b.cy,0.4); b.ico.position.set(b.cx,b.cy,0.5);
+    b.mesh.position.set(b.cx,b.cy,0.4); b.ico.position.set(b.cx,b.cy+(b.icoDY||0),0.5);
   }
   touchCntH.mesh.visible=touchCntM.mesh.visible=show;
   touchCntH.set(''+P.hpots); touchCntM.set(''+P.mpots);
@@ -6783,7 +6805,7 @@ function hitBtn(x,y){
 }
 function onTouchStart(ev){
   if(ev.preventDefault) ev.preventDefault();
-  touchMode=true;
+  if(!touchMode){ touchMode=true; layoutHUD(); }   // re-anchor the vitals for touch
   for(const t of ev.changedTouches){
     const [x,y]=tpos(t);
     if(state.mode==='title'||state.mode==='pause'){
@@ -6872,6 +6894,22 @@ function texPanel(w,h){
   const riv=(px2,py2)=>{ x.fillStyle='#0b0b11'; x.beginPath(); x.arc(px2,py2,4,0,7); x.fill();
     x.fillStyle='#5c5c6c'; x.beginPath(); x.arc(px2-1.2,py2-1.2,2.2,0,7); x.fill(); };
   riv(11,11); riv(w-11,11); riv(11,h-11); riv(w-11,h-11);
+  return toTex(c);
+}
+function texPlateRound(d){
+  // circular action-button plate: the square texPlate language (dark stone
+  // fill, steel rim, soft top highlight) wrapped in a circle
+  const [c,x]=cnv(d,d);
+  x.beginPath(); x.arc(d/2,d/2,d/2-1.5,0,6.2832); x.closePath();
+  x.save(); x.clip();
+  for(let j=0;j<d;j+=2)for(let i=0;i<d;i+=2){
+    const v=15+((Math.random()*9)|0);
+    x.fillStyle='rgb('+v+','+v+','+(v+7)+')'; x.fillRect(i,j,2,2);
+  }
+  x.restore();
+  x.strokeStyle='#4a4a5c'; x.lineWidth=2.5; x.stroke();
+  x.strokeStyle='rgba(255,255,255,0.12)'; x.lineWidth=1;
+  x.beginPath(); x.arc(d/2,d/2,d/2-4,Math.PI*1.05,Math.PI*1.95); x.stroke();
   return toTex(c);
 }
 function texPlate(w,h,cut,hollow){
