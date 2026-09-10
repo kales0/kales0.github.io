@@ -50,13 +50,22 @@ function resize(){
   UIS = Math.max(Math.min(0.9, W/560, H/560), Math.min(2.3, Math.min(W,H)/720));
   VW = W/UIS; VH = H/UIS;
   renderer.setSize(Math.max(2,W*DPR|0), Math.max(2,H*DPR|0), false);
-  canvas.style.width='100vw'; canvas.style.height='100vh';
+  // CSS size must be the SAME pixels the touch math uses. 100vw/100vh broke
+  // iOS: there 100vh is the LARGE viewport (toolbar hidden) while innerHeight
+  // is the current one, so the frame rendered stretched/shifted relative to
+  // the (clientX - W/2)/UIS hit mapping - every control missed its touch.
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
   cam.aspect = W/H; cam.updateProjectionMatrix();
   hudCam.left=-VW/2; hudCam.right=VW/2; hudCam.top=VH/2; hudCam.bottom=-VH/2; hudCam.updateProjectionMatrix();
   layoutHUD();
   try{ if(state && (state.mode==='gate'||gateFade>=0)) positionGateCorners(); }catch(e){}
 }
 window.addEventListener('resize', resize);
+// iOS collapses/expands the browser toolbar WITHOUT reliably firing 'resize':
+// visualViewport tracks the real visible area, and orientation flips need a
+// beat before innerWidth/innerHeight settle
+if(window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+window.addEventListener('orientationchange', ()=>{ setTimeout(resize, 250); setTimeout(resize, 800); });
 
 // ---------- canvas helpers (texture factory only — never in the page) ----------
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return [c, c.getContext('2d')]; }
@@ -514,7 +523,7 @@ function uiSprite(tex,w,h){
 
 // ---------- audio ----------
 let AC=null;
-const OPT={sens:1, master:1, music:0.8, sfx:1};
+const OPT={sens:1, master:1.15, music:0.8, sfx:1};   // ships a touch hot; the slider ranges to 1.25
 let musicGainNode=null, droneGainNode=null;
 function applyVolumes(){
   if(musicGainNode) musicGainNode.gain.value=0.224*OPT.master*OPT.music*(musicGainNode._trackVol||1);
@@ -2765,6 +2774,7 @@ function syncFlames(){
   fGeo.attributes.iHue.needsUpdate=true;
   fMat.uniforms.uTime.value=performance.now()*0.001;
   wMat.uniforms.uTime.value=performance.now()*0.001;
+  syncRibbons();
   fMat.uniforms.fogNear.value=scene.fog?scene.fog.near:1.5;
   fMat.uniforms.fogFar.value=scene.fog?scene.fog.far:10.5;
 }
@@ -3704,7 +3714,7 @@ function boltImpactFX(x,y,z,bx2,bz2,opt){
     for(let i2=0;i2<12;i2++){
       const th=Math.random()*6.28, phi=Math.acos(2*Math.random()-1), rr=0.1+Math.random()*0.26;
       wakeEmit(x+Math.sin(phi)*Math.cos(th)*rr, y+Math.cos(phi)*rr*0.8, z+Math.sin(phi)*Math.sin(th)*rr,
-        WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.03+Math.random()*0.026);
+        WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.016+Math.random()*0.014);
     }
     spawnSparks(x,y,z,0,0,{radial:true, n:5, slow:true, shadeHexes:[0x4073ff,0x80c7ff,0xccefff]});
     spawnImpactPop(x,y,z, 0x9adcff, 0.68);
@@ -3714,7 +3724,9 @@ function boltImpactFX(x,y,z,bx2,bz2,opt){
   }
   // ground-lying stamps match the victim's mark; walls stay tighter since
   // face-on viewing already reads larger
-  spawnCastCircle(x,y,z,nx,ny,nz, Math.abs(ny)>0.9?1.9:1.1, Math.abs(ny)>0.9?1.15:0.9, 0.95);
+  // one size everywhere: the circle telegraphs a damage field of identical
+  // radius on every surface, so it claims identical space on every surface
+  spawnCastCircle(x,y,z,nx,ny,nz, 1.9, Math.abs(ny)>0.9?1.15:0.9, 0.95);
   spawnImpactArcs(x,y,z,nx,ny,nz);
   spawnImpactPop(x,y,z, 0x9adcff, 0.55);
   dynLights.push({x,y,z, r:0.55,g:0.85,b:1, i:2.0, life:0.18});
@@ -3753,6 +3765,8 @@ function attachBoltFly(p){
   }catch(e){}
 }
 function stopBoltFly(p){
+  if(p._rib){ p._rib[0].alive=false; p._rib[1].alive=false; p._rib=null; }
+  if(!p.hostile && p.spr && p.spr.material && p.spr.material.dispose) p.spr.material.dispose();
   if(p.fly){ try{ p.fly.g.gain.value=0.0001; p.fly.src.stop(); if(p.fly.zsrc) p.fly.zsrc.stop(); }catch(e){} p.fly=null; }
 }
 function trySpell(){
@@ -3768,25 +3782,47 @@ function trySpell(){
     // 0.55 = the camera's true eye height (see the frame() camera block).
     // This was 0.62 - a stale constant that converged every bolt onto a point
     // 7cm ABOVE the real sight ray, visibly overshooting the crosshair.
-    const tx3=P.x+Math.sin(a)*cp*6, ty3=0.55+sy*6, tz3=P.z+Math.cos(a)*cp*6;
-    const ox3=P.x+Math.sin(a)*0.45, oy3=0.16, oz3=P.z+Math.cos(a)*0.45;
-    let vx3=tx3-ox3, vy3=ty3-oy3, vz3=tz3-oz3;
-    const vl=Math.hypot(vx3,vy3,vz3)||1;
-    vx3=vx3/vl*9; vy3=vy3/vl*9; vz3=vz3/vl*9;
+    // converge FAST and from BELOW ONLY: the bolt tracks the sight ray's
+    // height directly, carrying a vertical offset that decays exponentially
+    // (closed ~2.2u out). An aim-at-a-point chord overshoots when steep -
+    // it crosses the ray then bounces back; a decaying offset cannot cross.
+    // launch in the CAMERA'S frame: 0.45 ahead, 0.39 below the view axis -
+    // the spawn holds the same spot at the bottom of the view at ANY pitch.
+    // (A fixed world height slid into frame on down-aims and sank far out of
+    // frame on up-aims.) Level aim reproduces the old numbers exactly.
+    const DOWN=0.39;
+    const ox3=P.x+Math.sin(a)*(cp*0.45+sy*DOWN);
+    const oy3=Math.max(0.06, 0.55+sy*0.45-cp*DOWN);
+    const oz3=P.z+Math.cos(a)*(cp*0.45+sy*DOWN);
+    const vx3=Math.sin(a)*cp*9, vz3=Math.cos(a)*cp*9, vy3=sy*9;   // the ray's own rates
+    const _hx0=Math.random()*6.28;
+    const vl=2.2;   // nominal converge distance (kept for cruiseAt semantics)
     const bsc=Math.abs(sp)<0.01?0.3:0.24;
     const s=makeSprite(TEX.bolt, bsc, 'add'); s.center.set(0.5,0.5);
+    s.material=s.material.clone();   // private: each bolt spins on its own phase
     s.position.set(ox3, oy3, oz3);
     s.scale.set(bsc*2.7, bsc*2.7, 1);
     projectiles.push({spr:s, x:ox3, z:oz3, y:oy3,
       dx:vx3, dz:vz3, dy:vy3, dmg:(Math.abs(sp)<0.01?6:3)+P.lvl, hostile:false, life:2, bounce:P.bounces||0,
       baseSc:bsc, age:0, cruiseDy:Math.sin(P.pitch)*9,   // the look ray's vertical rate
-      cruiseAt:vl/9});                                   // this bolt's exact ray-crossing time
+      vOff:(0.55+Math.tan(P.pitch)*Math.hypot(ox3-P.x,oz3-P.z))-oy3,  // start this far BELOW the ray
+      cruiseAt:vl/9,                                     // this bolt's exact ray-crossing time
+      hxPh:_hx0, _pb:[ox3,oy3,oz3,_hx0],   // trail anchored at the TRUE muzzle:
+      // without this seed the first frame interpolates current-to-current and
+      // the spawn-to-frame-1 stretch never exists - a huge on-screen gap at
+      // point-blank camera distance (the trail 'started mid screen')
+      sx:ox3, sz:oz3, ex:P.x, ez:P.z, aimPitch:P.pitch,  // aim geometry: the RAY
+      // starts at the EYE (ex,ez), not the hand - all reticle-truth distances
+      // measure from there (measuring from the hand overshot every down-aim
+      // by the 0.45 hand offset - nearly double at steep angles)
+      // where the AIM RAY meets the floor (down-aims): the bolt skims until
+      // it has traveled this far, then bursts AT the aimed point instead of
+      // burying itself short during its launch dive
+      floorAimD: P.pitch<-0.02? Math.min(17.5,(0.55-0.12)/Math.tan(-P.pitch)) : undefined});
     if(Math.abs(sp)<0.01) attachBoltFly(projectiles[projectiles.length-1]);
   }
-  // muzzle: hanging slivers only - the arcane circle appears where the
-  // spell BITES (on the struck wall, or under the struck creature)
-  { const mx=P.x+Math.sin(P.yaw)*0.5, mz=P.z+Math.cos(P.yaw)*0.5;
-    wakePuff(mx, 0.24, mz, 5, 0.13); }
+  // muzzle: NOTHING. The twin light-ribbons ignite from the hand - under
+  // the ribbon shader a scattered puff rendered as chunky disconnected bars.
   dynLights.push({x:P.x+Math.sin(P.yaw)*0.5, y:0.3, z:P.z+Math.cos(P.yaw)*0.5, r:0.55,g:0.85,b:1, i:1.1, life:0.15});
 }
 function spawnNovaWave(x,z){
@@ -4515,7 +4551,7 @@ function syncShop(){
 let optOpen=false, optSel=0;
 const OPT_ROWS=[
   {key:'sens',   label:'SENSITIVITY', min:0.3, max:2.5, step:0.1},
-  {key:'master', label:'MASTER VOL',  min:0,   max:1,   step:0.05},
+  {key:'master', label:'MASTER VOL',  min:0,   max:1.25,step:0.05},
   {key:'music',  label:'MUSIC VOL',   min:0,   max:1,   step:0.05},
   {key:'sfx',    label:'EFFECTS VOL', min:0,   max:1,   step:0.05},
 ];
@@ -5493,7 +5529,23 @@ function update(dt){
         p.life=Math.min(p.life+0.6,2.8);
         wakePuff(p.x,p.y,p.z,4,0.1); SFX.hit();
       } else { dead=true;
-        if(!p.hostile){ spawnBoltField(p.x,p.z,boltFieldTicks(p),null); boltImpactFX(p.x,p.y,p.z,p.dx,p.dz); wakePuff(p.x,p.y,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit); }
+        if(!p.hostile){
+          // near-wall shots die mid-climb, below where the reticle points.
+          // While still converging, anchor the impact at the AIM RAY's height
+          // at this distance - the bolt's rise stays visual, the mark lands
+          // where the player aimed. (Damage field is 2D: zero balance change.)
+          let iy2=p.y;
+          if(p.cruiseDy!==undefined && p.sx!==undefined){
+            const hd2=Math.hypot(p.x-p.ex,p.z-p.ez);
+            iy2=Math.max(0.12, Math.min(wallH-0.12, 0.55+Math.tan(p.aimPitch)*hd2));
+          }
+          // point-blank casts spawn the bolt INSIDE the wall (hand offset is
+          // 0.45): step back along the flight until open air so the mark,
+          // field, and sound all live on the visible face, never in the rock
+          let ix3=p.x, iz3=p.z;
+          { const vl4=Math.hypot(p.dx,p.dz)||1, ux4=p.dx/vl4, uz4=p.dz/vl4;
+            for(let t4=0; t4<=1.0 && solid(ix3,iz3); t4+=0.06){ ix3=p.x-ux4*t4; iz3=p.z-uz4*t4; } }
+          spawnBoltField(ix3,iz3,boltFieldTicks(p),null); boltImpactFX(ix3,iy2,iz3,p.dx,p.dz); wakePuff(ix3,iy2,iz3,6,0.12); sfxAt(ix3,iz3,SFX.boltHit); }
         else burst(p.x,p.y,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); }
     }
     else {
@@ -5506,10 +5558,14 @@ function update(dt){
             p.y=Math.max(0.06,Math.min(wallH-0.06,p.y));
             burst(p.x,p.y,p.z,0x9adcff,5,1.2); SFX.hit();
           } else {
+            if(!p.hostile && p.dy<0 && p.floorAimD!==undefined && p.bounce<=0
+               && Math.hypot(p.x-p.ex,p.z-p.ez) < p.floorAimD-0.05){
+              p.y=0.07; p.dy=0; p.cruiseDy=undefined; p.vOff=undefined;   // skim: the aimed point is still ahead
+            } else {
             dead=true;
             { const iy=Math.max(0.1,Math.min(wallH-0.1,p.y));
               if(!p.hostile){ spawnBoltField(p.x,p.z,boltFieldTicks(p),null); boltImpactFX(p.x,iy,p.z,p.dx,p.dz,{ny:p.dy>0?-1:1}); wakePuff(p.x,iy,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit); }
-              else burst(p.x,iy,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); }
+              else burst(p.x,iy,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); } }
           }
         }
       }
@@ -5546,18 +5602,35 @@ function update(dt){
       }
       if(!p.hostile && p.baseSc!==undefined){
         p.age+=dt;
+        if(p.floorAimD!==undefined && !dead
+           && Math.hypot(p.x-p.ex,p.z-p.ez) >= p.floorAimD){
+          dead=true;
+          spawnBoltField(p.x,p.z,boltFieldTicks(p),null);
+          boltImpactFX(p.x,0.12,p.z,p.dx,p.dz,{ny:1});
+          wakePuff(p.x,0.12,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit);
+        }
         // convergence carries the bolt to the crosshair point ~6u out; past it,
         // ease onto the look ray so distant flight goes where the player aimed
         // instead of continuing the climb it needed to reach eye level
-        if(p.cruiseDy!==undefined && p.age>=p.cruiseAt*0.8){
-          // blend onto the look ray starting just before the crossing (smooth,
-          // no visible kink - safe now that the converge target matches the
-          // TRUE eye height), then settle exactly once the blend window closes
-          p.dy+=(p.cruiseDy-p.dy)*Math.min(1,dt*12);
-          if(p.age>=p.cruiseAt+0.15){ p.dy=p.cruiseDy; p.cruiseDy=undefined; }
+        if(p.vOff!==undefined){
+          // ride (ray height - offset); the offset only ever shrinks, so the
+          // approach is monotonic from below - no crossing, no bounce
+          p.vOff*=Math.max(0,1-12*dt);
+          const hd3=Math.hypot(p.x-p.ex,p.z-p.ez);
+          p.y=0.55+Math.tan(p.aimPitch)*hd3 - p.vOff;
+          p.dy=p.cruiseDy;
+          if(p.vOff<0.004){ p.vOff=undefined; p.cruiseDy=undefined; }
         }
+        // one scale formula, two composed effects:
+        //  launch: spawns big and shrinks over 0.32s (the long-standing feel)
+        //  range:  smaller overall near the hand, growing once past ~2u
         const k=Math.min(1, p.age/0.32);
-        const gs=p.baseSc*(1+1.7*(1-k)*(1-k));
+        const launch=1+1.7*(1-k)*(1-k);
+        // self-contained: this block must not reach into the emission block's
+        // scope (doing so threw every frame and froze the game on first cast)
+        const hd7=Math.hypot(p.x-p.ex,p.z-p.ez);
+        const ez7=(e0,e1,x)=>{const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
+        const gs=p.baseSc*launch*(0.75 + ez7(1.2,2.2,hd7)*0.4 + ez7(4,5.5,hd7)*0.6);   // 0.75 -> 1.15 -> 1.75
         p.spr.scale.set(gs,gs,1);
       }
       if(p.hostile){
@@ -5567,17 +5640,52 @@ function update(dt){
       }
       else {
         // double spiral around the flight axis; motes hang and dissolve behind
-        p.hxPh=(p.hxPh===undefined? Math.random()*6.28 : p.hxPh)+dt*24;
+        // spin eases off past 2u: full 34 rad/s density is right up close,
+        // but at range the coils packed too tight - slower spin = wider pitch
+        { const hdS=Math.hypot(p.x-p.ex,p.z-p.ez);
+          const tS=Math.min(1,Math.max(0,(hdS-2)/1.2));
+          p.hxPh+=dt*(26-tS*(tS*(3-2*tS))*8); }    // 26 -> 18 rad/s by 3.2u (overall calmer spin)
         const vl3=Math.hypot(p.dx,p.dy,p.dz)||1;
         const ax=p.dx/vl3, ay=p.dy/vl3, az=p.dz/vl3;
         let rx=-az, rz=ax; const rl2=Math.hypot(rx,rz)||1; rx/=rl2; rz/=rl2;
         const ux=ay*rz, uy=az*rx-ax*rz, uz=-ay*rx;   // axis x right
-        const R=0.035;   // hug the bolt
-        for(const ss of [0,Math.PI]){
-          const c2=Math.cos(p.hxPh+ss), sn2=Math.sin(p.hxPh+ss);
-          wakeEmit(p.x+(rx*c2+ux*sn2)*R, p.y+(uy*sn2)*R, p.z+(rz*c2+uz*sn2)*R,
-            WAKE_SHADES[(Math.random()*3)|0], p.hxPh+ss, 0.034+Math.random()*0.02);
+        // TWO eased growth stages for helix and bolt alike:
+        //  stage 1 (4..6.5u): the moderate bloom - "close" was right
+        //  stage 2 (8..11u):  bigger still, for truly long shots
+        const hd6=Math.hypot(p.x-p.ex,p.z-p.ez);
+        const eze=(e0,e1,x)=>{const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
+        //  stage 1 (1.2..2.2u): the close-range growth, as we had it
+        //  stage 2 (4..5.5u):   bigger still
+        const g1=eze(1.2,2.2,hd6), g2=eze(4,5.5,hd6);
+        const g1h=eze(2,3.2,hd6);               // the helix's first bloom starts ~2u
+        const R=0.022*(1 + g1h*0.55 + g2*1.85); // 0.022 -> 0.034 -> 0.075
+        // append points along the ANALYTIC helix to the two ribbon strips -
+        // the strip shares vertices between sections, so the band is one
+        // unbroken smooth surface whatever the sampling
+        p.spr.material.rotation=-p.hxPh;  // the bolt spins WITH its helix (screen-measured: helix turns clockwise; sprite rotation is CCW-positive, hence the sign)
+        if(!p._rib) p._rib=[ribbonStart(WAKE_SHADES[0]), ribbonStart(WAKE_SHADES[2])];
+        const prevB=p._pb||[p.x,p.y,p.z,p.hxPh-dt*26];
+        const SUB=4;
+        for(let k2=1;k2<=SUB;k2++){
+          const t5=k2/SUB;
+          const bx5=prevB[0]+(p.x-prevB[0])*t5, by5=prevB[1]+(p.y-prevB[1])*t5,
+                bz5=prevB[2]+(p.z-prevB[2])*t5, ph5=prevB[3]+(p.hxPh-prevB[3])*t5;
+          let si=0;
+          for(const ss of [0,Math.PI]){
+            const c2=Math.cos(ph5+ss), sn2=Math.sin(ph5+ss);
+            const odx=(rx*c2+ux*sn2), ody=(uy*sn2), odz=(rz*c2+uz*sn2);   // radial unit
+            // the whip is a DISTANCE effect: near the player it reads as
+            // distortion (magnified displacement, extrusion off the true
+            // path), so points born close carry ZERO fling - the near trail
+            // behaves exactly as before the whip existed
+            const wg=Math.min(1,Math.max(0,(hd6-2)/1.2));   // whip fully in by 3.2u
+            const fl2=R*4.2*wg;
+            ribbonPoint(p._rib[si], bx5+odx*R, by5+ody*R, bz5+odz*R,
+              odx*fl2, ody*fl2, odz*fl2);
+            si++;
+          }
         }
+        p._pb=[p.x,p.y,p.z,p.hxPh];
         dynLights.push({x:p.x,y:p.y,z:p.z, r:0.45,g:0.75,b:1, i:0.5, life:0.05});
       }
     }
@@ -6050,66 +6158,207 @@ function spawnEmber(x,y,z,r,g,b){
 // A double helix of small motes left hanging behind the bolt, one draw call.
 // Shader does the magic: each mote wobbles subtly (more as it dissolves),
 // sparkles, and fades over WAKE_LIFE. Three shades of blue per cast.
-const WMAX=256, WAKE_LIFE=0.55;
+const WMAX=2048, WAKE_LIFE=0.42;  // quads now serve ONLY impact debris: brief flecks, not trail
 const wGeo=new THREE.InstancedBufferGeometry();
 wGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5,-0.5,0, 0.5,-0.5,0, 0.5,0.5,0, -0.5,0.5,0]),3));
 wGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0,0, 1,0, 1,1, 0,1]),2));
 wGeo.setIndex([0,1,2, 0,2,3]);
 const wOff=new Float32Array(WMAX*3), wCol=new Float32Array(WMAX*3),
-      wBirth=new Float32Array(WMAX).fill(-1e9), wPh=new Float32Array(WMAX), wScl=new Float32Array(WMAX);
+      wBirth=new Float32Array(WMAX).fill(-1e9), wPh=new Float32Array(WMAX), wScl=new Float32Array(WMAX),
+      wDir=new Float32Array(WMAX*3), wLen=new Float32Array(WMAX);
 wGeo.setAttribute('iOff', new THREE.InstancedBufferAttribute(wOff,3));
 wGeo.setAttribute('iCol', new THREE.InstancedBufferAttribute(wCol,3));
 wGeo.setAttribute('iBirth', new THREE.InstancedBufferAttribute(wBirth,1));
 wGeo.setAttribute('iPh', new THREE.InstancedBufferAttribute(wPh,1));
 wGeo.setAttribute('iScl', new THREE.InstancedBufferAttribute(wScl,1));
+wGeo.setAttribute('iDir', new THREE.InstancedBufferAttribute(wDir,3));
+wGeo.setAttribute('iLen', new THREE.InstancedBufferAttribute(wLen,1));
 wGeo.instanceCount=WMAX;
 const wMat=new THREE.ShaderMaterial({
   uniforms:{ uTime:{value:0}, fogNear:{value:1.5}, fogFar:{value:10.5} },
   vertexShader:
 'attribute vec3 iOff; attribute vec3 iCol; attribute float iBirth; attribute float iPh; attribute float iScl;\n'+
+'attribute vec3 iDir; attribute float iLen;\n'+
 'varying vec2 vUv; varying vec3 vCol; varying float vAge; varying float vPh; varying float vFog;\n'+
 'uniform float uTime; uniform float fogNear; uniform float fogFar;\n'+
 'void main(){ vUv=uv; vCol=iCol; vPh=iPh;\n'+
 '  vAge=clamp((uTime-iBirth)/'+WAKE_LIFE+', 0.0, 1.0);\n'+
 '  vec3 right=vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);\n'+
 '  vec3 up=vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);\n'+
-'  vec3 wob=(right*sin(uTime*9.0+iPh)+up*cos(uTime*7.3+iPh*1.7))*(0.016*vAge);\n'+
-'  vec3 wp=iOff+wob + (right*position.x + up*position.y)*iScl;\n'+
+'  float dxp=dot(iDir,right), dyp=dot(iDir,up);\n'+
+'  float dl=max(0.0001,length(vec2(dxp,dyp)));\n'+
+'  vec2 axA=vec2(dxp,dyp)/dl, axB=vec2(-axA.y,axA.x);\n'+
+'  vec2 lp=axA*(position.x*iLen*1.25) + axB*(position.y*iScl);\n'+
+'  vec3 wob=(right*sin(uTime*9.0+iPh)+up*cos(uTime*7.3+iPh*1.7))*(0.007*vAge);\n'+
+'  vec3 wp=iOff+wob + right*lp.x + up*lp.y;\n'+
 '  vec4 mv=viewMatrix*vec4(wp,1.0);\n'+
 '  vFog=clamp((-mv.z-fogNear)/(fogFar-fogNear),0.0,1.0);\n'+
 '  gl_Position=projectionMatrix*mv; }',
   fragmentShader:
+// DEBRIS-ONLY SHADER. This material serves impact flecks and nothing else.
+// It deliberately does NOT share code with the flight-trail ribbon (ribMat):
+// that coupling twice let trail tuning corrupt impact visuals. Edit this
+// for impacts; edit ribMat for the trail; never fuse them again.
 'uniform float uTime;\n'+
 'varying vec2 vUv; varying vec3 vCol; varying float vAge; varying float vPh; varying float vFog;\n'+
 'void main(){ if(vAge>=1.0) discard;\n'+
 '  vec2 q=vUv-0.5;\n'+
 '  float cA=cos(vPh), sA=sin(vPh);\n'+
 '  vec2 rq=vec2(q.x*cA-q.y*sA, q.x*sA+q.y*cA);\n'+
-'  float d=length(vec2(rq.x*3.1, rq.y))*2.0;   // thin sliver, rotated per-mote\n'+
-'  float core=pow(max(0.0,1.0-d),1.3);\n'+
-'  float pin=pow(max(0.0,1.0-d),6.0);          // hot center line\n'+
-'  float spark=0.85+0.15*sin(uTime*26.0+vPh*7.0);\n'+
-'  float a=min(1.0,(core*1.9+pin*0.9))*pow(1.0-vAge,1.4)*spark*(1.0-vFog*0.45);\n'+
-'  gl_FragColor=vec4(vCol*(1.2+0.9*pin)*a, a); }',
+'  float d=length(vec2(rq.x*2.6, rq.y))*2.0;   // small soft-edged fleck\n'+
+'  float body=1.0-smoothstep(0.55,0.95,d);\n'+
+'  float a=body*pow(1.0-vAge,1.3)*(1.0-vFog*0.45);\n'+
+'  gl_FragColor=vec4(vCol*(1.0+0.4*(1.0-d))*a, a); }',
   transparent:true, depthWrite:false, blending:THREE.AdditiveBlending });
 const wMesh=new THREE.Mesh(wGeo,wMat); wMesh.frustumCulled=false; worldGroup.add(wMesh);
 let wCursor=0;
-const WAKE_SHADES=[[0.25,0.45,1],[0.5,0.78,1],[0.8,0.94,1]];
-function wakeEmit(x,y,z,shade,ph,scl){
+const WAKE_SHADES=[[0.28,0.4,0.78],[0.44,0.58,0.88],[0.66,0.78,0.94]];   // arcane slate blues, not synthwave
+function wakeEmit(x,y,z,shade,ph,scl,dx4,dy4,dz4,len){
   const i=wCursor; wCursor=(wCursor+1)%WMAX;
   wOff[i*3]=x; wOff[i*3+1]=y; wOff[i*3+2]=z;
   wCol[i*3]=shade[0]; wCol[i*3+1]=shade[1]; wCol[i*3+2]=shade[2];
   wBirth[i]=performance.now()*0.001; wPh[i]=ph; wScl[i]=scl;
+  if(dx4===undefined){ const a2=Math.random()*6.28; dx4=Math.cos(a2); dy4=(Math.random()-0.5); dz4=Math.sin(a2); len=0.026; }
+  wDir[i*3]=dx4; wDir[i*3+1]=dy4; wDir[i*3+2]=dz4; wLen[i]=len===undefined?0.06:len;
   wGeo.attributes.iOff.needsUpdate=true; wGeo.attributes.iCol.needsUpdate=true;
   wGeo.attributes.iBirth.needsUpdate=true; wGeo.attributes.iPh.needsUpdate=true;
-  wGeo.attributes.iScl.needsUpdate=true;
+  wGeo.attributes.iScl.needsUpdate=true; wGeo.attributes.iDir.needsUpdate=true;
+  wGeo.attributes.iLen.needsUpdate=true;
+}
+// ---------- RIBBON STRIPS: the real trail renderer ----------
+// One continuous triangle strip per helix strand: a polyline of points
+// extruded to width in the vertex shader. Consecutive sections SHARE their
+// vertices, so overlaps and seams are geometrically impossible - the band
+// is one unbroken surface. Cross-strip coordinate (aSide) drives the
+// lightline profile continuously along the whole curve.
+const RIB_PTS=4096, RIB_LIFE=0.9, RIB_HALFW=0.017;   // full life; NEAR sections age faster in-shader
+const ribTrails=[];   // {pts:[{x,y,z,b}], shade, alive}
+const ribGeo=new THREE.BufferGeometry();
+const ribPos=new Float32Array(RIB_PTS*2*3), ribDir=new Float32Array(RIB_PTS*2*3),
+      ribSide=new Float32Array(RIB_PTS*2), ribBir=new Float32Array(RIB_PTS*2),
+      ribCol=new Float32Array(RIB_PTS*2*3), ribRad=new Float32Array(RIB_PTS*2*3);
+ribGeo.setAttribute('position', new THREE.BufferAttribute(ribPos,3).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aDir', new THREE.BufferAttribute(ribDir,3).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aSide', new THREE.BufferAttribute(ribSide,1).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aBir', new THREE.BufferAttribute(ribBir,1).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aCol', new THREE.BufferAttribute(ribCol,3).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aRad', new THREE.BufferAttribute(ribRad,3).setUsage(THREE.DynamicDrawUsage));
+const ribIdx=new Uint32Array(RIB_PTS*6);
+ribGeo.setIndex(new THREE.BufferAttribute(ribIdx,1).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setDrawRange(0,0);
+const ribMat=new THREE.ShaderMaterial({
+  uniforms:{ uTime:{value:0}, fogNear:{value:1.5}, fogFar:{value:10.5} },
+  vertexShader:
+'attribute vec3 aDir; attribute float aSide; attribute float aBir; attribute vec3 aCol; attribute vec3 aRad;\n'+
+'varying float vSide; varying float vAge; varying vec3 vCol; varying float vFog; varying float vWhip; varying float vDg;\n'+
+'uniform float uTime; uniform float fogNear; uniform float fogFar;\n'+
+'void main(){ vSide=aSide; vCol=aCol; vWhip=clamp(length(aRad)*14.0,0.0,1.0);\n'+
+'  float rawAge=clamp((uTime-aBir)/'+RIB_LIFE+', 0.0, 1.0);\n'+
+'  // DISTANCE-SCALED RETREAT: near sections age ~1.64x (the tuned quick\n'+
+'  // retreat, dead by ~0.55s); far sections live the full life - the\n'+
+'  // "many builds ago" long visible tail, restored where it reads\n'+
+'  float vDep0=-(viewMatrix*vec4(position,1.0)).z;\n'+
+'  float dg=smoothstep(1.2, 2.2, vDep0);\n'+
+'  vAge=clamp(rawAge*mix(1.64, 0.92, dg), 0.0, 1.0);\n'+
+'  vec3 right=vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);\n'+
+'  vec3 up=vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);\n'+
+'  float dxp=dot(aDir,right), dyp=dot(aDir,up);\n'+
+'  vec2 t2=vec2(dxp,dyp); float tl=max(0.0001,length(t2)); t2/=tl;\n'+
+'  vec2 perp=vec2(-t2.y,t2.x);\n'+
+'  // taper floor scales with camera distance: up close a 15% hair is\n'+
+'  // sub-pixel, so nearby tails only thin to 45%; far tails keep the hair\n'+
+'  float vDep=vDep0;\n'+
+'  float wMin=mix(0.45, 0.28, smoothstep(1.2, 2.2, vDep));\n'+   // far floor raised: 15% was sub-pixel at range
+'  // near the camera the shrink is FAST ease-in (big to small in ~0.1 of\n'+
+'  // life) - a slow taper right in front of the eye just reads as a small\n'+
+'  // trail. Far tails keep the leisurely 0.32 window.\n'+
+'  float win=mix(0.11, 0.32, smoothstep(1.2, 2.2, vDep));\n'+
+'  // the ease-in exponent is a NEAR effect only - it had leaked into the\n'+
+'  // far branch and sped up distant tapering that was never asked to change\n'+
+'  float expo=mix(0.65, 1.0, smoothstep(1.2, 2.2, vDep));\n'+
+'  float tt=pow(smoothstep(0.0, win, vAge), expo);\n'+
+'  float w='+RIB_HALFW+'*mix(1.0, wMin, tt);\n'+
+'  // CENTRIFUGAL whip: released from the spin, each point flings outward\n'+
+'  // along its birth radial - accelerating with age. Fling scales with the\n'+
+'  // local helix radius, so distant (wider) trail whips visibly in circles.\n'+
+'  vec3 wp=position + aRad*pow(vAge,1.1) + (right*perp.x + up*perp.y)*aSide*w;\n'+
+'  vec4 mv=viewMatrix*vec4(wp,1.0);\n'+
+'  vDg=dg;\n'+
+'  vFog=clamp((-mv.z-fogNear)/(fogFar-fogNear),0.0,1.0);\n'+
+'  gl_Position=projectionMatrix*mv; }',
+  fragmentShader:
+'uniform float uTime;\n'+
+'varying float vSide; varying float vAge; varying vec3 vCol; varying float vFog; varying float vWhip; varying float vDg;\n'+
+'void main(){ if(vAge>=1.0) discard;\n'+
+'  float ay=abs(vSide);\n'+
+'  float body=1.0-smoothstep(0.72,0.95,ay);\n'+
+'  float halo=exp(-max(0.0,ay-0.95)*4.5)*0.4;\n'+
+'  float fade=pow(1.0-vAge, mix(2.6, 1.35, vDg));\n'+   // near: retreat plunge; far: the old lingering glow
+'  // solid at the LEADING edge, easing to translucency down the tail:\n'+
+'  // fresh ribbon burns near-opaque, the history behind it goes ghostly\n'+
+'  float lead=mix(1.0, mix(0.45, 0.75, vDg), smoothstep(0.0, 0.35, vAge));\n'+   // far plateau brighter
+'  // EMBER TIPS: the retreat fade was killing exactly the points the whip\n'+
+'  // flings - so whipped tips re-brighten as flying sparks before dying\n'+
+'  float tip=smoothstep(0.22, 0.5, vAge)*(1.0-vAge)*0.85*vWhip;\n'+   // embers ONLY where the whip flings - near trail fades monotonically, no dip-rise strobe
+'  float a=min(1.0,(body*1.6+halo))*max(lead*fade, tip)*(1.0-vFog*0.45);\n'+
+'  vec3 col=mix(vec3(1.05), vCol*1.6, smoothstep(0.08,0.55,ay));\n'+
+'  gl_FragColor=vec4(col*a, a); }',
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
+const ribMesh=new THREE.Mesh(ribGeo,ribMat); ribMesh.frustumCulled=false; worldGroup.add(ribMesh);
+function ribbonStart(shade){ const t={pts:[],shade,alive:true}; ribTrails.push(t); return t; }
+function ribbonPoint(t,x,y,z,rdx,rdy,rdz){
+  t.pts.push({x,y,z,rdx:rdx||0,rdy:rdy||0,rdz:rdz||0,b:performance.now()*0.001}); }
+function syncRibbons(){
+  const now=performance.now()*0.001;
+  let vi=0, ii=0;
+  for(let ti=ribTrails.length-1;ti>=0;ti--){
+    const t=ribTrails[ti];
+    while(t.pts.length && now-t.pts[0].b>RIB_LIFE) t.pts.shift();
+    if(!t.pts.length && !t.alive){ ribTrails.splice(ti,1); continue; }
+    const n=t.pts.length;
+    if(n<2) continue;
+    const base=vi/1;   // vertex index base (2 verts per point)
+    for(let k=0;k<n;k++){
+      if(vi+2>RIB_PTS*2) break;
+      const p0=t.pts[k];
+      const pa=t.pts[Math.max(0,k-1)], pb=t.pts[Math.min(n-1,k+1)];
+      let dx=pb.x-pa.x, dy=pb.y-pa.y, dz=pb.z-pa.z;
+      const dl=Math.hypot(dx,dy,dz)||1; dx/=dl; dy/=dl; dz/=dl;
+      for(const sd of [-1,1]){
+        const v3=vi*3;
+        ribPos[v3]=p0.x; ribPos[v3+1]=p0.y; ribPos[v3+2]=p0.z;
+        ribDir[v3]=dx; ribDir[v3+1]=dy; ribDir[v3+2]=dz;
+        ribSide[vi]=sd; ribBir[vi]=p0.b;
+        ribCol[v3]=t.shade[0]; ribCol[v3+1]=t.shade[1]; ribCol[v3+2]=t.shade[2];
+        ribRad[v3]=p0.rdx; ribRad[v3+1]=p0.rdy; ribRad[v3+2]=p0.rdz;
+        vi++;
+      }
+    }
+    const ptsWritten=(vi-base)/2;
+    for(let k=0;k<ptsWritten-1;k++){
+      const a2=base+k*2;
+      ribIdx[ii++]=a2; ribIdx[ii++]=a2+1; ribIdx[ii++]=a2+2;
+      ribIdx[ii++]=a2+1; ribIdx[ii++]=a2+3; ribIdx[ii++]=a2+2;
+    }
+  }
+  ribGeo.attributes.position.needsUpdate=true;
+  ribGeo.attributes.aDir.needsUpdate=true;
+  ribGeo.attributes.aSide.needsUpdate=true;
+  ribGeo.attributes.aBir.needsUpdate=true;
+  ribGeo.attributes.aCol.needsUpdate=true;
+  ribGeo.attributes.aRad.needsUpdate=true;
+  ribGeo.index.needsUpdate=true;
+  ribGeo.setDrawRange(0,ii);
+  ribMat.uniforms.uTime.value=now;
+  ribMat.uniforms.fogNear.value=scene.fog?scene.fog.near:1.5;
+  ribMat.uniforms.fogFar.value=scene.fog?scene.fog.far:10.5;
 }
 function wakePuff(x,y,z,n,spread){
   // a scatter of hanging wake slivers: magic residue that dissolves in place.
   // The replacement for every circle burst the arc bolt used to throw.
   for(let i=0;i<n;i++)
     wakeEmit(x+(Math.random()-0.5)*spread*2, y+(Math.random()-0.5)*spread*1.6, z+(Math.random()-0.5)*spread*2,
-      WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.03+Math.random()*0.024);
+      WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.016+Math.random()*0.012);
 }
 function spawnTrail(x,y,z,r,g,b){
   spawnP({x,y,z, vx:(Math.random()-0.5)*0.5, vy:(Math.random()-0.5)*0.5, vz:(Math.random()-0.5)*0.5,
@@ -6517,6 +6766,11 @@ function mkBtn(iconTex,size,fx){
   const b={w:size,h:size,fx,mesh:plate,ico,cx:0,cy:0};
   touchButtons.push(b); return b;
 }
+// the same glow treatment the PC HUD gives its potions: tinted soft light
+// behind each bottle, 2x the icon footprint, sitting under the icon layer
+const tGlowH=uiSprite(null,186,186), tGlowM=uiSprite(null,186,186);
+tGlowH.renderOrder=23; tGlowM.renderOrder=23;
+hud.add(tGlowH); hud.add(tGlowM);
 const touchCntH=new GLText(21,0xffffff,'center'), touchCntM=new GLText(21,0xffffff,'center');
 touchCntH.mesh.renderOrder=touchCntM.mesh.renderOrder=32;
 hud.add(touchCntH.mesh); hud.add(touchCntM.mesh);
@@ -6546,10 +6800,13 @@ function syncTouchUI(){
   if(TEX.bolt && !btnSpell.ico.material.map){
     btnSpell.ico.material.map=TEX.bolt; btnNova.ico.material.map=TEX.snow;
     btnUse.ico.material.map=TEX.door; btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
+    tGlowH.material.map=TEX.glow; tGlowH.material.color.setHex(0xff5a5a); tGlowH.material.needsUpdate=true;
+    tGlowM.material.map=TEX.glow; tGlowM.material.color.setHex(0x7ab0ff); tGlowM.material.needsUpdate=true;
     for(const b of touchButtons){ b.ico.material.needsUpdate=true; }
   }
   for(const b of touchButtons){
     const vis = show && (b!==btnNova || P.lvl>=5);
+    b.active=vis;   // hit-testing honors THIS: a hidden button must never eat a touch
     b.mesh.visible=vis && !b.noPlate; b.ico.visible=vis && !!b.ico.material.map;
     b.mesh.position.set(b.cx,b.cy,0.4); b.ico.position.set(b.cx,b.cy,0.5);
   }
@@ -6558,6 +6815,10 @@ function syncTouchUI(){
   touchCntH.set(''+P.hpots); touchCntM.set(''+P.mpots);
   touchCntH.mesh.position.set(btnHP.cx, btnHP.cy-11, 0.6);
   touchCntM.mesh.position.set(btnMP.cx, btnMP.cy-11, 0.6);
+  tGlowH.visible=btnHP.ico.visible && !!tGlowH.material.map;
+  tGlowM.visible=btnMP.ico.visible && !!tGlowM.material.map;
+  tGlowH.position.set(btnHP.cx, btnHP.cy, 0.42);
+  tGlowM.position.set(btnMP.cx, btnMP.cy, 0.42);
   joyBase.visible=show; joyNub.visible=show;
   if(joyId>=0) joyNub.position.set(joyAX+joyVX*38, joyAY+joyVY*38, 0.5);
   else joyNub.position.set(joyBase.position.x, joyBase.position.y, 0.5);
@@ -6565,6 +6826,10 @@ function syncTouchUI(){
 function tpos(t){ return [(t.clientX-W/2)/UIS, (H/2-t.clientY)/UIS]; }
 function hitBtn(x,y){
   for(const b of touchButtons){
+    if(!b.active) continue;   // the invisible pre-level-5 nova button was a
+                              // silent dead square: it ate the touch, tryNova()
+                              // failed its level gate, and the look-drag never
+                              // got the finger - "camera would not react"
     if(Math.abs(x-b.cx)<b.w/2+14 && Math.abs(y-b.cy)<b.h/2+14) return b;
   }
   return null;
