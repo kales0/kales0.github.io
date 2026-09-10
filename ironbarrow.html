@@ -999,7 +999,6 @@ const SFX={
   squeakDie:()=>{const dv=sfxDist; ratSqueak({dur:0.13, up:1.45});
     setTimeout(()=>{const p=sfxDist; sfxDist=dv;
       ratSqueak({f0:1700, dur:0.3, up:1.1, down:0.35, trill:38, amp:0.13}); sfxDist=p;},100);},
-  nova:()=>{beep(900,0.3,'sawtooth',0.07,-700);noiseHit(0.2,0.09,2400);},
   roar:()=>roarSynth(),
   rumble:()=>{noiseHit(0.7,0.2,220);beep(42,0.8,'sawtooth',0.1,-14);},
   uiHover:()=>{beep(880,0.03,'triangle',0.03);},
@@ -1298,8 +1297,7 @@ const THEMES=[
 let levelMeshes=[], enemies=[], pickups=[], projectiles=[], particles=[], dmgNums=[], torches=[], corpses=[], merchant=null;
 let pillars=[], pillarTimer=0;
 let openingDoors=[];
-let novaWaves=[];
-let novaEchoes=[];
+let ringFX=[];
 function startDoorOpen(d){
   if(d.open) return;
   d.open=true; d.anim=0;
@@ -1413,11 +1411,19 @@ function clearStairChains(){
   }
   stairChains=[];
 }
+// OWNERSHIP RULE (learned the hard way, twice):
+// spawnShockRing is a feature-NEUTRAL primitive - it draws an expanding ring
+// and nothing else. Every feature that uses it (boss stagger, poison burst,
+// summoner pulse, pillar collapse, enemy death) passes its OWN color/size/
+// duration at its OWN call site. Tuning a feature's ring means editing that
+// feature's call, never this function. If a feature ever needs ring behavior
+// this primitive doesn't have, it gets its own system - do not grow feature
+// logic in here.
 function spawnShockRing(x,z,color,rMul,dur){
   const rg=new THREE.RingGeometry(0.86,1.0,44); rg.rotateX(-Math.PI/2);
   const rm=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
   rm.position.set(x,0.07,z); rm.scale.setScalar(0.25); rm.visible=false;
-  worldGroup.add(rm); novaWaves.push({m:rm,t:0,rMul:rMul||1,dur:dur||0.45});
+  worldGroup.add(rm); ringFX.push({m:rm,t:0,rMul:rMul||1,dur:dur||0.45});
 }
 function mkGlow(scale,opacity,x,y,z,colorHex){
   // the one additive glow sprite: soft light pool used by torches, braziers,
@@ -1569,8 +1575,8 @@ function clearLevel(){
     if(e.lens){ worldGroup.remove(e.lens); e.lens.geometry.dispose(); e.lens=null; } }
   enemies=[]; pickups=[]; projectiles=[]; torches=[]; corpses=[]; doors={}; openingDoors=[];
   clearStairChains();
-  for(const w of novaWaves){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); }
-  novaWaves=[]; novaEchoes=[];
+  for(const w of ringFX){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); }
+  ringFX=[];
 }
 
 function genArena(theme){
@@ -3060,7 +3066,7 @@ function dmgNum(x,y,z,val,color){
 const P={ x:2,z:2, vx:0,vz:0, yaw:0, pitch:0, r:0.27,
   hp:50, maxhp:50, mp:20, maxmp:20, lvl:1, xp:0, gold:0,
   str:3, dex:2, vit:2, swordTier:0, armor:0, hpots:1, mpots:1, keys:0, spellOrbs:0, kx:0, kz:0,
-  poisonT:0, poisonAcc:0, chillT:0, novaCool:0,
+  poisonT:0, poisonAcc:0, chillT:0,
   atkCool:0, spellCool:0, swing:-1, hurtFlash:0, bobT:0, regenT:0 };
 function xpNeed(){ return P.lvl*22; }
 function gainXP(n){
@@ -3070,8 +3076,7 @@ function gainXP(n){
     P.vit++; P.maxhp+=5; P.maxmp+=3; P.str+=1;
     if(P.lvl%2===0) P.dex++;
     P.hp=Math.min(P.maxhp,P.hp+10); P.mp=P.maxmp;
-    if(P.lvl===5) showMsg('FROST NOVA UNLOCKED - PRESS Q', 3, 0x9adcff);
-    else showMsg('LEVEL UP!  LV '+P.lvl, 2.2, 0x9aff9a);
+    showMsg('LEVEL UP!  LV '+P.lvl, 2.2, 0x9aff9a);
     SFX.level();
   }
 }
@@ -3229,7 +3234,6 @@ function buildShopItems(){
     {id:'crystal',label:'MANA CRYSTAL +5',   price:70, stock:1},
     {id:'ricochet', label:'RICOCHET SIGIL',  price:60+(P.bounces||0)*30, stock:1},
     {id:'witchfire',label:'WITCHFIRE OIL',   price:70+(P.fireLvl||0)*35, stock:1},
-    {id:'echo',     label:'ECHO CRYSTAL',    price:80+(P.novaEcho||0)*40, stock:1},
     {id:'fang',     label:'VAMPIRE FANG',    price:55+(P.vamp||0)*15, stock:1},
   ];
   const a=ri(0,pool.length-1); let b2=ri(0,pool.length-1);
@@ -3270,8 +3274,6 @@ function buyShop(i){
       showMsg('ARC BOLT RICOCHETS x'+P.bounces,2.2,0x9adcff); SFX.level(); break;
     case 'witchfire': P.fireLvl=(P.fireLvl||0)+1;
       showMsg('ARC BOLT IGNITES - WITCHFIRE '+P.fireLvl,2.2,0xff9a4a); SFX.level(); break;
-    case 'echo': P.novaEcho=(P.novaEcho||0)+1;
-      showMsg('FROST NOVA ECHOES x'+P.novaEcho,2.2,0x9adcff); SFX.level(); break;
     case 'fang': P.vamp=(P.vamp||0)+2;
       showMsg('MELEE KILLS FEED YOU +'+P.vamp+' HP',2.2,0xff8a8a); SFX.level(); break;
     case 'crystal': P.maxmp+=5; P.mp+=5; SFX.level(); break;
@@ -3334,7 +3336,6 @@ document.addEventListener('keydown',e=>{
       if(e.code==='KeyE') interact();
       if(e.code==='Space') tryMelee();
       if(e.code==='KeyF') trySpell();
-      if(e.code==='KeyQ') tryNova();
     }
   }
   if(e.code==='Space') e.preventDefault();
@@ -3825,42 +3826,6 @@ function trySpell(){
   // the ribbon shader a scattered puff rendered as chunky disconnected bars.
   dynLights.push({x:P.x+Math.sin(P.yaw)*0.5, y:0.3, z:P.z+Math.cos(P.yaw)*0.5, r:0.55,g:0.85,b:1, i:1.1, life:0.15});
 }
-function spawnNovaWave(x,z){
-  // expanding shockwave: two staggered ground rings + a radial shell of frost particles
-  for(const d of [0,0.09]){
-    const rg=new THREE.RingGeometry(0.86,1.0,44); rg.rotateX(-Math.PI/2);
-    const rm=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:0x9adcff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-    rm.position.set(x,0.07,z); rm.scale.setScalar(0.25); rm.visible=false;
-    worldGroup.add(rm); novaWaves.push({m:rm,t:-d});
-  }
-  if(!pMat.uniforms.map.value) pMat.uniforms.map.value=TEX.spark;
-  for(let a=0;a<40;a++){
-    const an=a/40*Math.PI*2+(Math.random()-0.5)*0.12;
-    const sp=4.4+Math.random()*0.9;
-    spawnP({x:x+Math.cos(an)*0.35, y:0.12+Math.random()*0.35, z:z+Math.sin(an)*0.35,
-      vx:Math.cos(an)*sp, vy:0.3+Math.random()*0.5, vz:Math.sin(an)*sp,
-      life:0.42+Math.random()*0.22, r:0.6,g:0.87,b:1, size:0.085, growth:-0.05, grav:-0.35, drag:2.4});
-  }
-  burst(x,0.4,z,0xcfefff,10,1.6);
-}
-function tryNova(){
-  if(P.lvl<5) return; // undiscovered until unlocked
-  if(P.novaCool>0) return;
-  if(P.mp<8){ showMsg('NOT ENOUGH MANA',1.2,0x8ab0ff); return; }
-  P.mp-=8; P.novaCool=4; SFX.nova(); shake=Math.min(0.5,shake+0.15);
-  dynLights.push({x:P.x,y:0.6,z:P.z, r:0.5,g:0.85,b:1, i:2.2, life:0.4});
-  novaBlast(P.x,P.z,1);
-  if(P.novaEcho>0) novaEchoes.push({t:0.85, left:P.novaEcho});
-}
-function novaBlast(x,z,mult){
-  spawnNovaWave(x,z);
-  for(const e of enemies.slice()){
-    if(Math.hypot(e.x-x,e.z-z)<2.3){
-      e.slowT=2.2;
-      damageEnemy(e, Math.max(1, ((8+P.lvl*2)*mult)|0));
-    }
-  }
-}
 function bossRing(e,opts){
   // artillery wave: a full circle of projectiles. Called twice per cataclysm -
   // slow spiralling doom skulls, then a faster ring of fire.
@@ -3953,7 +3918,6 @@ hpFill.geometry.translate(100,0,0); mpFill.geometry.translate(75,0,0); xpFill.ge
 const txtHP=new GLText(15,0xffb0a0), txtMP=new GLText(15,0xa0c0ff), txtLV=new GLText(16,0xd7c9ff);
 const txtGold=new GLText(16,0xf1d06a), txtFloor=new GLText(16,0xcfd6e0,'right'), txtKeys=new GLText(16,0xf1d06a);
 const txtStats=new GLText(13,0x8890a0);
-const txtNova=new GLText(13,0x9adcff);
 const txtPots=new GLText(15,0xffffff);
 const msgText=new GLText(24,0xffffff,'center'); let msgTime=0;
 const subText=new GLText(15,0x9aa0b0,'center');
@@ -4463,7 +4427,6 @@ function shopDesc(it){
     case 'crystal': return ['A SHARD OF THE FROZEN DEEP.','+5 TO YOUR DEEPEST MANA.'];
     case 'ricochet': return ['ARC BOLT LEARNS TO REBOUND','FROM STONE AND EARTH.','+1 BOUNCE  (NOW: '+(P.bounces||0)+')'];
     case 'witchfire': return ['ARC BOLT CARRIES WITCHFIRE:','STRUCK FOES BURN.','(NOW: LEVEL '+(P.fireLvl||0)+')'];
-    case 'echo': return ['FROST NOVA SOUNDS TWICE:','THE ECHO STRIKES WHERE','YOU STAND.  (NOW: '+(P.novaEcho||0)+')'];
     case 'fang': return ['AN OLD THIRST AWAKENS.','MELEE KILLS RESTORE','+'+((P.vamp||0)+2)+' HEALTH.'];
   }
   return [''];
@@ -4578,7 +4541,11 @@ function mkMenuBtn(label,w,h,fx,screens){
 const mbDescend =mkMenuBtn('DESCEND INTO THE DEPTHS',380,62,()=>enterPlay(),['title']);
 const mbContinue=mkMenuBtn('CONTINUE',300,58,()=>enterPlay(),['pause']);
 const mbEndGame =mkMenuBtn('END GAME',300,58,()=>endRun(),['pause']);
-const mbOptions =mkMenuBtn('OPTIONS',240,52,()=>openOptions(),['title','pause']);
+// one Options button per screen: the title's is a small secondary under the
+// big DESCEND banner; the pause one matches its 300x58 siblings. Sharing one
+// object across screens meant one size fit neither.
+const mbOptionsT=mkMenuBtn('OPTIONS',240,52,()=>openOptions(),['title']);
+const mbOptionsP=mkMenuBtn('OPTIONS',300,58,()=>openOptions(),['pause']);
 const mbRetry  =mkMenuBtn('RETRY THIS FLOOR',330,60,()=>retryFloor(),['dead']);
 const mbAbandon=mkMenuBtn('ABANDON RUN',260,50,()=>endRun(),['dead']);
 const mbNewRun =mkMenuBtn('DESCEND AGAIN',300,58,()=>startRun(),['win']);
@@ -4664,12 +4631,12 @@ function syncMenu(){
   if(s==='title'){
     midTitle.mesh.position.set(0,4,1);
     mbDescend.cx=0; mbDescend.cy=-64;
-    mbOptions.cx=0; mbOptions.cy=-144;
+    mbOptionsT.cx=0; mbOptionsT.cy=-144;
   } else if(s==='pause'){
     midTitle.mesh.position.set(0,34,1);
     mbContinue.cx=0; mbContinue.cy=-18;
-    mbEndGame.cx=0;  mbEndGame.cy=-82;
-    mbOptions.cx=0;  mbOptions.cy=-142;
+    mbOptionsP.cx=0;  mbOptionsP.cy=-82;
+    mbEndGame.cx=0;  mbEndGame.cy=-146;   // the destructive choice sits LAST
   } else if(s==='dead'){
     midTitle.mesh.position.set(0,80,1);
     mbRetry.cx=0;   mbRetry.cy=-22;
@@ -4771,7 +4738,7 @@ const weaponTex=weaponTexFor(0);
 const weapon=uiSprite(weaponTex, 330,556);
 weapon.renderOrder=19;
 
-for(const m of [hpBg,hpFill,mpBg,mpFill,xpBg,xpFill,txtHP.mesh,txtMP.mesh,txtLV.mesh,txtGold.mesh,txtFloor.mesh,txtKeys.mesh,txtStats.mesh,txtNova.mesh,txtPots.mesh,msgText.mesh,subText.mesh,crossV,crossH,vignette,icoH,icoM,icoK,icoHGlow,icoMGlow,screenBg,bigTitle.mesh,midTitle.mesh,mmQuad,bigMapQuad,weapon,shopEdge,shopBg,shopTitle.mesh,shopGold.mesh,shopFoot.mesh,bossBg,bossFill,bossName.mesh]) hud.add(m);
+for(const m of [hpBg,hpFill,mpBg,mpFill,xpBg,xpFill,txtHP.mesh,txtMP.mesh,txtLV.mesh,txtGold.mesh,txtFloor.mesh,txtKeys.mesh,txtStats.mesh,txtPots.mesh,msgText.mesh,subText.mesh,crossV,crossH,vignette,icoH,icoM,icoK,icoHGlow,icoMGlow,screenBg,bigTitle.mesh,midTitle.mesh,mmQuad,bigMapQuad,weapon,shopEdge,shopBg,shopTitle.mesh,shopGold.mesh,shopFoot.mesh,bossBg,bossFill,bossName.mesh]) hud.add(m);
 for(const t of shopLines) hud.add(t.mesh);
 hud.add(cntH.mesh); hud.add(cntM.mesh);
 setShopVisible(false);
@@ -4791,7 +4758,6 @@ function layoutHUD(){
   for(let i=0;i<keyIcos.length;i++) keyIcos[i].position.set(16+i*26, B+42+(i%2?3:-2), 0.2);
   txtGold.mesh.position.set(L+2,B+80,0.2);
   txtStats.mesh.position.set(L+110,B+81,0.2);
-  txtNova.mesh.position.set(L+2,B+97,0.2);
   txtFloor.mesh.position.set(R,T-18,0.2);
   mmQuad.position.set(R-72,T-90,0.2);
   bigMapQuad.position.set(0,0,0.5);
@@ -4975,12 +4941,12 @@ function snapshotFloor(){
     p:{ hp:P.hp, maxhp:P.maxhp, mp:P.mp, maxmp:P.maxmp, lvl:P.lvl, xp:P.xp, gold:P.gold,
         str:P.str, dex:P.dex, vit:P.vit, swordTier:P.swordTier, armor:P.armor,
         hpots:P.hpots, mpots:P.mpots, keys:P.keys, spellOrbs:P.spellOrbs||0,
-        bounces:P.bounces||0, fireLvl:P.fireLvl||0, novaEcho:P.novaEcho||0, vamp:P.vamp||0 } };
+        bounces:P.bounces||0, fireLvl:P.fireLvl||0, vamp:P.vamp||0 } };
 }
 function retryFloor(){
   if(!floorSnap) { startRun(); return; }
   Object.assign(P, floorSnap.p);
-  Object.assign(P, {kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,novaCool:0,atkCool:0,spellCool:0,swing:-1,keySwing:-1,hurtFlash:0});
+  Object.assign(P, {kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,atkCool:0,spellCool:0,swing:-1,keySwing:-1,hurtFlash:0});
   applyWeaponTint(); closeShop();
   floorNum=floorSnap.floor;
   genLevel(floorNum);
@@ -5015,7 +4981,7 @@ function startRun(skipPlay){
   titleSceneOn=false;
   floorNum=TEST_BOSS_JUMP?TEST_FLOOR:1;
   state.runSeed=(Math.random()*1e9)|0;
-  Object.assign(P,{hp:50,maxhp:50,mp:20,maxmp:20,lvl:1,xp:0,gold:0,str:3,dex:2,vit:2,swordTier:0,armor:0,hpots:1,mpots:1,keys:0,spellOrbs:0,bounces:0,fireLvl:0,novaEcho:0,vamp:0,keySwing:-1,kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,novaCool:0,atkCool:0,spellCool:0,swing:-1,hurtFlash:0});
+  Object.assign(P,{hp:50,maxhp:50,mp:20,maxmp:20,lvl:1,xp:0,gold:0,str:3,dex:2,vit:2,swordTier:0,armor:0,hpots:1,mpots:1,keys:0,spellOrbs:0,bounces:0,fireLvl:0,vamp:0,keySwing:-1,kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,atkCool:0,spellCool:0,swing:-1,hurtFlash:0});
   closeShop(); applyWeaponTint();
   if(TEST_BOSS_JUMP){
     // TEST LOADOUT: level 10 with three sword upgrades, stats mirroring
@@ -5096,7 +5062,6 @@ function update(dt){
   drawMinimap(); // every frame: the player arrow tracks in realtime on both maps
   // cooldowns / swing
   P.atkCool=Math.max(0,P.atkCool-dt); P.spellCool=Math.max(0,P.spellCool-dt);
-  P.novaCool=Math.max(0,P.novaCool-dt);
   P.chillT=Math.max(0,P.chillT-dt);
   if(P.poisonT>0){
     P.poisonT-=dt; P.poisonAcc+=dt;
@@ -5227,7 +5192,6 @@ function update(dt){
   for(let i=enemies.length-1;i>=0;i--){
     const e=enemies[i];
     e.flash=Math.max(0,e.flash-dt*4);
-    e.slowT=Math.max(0,(e.slowT||0)-dt);
     e.painT=Math.max(0,(e.painT||0)-dt);
     gaitStep(e,dt);
     if(e.boss) bossBladeFX(e,dt);
@@ -5240,7 +5204,6 @@ function update(dt){
     }
     const b=1+e.flash*2;
     if(e.windup>0){ e.tR=b+0.8; e.tG=b*0.5; e.tB=b*0.5; }
-    else if(e.slowT>0){ e.tR=b*0.55; e.tG=b*0.8; e.tB=b*1.5; }
     else { e.tR=b; e.tG=b; e.tB=b; }
     const dx2=P.x-e.x, dz2=P.z-e.z, dist=Math.hypot(dx2,dz2);
     if(e.state==='idle'){
@@ -5266,7 +5229,7 @@ function update(dt){
           const wdx=e.wtx-e.x, wdz=e.wtz-e.z, wd=Math.hypot(wdx,wdz);
           if(wd<0.3){ e.wtx=undefined; e.wpT=0.8+Math.random()*2.4; }
           else {
-            const sp=wanderSpd(e)*(e.slowT>0?0.45:1)*(e.gaitMul||1);
+            const sp=wanderSpd(e)*(e.gaitMul||1);
             const r2=moveCircle(e.x,e.z, wdx/wd*sp*dt, wdz/wd*sp*dt, e.r);
             e._mv=true;
             const stepped=Math.hypot(r2[0]-e.x, r2[1]-e.z);
@@ -5462,7 +5425,7 @@ function update(dt){
         }
       }
       if(wx||wz){
-        const sm=(e.slowT>0?0.45:1)*(e.gaitMul||1);
+        const sm=(e.gaitMul||1);
         const [ex,ez]=moveCircle(e.x,e.z, wx*e.spd*sm*dt, wz*e.spd*sm*dt, e.r, e.r*0.55);
         e._mv=true;
         // stuck? wanted to move, barely did: force the flow route for a while
@@ -5966,17 +5929,6 @@ function update(dt){
     const c=corpses[i]; c.life-=dt;
     if(c.life<=0) corpses.splice(i,1);
   }
-  // echo crystal: the nova re-detonates wherever you are now
-  for(let i=novaEchoes.length-1;i>=0;i--){
-    const q=novaEchoes[i]; q.t-=dt;
-    if(q.t<=0){
-      SFX.nova();
-      dynLights.push({x:P.x,y:0.6,z:P.z, r:0.5,g:0.85,b:1, i:1.8, life:0.35});
-      novaBlast(P.x,P.z,0.6);
-      q.left--;
-      if(q.left>0) q.t=0.85; else novaEchoes.splice(i,1);
-    }
-  }
   // embers drift up out of the stairwell
   if(Math.hypot(P.x-stairsPos.x-0.5,P.z-stairsPos.z-0.5)<8 && Math.random()<dt*7){
     if(!pMat.uniforms.map.value) pMat.uniforms.map.value=TEX.spark;
@@ -5984,14 +5936,14 @@ function update(dt){
       vx:(Math.random()-0.5)*0.1, vy:0.5+Math.random()*0.3, vz:(Math.random()-0.5)*0.1,
       life:1.7+Math.random()*0.8, r:0.95,g:0.6,b:0.28, size:0.05, growth:-0.015, grav:-0.12, drag:0.7});
   }
-  for(let i=novaWaves.length-1;i>=0;i--){
-    const w=novaWaves[i]; w.t+=dt;
+  for(let i=ringFX.length-1;i>=0;i--){
+    const w=ringFX[i]; w.t+=dt;
     if(w.t<0){ w.m.visible=false; continue; }
     w.m.visible=true;
     const k=Math.min(1,w.t/(w.dur||0.45)), e2=1-(1-k)*(1-k);
     w.m.scale.setScalar(0.25+e2*2.2*(w.rMul||1));
     w.m.material.opacity=0.9*(1-k*k);
-    if(k>=1){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); novaWaves.splice(i,1); }
+    if(k>=1){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); ringFX.splice(i,1); }
   }
   simParticles(dt,3);
   writeParticleBuffers();
@@ -6531,7 +6483,6 @@ function syncHUD(){
   txtGold.set('    '+P.gold);
   txtStats.set('STR '+P.str+'  DEX '+P.dex+'  VIT '+P.vit+'  ARM '+P.armor);
   txtStats.mesh.visible = bigMap && state.mode==='play';
-  txtNova.mesh.visible=false; // replaced by the nova crystal icon
   const boss=enemies.find(e=>e.boss);
   const showBoss=!!boss && boss.state!=='idle' && state.mode==='play';
   bossBg.visible=bossFill.visible=bossName.mesh.visible=showBoss;
@@ -6778,7 +6729,6 @@ const joyBase=uiQuad(124,124,0x1a1a26,0.35), joyNub=uiQuad(48,48,0x8890a0,0.55);
 joyBase.renderOrder=24; joyNub.renderOrder=25; hud.add(joyBase); hud.add(joyNub);
 const btnAtk=mkBtn(weaponTex,80,()=>tryMelee());
 const btnSpell=mkBtn(null,62,()=>trySpell());
-const btnNova=mkBtn(null,62,()=>tryNova());
 const btnUse=mkBtn(null,62,()=>interact());
 const btnHP=mkBtn(null,74,()=>drink('h')); btnHP.noPlate=true; btnHP.ico.scale.set(2.05,2.05,1);
 const btnMP=mkBtn(null,74,()=>drink('m')); btnMP.noPlate=true; btnMP.ico.scale.set(2.05,2.05,1);
@@ -6788,7 +6738,6 @@ function layoutTouch(){
   btnAtk.cx=R-64;  btnAtk.cy=B2+160;
   btnUse.cx=R-64;  btnUse.cy=B2+240;
   btnSpell.cx=R-160; btnSpell.cy=B2+110;
-  btnNova.cx=R-160;  btnNova.cy=B2+178;
   btnHP.cx=-VW/2+56; btnHP.cy=B2+256;
   btnMP.cx=-VW/2+56; btnMP.cy=B2+336;
   btnPause.cx=-VW/2+42; btnPause.cy=VH/2-96;
@@ -6798,19 +6747,18 @@ function syncTouchUI(){
   layoutTouch();
   const show=touchMode && state.mode==='play' && !shopOpen;
   if(TEX.bolt && !btnSpell.ico.material.map){
-    btnSpell.ico.material.map=TEX.bolt; btnNova.ico.material.map=TEX.snow;
+    btnSpell.ico.material.map=TEX.bolt;
     btnUse.ico.material.map=TEX.door; btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
     tGlowH.material.map=TEX.glow; tGlowH.material.color.setHex(0xff5a5a); tGlowH.material.needsUpdate=true;
     tGlowM.material.map=TEX.glow; tGlowM.material.color.setHex(0x7ab0ff); tGlowM.material.needsUpdate=true;
     for(const b of touchButtons){ b.ico.material.needsUpdate=true; }
   }
   for(const b of touchButtons){
-    const vis = show && (b!==btnNova || P.lvl>=5);
+    const vis = show;
     b.active=vis;   // hit-testing honors THIS: a hidden button must never eat a touch
     b.mesh.visible=vis && !b.noPlate; b.ico.visible=vis && !!b.ico.material.map;
     b.mesh.position.set(b.cx,b.cy,0.4); b.ico.position.set(b.cx,b.cy,0.5);
   }
-  btnNova.ico.material.opacity = P.novaCool>0?0.3:1;
   touchCntH.mesh.visible=touchCntM.mesh.visible=show;
   touchCntH.set(''+P.hpots); touchCntM.set(''+P.mpots);
   touchCntH.mesh.position.set(btnHP.cx, btnHP.cy-11, 0.6);
@@ -6826,10 +6774,9 @@ function syncTouchUI(){
 function tpos(t){ return [(t.clientX-W/2)/UIS, (H/2-t.clientY)/UIS]; }
 function hitBtn(x,y){
   for(const b of touchButtons){
-    if(!b.active) continue;   // the invisible pre-level-5 nova button was a
-                              // silent dead square: it ate the touch, tryNova()
-                              // failed its level gate, and the look-drag never
-                              // got the finger - "camera would not react"
+    if(!b.active) continue;   // inactive buttons must never eat a touch:
+                              // a hidden button once made a silent dead square
+                              // where the look-drag never got the finger
     if(Math.abs(x-b.cx)<b.w/2+14 && Math.abs(y-b.cy)<b.h/2+14) return b;
   }
   return null;
@@ -7004,7 +6951,6 @@ const skinBoss=uiSprite(texPlate(424,30,10,true),424,30); skinBoss.renderOrder=1
 const skinHP=uiSprite(texPlate(224,24,9),224,24); skinHP.renderOrder=18;
 const skinMP=uiSprite(texPlate(174,24,9),174,24); skinMP.renderOrder=18;
 const icoGold=uiSprite(null,20,20); icoGold.renderOrder=22;
-const novaIco=uiSprite(null,22,22); novaIco.renderOrder=22;
 const handIco=uiSprite(null,50,50); handIco.renderOrder=22;
 const handKey=uiSprite(null,26,26); handKey.renderOrder=23;
 const handLbl=new GLText(15,0xcfd6e0,'center'); handLbl.mesh.renderOrder=23;
@@ -7041,7 +6987,7 @@ const titleLogo=uiSprite(texLogo(),656,168); titleLogo.renderOrder=31;
 const logoGlow=uiSprite(texGlow(),980,420); logoGlow.renderOrder=30;
 logoGlow.material.blending=THREE.AdditiveBlending; logoGlow.material.depthWrite=false;
 logoGlow.material.color.setHex(0xe8c33a); logoGlow.material.opacity=0.0;
-for(const m of [skinMM,skinBoss,skinHP,skinMP,icoHeart,icoCrys,icoGold,novaIco,handIco,handKey,handLbl.mesh,keyHand,moodV,logoGlow,titleLogo]) hud.add(m);
+for(const m of [skinMM,skinBoss,skinHP,skinMP,icoHeart,icoCrys,icoGold,handIco,handKey,handLbl.mesh,keyHand,moodV,logoGlow,titleLogo]) hud.add(m);
 shopBg.material.map=texPanel(528,404);
 tipBg.material.map=texPanel(252,178); tipBg.material.needsUpdate=true;
 for(const el of [tipBg,tipTitle.mesh,tipChev.mesh,tipPrice.mesh]) hud.add(el);
@@ -7086,10 +7032,6 @@ function syncTheme(){
     handIco.position.set(0,-72,0.3);
     handKey.position.set(30,-62,0.35);
   }
-  if(!novaIco.material.map && TEX.snow){ novaIco.material.map=TEX.snow; novaIco.material.needsUpdate=true; }
-  novaIco.visible = inPlay && P.lvl>=5;
-  novaIco.material.opacity = P.novaCool>0 ? 0.28 : 1;
-  novaIco.position.set(txtNova.mesh.position.x+11, txtNova.mesh.position.y+8, 0.25);
   titleLogo.visible = (state.mode==='title'||state.mode==='pause') && !optOpen;
   const logoY = state.mode==='pause' ? 134 : 96;
   titleLogo.position.set(0,logoY,1.1);
