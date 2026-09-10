@@ -6736,31 +6736,42 @@ hud.add(touchCntH.mesh); hud.add(touchCntM.mesh);
 const joyBase=uiQuad(124,124,0x1a1a26,0.35), joyNub=uiQuad(48,48,0x8890a0,0.55);
 joyBase.renderOrder=24; joyNub.renderOrder=25; hud.add(joyBase); hud.add(joyNub);
 const PHONE_UI=Math.min(window.innerWidth,window.innerHeight)<=500;
-const btnAtk=mkBtn(weaponTex,PHONE_UI?96:80,()=>tryMelee(),true);
+const btnAtk=mkBtn(weaponTex,PHONE_UI?96:88,()=>tryMelee(),true);
 // the weapon texture is 96x162 - forced square it rendered SQUISHED. True
 // aspect, sized so the blade tip clears the plate's top rim a touch.
 { const aw=btnAtk.w*0.5; btnAtk.ico.scale.set(aw, aw*162/96, 1); btnAtk.icoDY=btnAtk.w*0.10; }
-const btnSpell=mkBtn(null,PHONE_UI?78:62,()=>trySpell(),true);
-const btnUse=mkBtn(null,PHONE_UI?72:62,()=>interact(),true);
+const btnSpell=mkBtn(null,PHONE_UI?78:72,()=>trySpell(),true);
+const btnUse=mkBtn(null,PHONE_UI?72:68,()=>interact(),true);
 const btnHP=mkBtn(null,74,()=>drink('h')); btnHP.noPlate=true; btnHP.ico.scale.set(2.05,2.05,1);
 const btnMP=mkBtn(null,74,()=>drink('m')); btnMP.noPlate=true; btnMP.ico.scale.set(2.05,2.05,1);
 const btnPause=mkBtn(spriteTex(drawPauseIco,32),42,()=>{ if(state.mode==='play') enterPause(); });
 function layoutTouch(){
   const R=VW/2-16, B2=-VH/2+16;
-  btnAtk.cx=R-64;  btnAtk.cy=B2+160;
-  btnUse.cx=R-64;  btnUse.cy=B2+240;
-  btnSpell.cx=R-160; btnSpell.cy=B2+110;
+  // TABLET: thumbs pivot at the held corners with limited reach - the action
+  // cluster arcs around the right pivot (sword nearest, spell inward along
+  // the arc, interact above), radii sized for tablet thumb travel
+  if(PHONE_UI){
+    btnAtk.cx=R-64;  btnAtk.cy=B2+160;
+    btnUse.cx=R-64;  btnUse.cy=B2+240;
+    btnSpell.cx=R-160; btnSpell.cy=B2+110;
+  } else {
+    btnAtk.cx=R-72;   btnAtk.cy=B2+130;
+    btnSpell.cx=R-190; btnSpell.cy=B2+102;
+    btnUse.cx=R-108;  btnUse.cy=B2+242;
+  }
   // phone vs tablet: on a phone the thumbs anchor at the screen corners, so
   // the potions climb higher and ANGLE INWARD along the left thumb's natural
   // arc - two distinct diagonal targets instead of a vertical stack. Tablets
   // keep the stack (hands float freer on a big slab).
-  const phone=Math.min(window.innerWidth,window.innerHeight)<=500;
-  if(phone){
+  // both devices get the inward potion arc (two diagonal targets along the
+  // left thumb's sweep); tablet radii are larger, and the arc clears the
+  // joystick below so drinking never means hunting over the stick
+  if(PHONE_UI){
     btnHP.cx=-VW/2+64;  btnHP.cy=B2+300;
     btnMP.cx=-VW/2+126; btnMP.cy=B2+372;   // upper one tips toward center
   } else {
-    btnHP.cx=-VW/2+56; btnHP.cy=B2+256;
-    btnMP.cx=-VW/2+56; btnMP.cy=B2+336;
+    btnHP.cx=-VW/2+68;  btnHP.cy=B2+312;
+    btnMP.cx=-VW/2+142; btnMP.cy=B2+390;
   }
   btnPause.cx=VW/2-186; btnPause.cy=VH/2-90;   // tucked just left of the minimap plate, vertically centered on it
   joyBase.position.set(-VW/2+112, B2+150, 0.4);
@@ -6790,8 +6801,9 @@ function syncTouchUI(){
   tGlowH.position.set(btnHP.cx, btnHP.cy, 0.42);
   tGlowM.position.set(btnMP.cx, btnMP.cy, 0.42);
   joyBase.visible=show; joyNub.visible=show;
-  if(joyId>=0) joyNub.position.set(joyAX+joyVX*38, joyAY+joyVY*38, 0.5);
-  else joyNub.position.set(joyBase.position.x, joyBase.position.y, 0.5);
+  { const nr=PHONE_UI?38:46;
+    if(joyId>=0) joyNub.position.set(joyAX+joyVX*nr, joyAY+joyVY*nr, 0.5);
+  else joyNub.position.set(joyBase.position.x, joyBase.position.y, 0.5); }
 }
 function tpos(t){ return [(t.clientX-W/2)/UIS, (H/2-t.clientY)/UIS]; }
 function hitBtn(x,y){
@@ -6851,7 +6863,8 @@ function onTouchMove(ev){
     }
     if(t.identifier===joyId){
       const [x,y]=tpos(t);
-      let jx=(x-joyAX)/52, jy=(y-joyAY)/52;
+      const jr=PHONE_UI?52:62;   // tablet thumbs sweep wider: finer analog
+      let jx=(x-joyAX)/jr, jy=(y-joyAY)/jr;
       const l=Math.hypot(jx,jy); if(l>1){ jx/=l; jy/=l; }
       joyVX=jx; joyVY=jy;
     } else if(t.identifier===lookId){
