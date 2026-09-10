@@ -4793,7 +4793,10 @@ function layoutHUD(){
   txtPots.mesh.position.set(L+316,B+32,0.2);
   icoK.position.set(L+300,B+12,0.2); txtKeys.mesh.position.set(L+316,B+4,0.2);
   for(let i=0;i<keyIcos.length;i++) keyIcos[i].position.set(16+i*26, B+42+(i%2?3:-2), 0.2);
-  txtGold.mesh.position.set(L+2,B+80,0.2);
+  // gold rides with the vitals: top-center beside the bars on touch (its old
+  // bottom-left spot sat alone under the player's hand), bottom-left on desktop
+  if(touchMode) txtGold.mesh.position.set(bL+238, bB+34, 0.2);
+  else txtGold.mesh.position.set(L+2,B+80,0.2);
   txtStats.mesh.position.set(L+110,B+81,0.2);
   txtFloor.mesh.position.set(R,T-18,0.2);
   mmQuad.position.set(R-72,T-90,0.2);
@@ -6847,7 +6850,8 @@ function syncTouchUI(){
   const show=touchMode && state.mode==='play' && !shopOpen;
   if(TEX.bolt && !btnSpell.ico.material.map){
     btnSpell.ico.material.map=TEX.bolt;
-    btnUse.ico.material.map=TEX.handUI;   // the same hand the door prompt shows btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
+    btnUse.ico.material.map=TEX.handUI;   // the same hand the door prompt shows
+    btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
     tGlowH.material.map=TEX.glow; tGlowH.material.color.setHex(0xff5a5a); tGlowH.material.needsUpdate=true;
     tGlowM.material.map=TEX.glow; tGlowM.material.color.setHex(0x7ab0ff); tGlowM.material.needsUpdate=true;
     for(const b of touchButtons){ b.ico.material.needsUpdate=true; }
