@@ -44,7 +44,8 @@ const hudCam = new THREE.OrthographicCamera(-1,1,1,-1,-1000,1000);
 // depth range must swallow tilted hud planes: a 556px weapon leaned ~9deg
 // spans ~44 units of depth - the old -10..10 box CLIPPED the hilt clean off
 
-let SAFE={l:0,r:0,t:0,b:0};   // device safe-area insets (notch, home bar), UI units
+let SAFE={l:0,r:0,t:0,b:0};
+let HUD_WMUL=1, HUD_TMUL=1;   // touch vitals width/text multipliers (set in layoutHUD)   // device safe-area insets (notch, home bar), UI units
 const safeProbe=document.createElement('div'); safeProbe.id='safeProbe';
 document.body.appendChild(safeProbe);
 function readSafeArea(){
@@ -4629,6 +4630,7 @@ function menuBtnAt(x,y){
   return null;
 }
 let menuPressed=null, menuTouchBtn=null, menuTouchIdB=-1, menuMX=1e9, menuMY=1e9;
+let lookT0=0, lookAcc=0;   // look-touch tap detection: birth time + total travel
 function titleAudioKick(){
   if(state.mode==='gate'){ beginDescend(); return; }
   if(state.mode!=='title') return;
@@ -4781,14 +4783,25 @@ function layoutHUD(){
   const L=-VW/2+16, B=-VH/2+16, R=VW/2-16, T=VH/2-16;
   // vitals cluster anchor: desktop lives bottom-left; on touch the left hand
   // COVERS that corner, so the bars move to top-center where nothing rests
-  const bL = touchMode ? -115 : L;
+  // touch vitals anchor: top-CENTER normally, but portrait's narrow width
+  // runs a centered cluster into the minimap - portrait tucks it top-LEFT
+  const tPort = touchMode && VH>VW;
+  // touch vitals get WIDER bars + larger text - glanceable mid-fight.
+  // phone landscape most (smallest physical bars), portrait less (narrow),
+  // tablet a moderate step both ways.
+  HUD_WMUL = !touchMode ? 1 : (PHONE_UI ? (tPort?1.2:1.45) : (tPort?1.25:1.3));
+  HUD_TMUL = !touchMode ? 1 : (PHONE_UI ? (tPort?1.15:1.28) : 1.15);
+  const bL = tPort ? L+SAFE.l : (touchMode ? -115 : L);
   const bB = touchMode ? VH/2-100 : B;
-  hpBg.position.set(bL+102,bB+42,0); hpFill.position.set(bL+2,bB+42,0.1);
-  txtHP.mesh.position.set(bL+214,bB+34,0.2);
-  mpBg.position.set(bL+77,bB+16,0); mpFill.position.set(bL+2,bB+16,0.1);
-  txtMP.mesh.position.set(bL+164,bB+8,0.2);
-  xpBg.position.set(bL+102,bB+64,0); xpFill.position.set(bL+2,bB+64,0.1);
-  txtLV.mesh.position.set(bL+214,bB+57,0.2);
+  const wm=HUD_WMUL, tm=HUD_TMUL;
+  hpBg.scale.x=wm; mpBg.scale.x=wm; xpBg.scale.x=wm;   // left edges stay put; bars grow right
+  hpBg.position.set(bL+2+100*wm,bB+42,0); hpFill.position.set(bL+2,bB+42,0.1);
+  txtHP.mesh.position.set(bL+4+210*wm,bB+34,0.2);
+  mpBg.position.set(bL+2+75*wm,bB+16,0); mpFill.position.set(bL+2,bB+16,0.1);
+  txtMP.mesh.position.set(bL+4+160*wm,bB+8,0.2);
+  xpBg.position.set(bL+2+100*wm,bB+64,0); xpFill.position.set(bL+2,bB+64,0.1);
+  txtLV.mesh.position.set(bL+4+210*wm,bB+57,0.2);
+  for(const t of [txtHP,txtMP,txtLV]) t.mesh.scale.setScalar(tm);
   icoH.position.set(-108,B+42,0.2); icoM.position.set(-46,B+42,0.2);
   txtPots.mesh.position.set(L+316,B+32,0.2);
   icoK.position.set(L+300,B+12,0.2); txtKeys.mesh.position.set(L+316,B+4,0.2);
@@ -6518,10 +6531,10 @@ function syncHUD(){
   if(touchMode){ icoH.visible=icoM.visible=false; }   // mobile: the touch potion
   // buttons (with their own counts and glows) own this - the desktop bottle
   // cluster duplicating them bottom-center was pure clutter
-  hpFill.scale.x=Math.max(0.001,P.hp/P.maxhp);
+  hpFill.scale.x=Math.max(0.001,P.hp/P.maxhp)*HUD_WMUL;
   hpFill.material.color.setHex(P.poisonT>0 ? 0x57c96a : 0xc0392b);
-  mpFill.scale.x=Math.max(0.001,P.mp/P.maxmp);
-  xpFill.scale.x=Math.max(0.001,P.xp/xpNeed());
+  mpFill.scale.x=Math.max(0.001,P.mp/P.maxmp)*HUD_WMUL;
+  xpFill.scale.x=Math.max(0.001,P.xp/xpNeed())*HUD_WMUL;
   txtHP.set(P.hp+'/'+P.maxhp);
   txtMP.set(P.mp+'/'+P.maxmp);
   txtLV.set('LV '+P.lvl);
@@ -6806,9 +6819,9 @@ function layoutTouch(){
   // interact above). Portrait holds are one-handed and lower: the arc drops
   // and tightens so everything stays inside the resting thumb's sweep.
   if(PHONE_UI && !PORT){
-    btnAtk.cx=R-64;  btnAtk.cy=B2+160;
-    btnUse.cx=R-64;  btnUse.cy=B2+240;
-    btnSpell.cx=R-160; btnSpell.cy=B2+110;
+    btnAtk.cx=R-66;  btnAtk.cy=B2+150;
+    btnUse.cx=R-70;  btnUse.cy=B2+268;   // clear of the bigger sword: ~34u edge gap
+    btnSpell.cx=R-172; btnSpell.cy=B2+112;
   } else if(PHONE_UI){          // phone PORTRAIT: low tight one-thumb arc
     btnAtk.cx=R-62;   btnAtk.cy=B2+150;
     btnSpell.cx=R-168; btnSpell.cy=B2+116;
@@ -6842,7 +6855,7 @@ function layoutTouch(){
     btnHP.cx=-VW/2+SAFE.l+72;  btnHP.cy=B2+330;
     btnMP.cx=-VW/2+SAFE.l+148; btnMP.cy=B2+404;
   }
-  btnPause.cx=VW/2-186; btnPause.cy=VH/2-90;   // tucked just left of the minimap plate, vertically centered on it
+  btnPause.cx=VW/2-212; btnPause.cy=VH/2-90;   // left of the minimap plate with a ~24u gap
   joyBase.position.set(-VW/2+SAFE.l+112, B2+150, 0.4);
 }
 function syncTouchUI(){
@@ -6912,10 +6925,16 @@ function onTouchStart(ev){
       if(!bought && y<-138) closeShop();
       continue;
     }
+    // full map on touch: with it open, ANY tap closes it (the whole screen
+    // is the dismiss target); with it closed, a tap on the minimap opens it
+    if(bigMap){ bigMap=false; continue; }
+    { const mmx=VW/2-72, mmy=VH/2-90;
+      if(Math.abs(x-mmx)<80 && Math.abs(y-mmy)<80){ bigMap=true; continue; } }
     const b=hitBtn(x,y);
     if(b){ b.fx(); continue; }
     if(x<0 && joyId<0){ joyId=t.identifier; joyAX=x; joyAY=y; joyVX=0; joyVY=0; }
-    else if(lookId<0){ lookId=t.identifier; lastLX=t.clientX; lastLY=t.clientY; }
+    else if(lookId<0){ lookId=t.identifier; lastLX=t.clientX; lastLY=t.clientY;
+      lookT0=performance.now(); lookAcc=0; }   // tap candidate until it moves
   }
 }
 function onTouchMove(ev){
@@ -6940,6 +6959,7 @@ function onTouchMove(ev){
     } else if(t.identifier===lookId){
       const dx4=t.clientX-lastLX, dy4=t.clientY-lastLY;
       lastLX=t.clientX; lastLY=t.clientY;
+      lookAcc+=Math.abs(dx4)+Math.abs(dy4);
       if(dx4>220||dx4<-220||dy4>220||dy4<-220) continue; // touch glitch spike: resync, don't snap
       P.yaw  -= dx4*0.0048*OPT.sens;
       P.pitch -= dy4*0.00392*OPT.sens;
@@ -6956,7 +6976,16 @@ function onTouchEnd(ev){
       menuTouchBtn=null; menuTouchIdB=-1;
     }
     if(t.identifier===joyId){ joyId=-1; joyVX=0; joyVY=0; }
-    if(t.identifier===lookId) lookId=-1;
+    if(t.identifier===lookId){
+      lookId=-1;
+      // TAP on the look side (short + still): context action. The hand
+      // prompt decides - interact when something's in reach, else swing.
+      // Real camera drags exceed 14px instantly, so they never trigger this.
+      if(performance.now()-lookT0<280 && lookAcc<=14 &&
+         state.mode==='play' && !shopOpen && !bigMap){
+        if(handKind!=='') interact(); else tryMelee();
+      }
+    }
   }
 }
 canvas.addEventListener('touchstart',onTouchStart,{passive:false});
@@ -7130,10 +7159,10 @@ function syncTheme(){
   skinMM.position.set(mmQuad.position.x, mmQuad.position.y, -0.5);
   skinBoss.visible=bossBg.visible;
   skinBoss.position.set(bossBg.position.x, bossBg.position.y+6, -0.5);
-  skinHP.visible=inPlay; skinHP.position.set(hpBg.position.x, hpBg.position.y, -0.4);
-  skinMP.visible=inPlay; skinMP.position.set(mpBg.position.x, mpBg.position.y, -0.4);
-  icoHeart.visible=inPlay; icoHeart.position.set(hpBg.position.x-100, hpBg.position.y, 0.25);
-  icoCrys.visible=inPlay; icoCrys.position.set(mpBg.position.x-75, mpBg.position.y, 0.25);
+  skinHP.visible=inPlay; skinHP.position.set(hpBg.position.x, hpBg.position.y, -0.4); skinHP.scale.x=HUD_WMUL;
+  skinMP.visible=inPlay; skinMP.position.set(mpBg.position.x, mpBg.position.y, -0.4); skinMP.scale.x=HUD_WMUL;
+  icoHeart.visible=inPlay; icoHeart.position.set(hpBg.position.x-100*HUD_WMUL, hpBg.position.y, 0.25);
+  icoCrys.visible=inPlay; icoCrys.position.set(mpBg.position.x-75*HUD_WMUL, mpBg.position.y, 0.25);
   if(!icoGold.material.map && TEX.gold){ icoGold.material.map=TEX.gold; icoGold.material.needsUpdate=true; }
   icoGold.visible=inPlay;
   icoGold.position.set(txtGold.mesh.position.x+9, txtGold.mesh.position.y+8, 0.25);
