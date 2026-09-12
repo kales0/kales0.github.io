@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>IRONBARROW</title>
-<style>html,body{margin:0;padding:0;overflow:hidden;background:#000;height:100%}canvas{display:block;touch-action:none}</style>
+<style>html,body{margin:0;padding:0;overflow:hidden;background:#000;height:100%;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}canvas{display:block;touch-action:none}#safeProbe{position:fixed;visibility:hidden;pointer-events:none;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}</style>
 </head>
 <body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -44,19 +44,40 @@ const hudCam = new THREE.OrthographicCamera(-1,1,1,-1,-1000,1000);
 // depth range must swallow tilted hud planes: a 556px weapon leaned ~9deg
 // spans ~44 units of depth - the old -10..10 box CLIPPED the hilt clean off
 
+let SAFE={l:0,r:0,t:0,b:0};
+let HUD_WMUL=1, HUD_TMUL=1;   // touch vitals width/text multipliers (set in layoutHUD)   // device safe-area insets (notch, home bar), UI units
+const safeProbe=document.createElement('div'); safeProbe.id='safeProbe';
+document.body.appendChild(safeProbe);
+function readSafeArea(){
+  if(typeof getComputedStyle!=='function') return;   // headless rigs have no CSS engine
+  const cs=getComputedStyle(safeProbe);
+  SAFE={ l:(parseFloat(cs.paddingLeft)||0)/UIS, r:(parseFloat(cs.paddingRight)||0)/UIS,
+         t:(parseFloat(cs.paddingTop)||0)/UIS,  b:(parseFloat(cs.paddingBottom)||0)/UIS };
+}
 function resize(){
   W = window.innerWidth; H = window.innerHeight;
   DPR = Math.min(window.devicePixelRatio||1, 2);
   UIS = Math.max(Math.min(0.9, W/560, H/560), Math.min(2.3, Math.min(W,H)/720));
   VW = W/UIS; VH = H/UIS;
   renderer.setSize(Math.max(2,W*DPR|0), Math.max(2,H*DPR|0), false);
-  canvas.style.width='100vw'; canvas.style.height='100vh';
+  // CSS size must be the SAME pixels the touch math uses. 100vw/100vh broke
+  // iOS: there 100vh is the LARGE viewport (toolbar hidden) while innerHeight
+  // is the current one, so the frame rendered stretched/shifted relative to
+  // the (clientX - W/2)/UIS hit mapping - every control missed its touch.
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
   cam.aspect = W/H; cam.updateProjectionMatrix();
   hudCam.left=-VW/2; hudCam.right=VW/2; hudCam.top=VH/2; hudCam.bottom=-VH/2; hudCam.updateProjectionMatrix();
+  readSafeArea();
   layoutHUD();
   try{ if(state && (state.mode==='gate'||gateFade>=0)) positionGateCorners(); }catch(e){}
 }
 window.addEventListener('resize', resize);
+// iOS collapses/expands the browser toolbar WITHOUT reliably firing 'resize':
+// visualViewport tracks the real visible area, and orientation flips need a
+// beat before innerWidth/innerHeight settle
+if(window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+window.addEventListener('orientationchange', ()=>{ setTimeout(resize, 250); setTimeout(resize, 800); });
+setTimeout(resize, 60); setTimeout(resize, 450);   // boot dims settle late on mobile
 
 // ---------- canvas helpers (texture factory only — never in the page) ----------
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return [c, c.getContext('2d')]; }
@@ -228,8 +249,8 @@ const drawOgre = (x,s)=>{ const g=s/16;
   px(x,g,'#5f7a3a',4,2,8,6); px(x,g,'#54692f',3,7,10,7); px(x,g,'#c22',6,4,1,1); px(x,g,'#c22',9,4,1,1);
   px(x,g,'#3d4d24',2,7,2,6); px(x,g,'#3d4d24',12,7,2,6);
   px(x,g,'#4a5c2a',5,14,3,2); px(x,g,'#4a5c2a',9,14,3,2);
-  px(x,g,'#e8e0c8',6,6,1,2); px(x,g,'#e8e0c8',9,6,1,2);
-  px(x,g,'#7a5a30',13,3,2,9); px(x,g,'#999',12,2,4,2); };
+  px(x,g,'#e8e0c8',6,6,1,2); px(x,g,'#e8e0c8',9,6,1,2); };
+  // no weapon: the ogre's fists ARE the weapon (club removed by request)
 const drawElite3=(x,s)=>{ const g=s/16; // THE FORGE WARDEN: charred iron brute, ember veins
   px(x,g,'#241a16',4,1,8,7); px(x,g,'#2e211c',3,7,10,7);
   px(x,g,'#3a2a22',2,7,2,6); px(x,g,'#3a2a22',12,7,2,6);
@@ -386,6 +407,7 @@ const drawShrine=(x,s)=>{ const g=s/16;
   px(x,g,'#8a8a98',4,7,8,2);
   px(x,g,'#9adcff',7,3,2,4); px(x,g,'#d6f4ff',7,4,1,1); };
 const drawBolt = (x,s)=>{ const g=s/16; px(x,g,'#9adcff',6,6,4,4); px(x,g,'#ffffff',7,7,2,2); };
+const drawBoltFire=(x,s)=>{ const g=s/16; px(x,g,'#ff3a3a',6,6,4,4); px(x,g,'#ffe6e2',7,7,2,2); };   // witchfire, additive like the arc bolt: a red body and a near-white heart that saturates solid
 const drawEBolt= (x,s)=>{ const g=s/16; px(x,g,'#ff7ab0',6,6,4,4); px(x,g,'#ffe0ee',7,7,2,2); };
 // cultist hex orb: void core in a magenta rune-ring with four spikes
 const drawHexOrb=(x,s)=>{ const g=s/16;
@@ -514,7 +536,7 @@ function uiSprite(tex,w,h){
 
 // ---------- audio ----------
 let AC=null;
-const OPT={sens:1, master:1, music:0.8, sfx:1};
+const OPT={sens:1, master:1.15, music:0.8, sfx:1};   // ships a touch hot; the slider ranges to 1.25
 let musicGainNode=null, droneGainNode=null;
 function applyVolumes(){
   if(musicGainNode) musicGainNode.gain.value=0.224*OPT.master*OPT.music*(musicGainNode._trackVol||1);
@@ -530,7 +552,48 @@ function sfxAt(x,z,fn,extra){
   sfxDist=distVol(x,z)*(extra||1);
   try{ fn(); } finally{ sfxDist=1; }
 }
-function audio(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); } return AC; }
+// SHARED AUDIO INFRASTRUCTURE - built ONCE, reused by every sound.
+// Per-call synthesis was a real frame-hitch source: the roar filled ~148k
+// noise samples in a JS loop, and EVERY spell explosion built a 48k-sample
+// impulse response and initialized a fresh ConvolverNode (FFT partitioning,
+// several ms each, main thread). Boss cataclysm = roar + explosions in one
+// frame = the felt dip. Good practice: one noise buffer, one reverb bus.
+let _nzBuf=null, _verb=null;
+function nzSrc(a){
+  if(!_nzBuf){
+    _nzBuf=a.createBuffer(1,(a.sampleRate*2)|0,a.sampleRate);
+    const d=_nzBuf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  const s=a.createBufferSource(); s.buffer=_nzBuf; s.loop=true;
+  return s;   // caller: s.start(t0, Math.random()*1.5) for variety, s.stop(...)
+}
+function verbBus(a){
+  if(!_verb){
+    const SR=a.sampleRate;
+    const ir=a.createBuffer(1, SR*1.0|0, SR), ird=ir.getChannelData(0);
+    let lpv=0;
+    for(let k=0;k<ird.length;k++){ const t=k/ird.length;
+      lpv+=((Math.random()*2-1)-lpv)*0.12;
+      ird[k]=lpv*Math.pow(1-t,2.6);
+    }
+    const cv=a.createConvolver(); cv.buffer=ir;
+    const whp=a.createBiquadFilter(); whp.type='highpass'; whp.frequency.value=180;
+    cv.connect(whp); whp.connect(a.destination);   // low-cut WET trunk, built once
+    _verb=cv;
+  }
+  return _verb;   // per-call: dry chain -> sendGain(level) -> this
+}
+function envCurve(g,t0,dur,expo,v0){
+  // gain curve g(t) = v0 * (1-t)^expo - moves per-sample buffer shaping
+  // into the gain node, which the audio thread evaluates for free
+  const N=33, c=new Float32Array(N);
+  for(let k=0;k<N;k++) c[k]=Math.max(0.0001, v0*Math.pow(1-k/(N-1),expo));
+  g.gain.setValueCurveAtTime(c,t0,dur);
+}
+function audio(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)();
+  try{ nzSrc(AC); verbBus(AC); }catch(e){}   // pre-warm: pay the one-time costs at unlock, not in combat
+} return AC; }
 function beep(f,dur,type,vol,slide){
   try{
     const a=audio(), o=a.createOscillator(), g=a.createGain();
@@ -555,37 +618,43 @@ function summonHum(){
       g.gain.exponentialRampToValueAtTime(0.0001, t0+D+0.15);
       o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0+D+0.2);
     };
-    mk(36,58,'sawtooth',0.42);          // the deep body of the hum
-    mk(41,66,'sawtooth',0.3);           // detuned twin: menacing beat-throb
+    // (peaks trimmed ~30%: the swell's top plus the noise bed plus the
+    // arena-wide send was summing past full scale and clipping)
+    mk(36,58,'sawtooth',0.3);           // the deep body of the hum
+    mk(41,66,'sawtooth',0.21);          // detuned twin: menacing beat-throb
     mk(320,1900,'sine',0.07);           // the thin rising whine on top
     const n=a.sampleRate*D|0, buf=a.createBuffer(1,n,a.sampleRate), d=buf.getChannelData(0);
     for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(i/n,1.6);   // noise RISES
     const s=a.createBufferSource(); s.buffer=buf;
     const f=a.createBiquadFilter(); f.type='lowpass';
     f.frequency.setValueAtTime(180,t0); f.frequency.exponentialRampToValueAtTime(1400,t0+D);
-    const g2=a.createGain(); g2.gain.value=0.5*OPT.master*OPT.sfx*sfxDist;
+    const g2=a.createGain(); g2.gain.value=0.34*OPT.master*OPT.sfx*sfxDist;
     s.connect(f); f.connect(g2); g2.connect(a.destination); s.start(t0);
   }catch(e){}
 }
 function summonBurst(n2){
   // each shockwave CRACKS like green lightning: a bright snap, a descending
   // electric zap, and a boom that grows with each successive wave
-  noiseHit(0.16,0.55,4200);                          // the crack
-  beep(1300-n2*150,0.16,'square',0.16,-900);         // the zap, tearing downward
-  noiseHit(0.5,0.42+n2*0.12,240);                    // the boom, bigger each time
-  beep(52,0.4,'sawtooth',0.2+n2*0.05,-18);           // low weight under it
+  noiseHit(0.16,0.42,4200);                          // the crack        (trimmed ~25%: it was peaking)
+  beep(1300-n2*150,0.16,'square',0.13,-900);         // the zap, tearing downward
+  noiseHit(0.5,0.32+n2*0.09,240);                    // the boom, bigger each time
+  beep(52,0.4,'sawtooth',0.16+n2*0.04,-18);          // low weight under it
 }
 function noiseHit(dur,vol,lp){
   try{
-    const a=audio(), n=a.sampleRate*dur|0, buf=a.createBuffer(1,n,a.sampleRate), d=buf.getChannelData(0);
-    for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
-    const s=a.createBufferSource(); s.buffer=buf;
+    const a=audio(), t0=a.currentTime;
+    const s=nzSrc(a);   // shared noise; the old per-sample (1-i/n) decay is
     const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||900;
-    const g=a.createGain(); g.gain.value=(vol||0.12)*OPT.master*OPT.sfx*sfxDist;
-    s.connect(f); f.connect(g); g.connect(a.destination); s.start();
+    const g=a.createGain();          // exactly this linear gain ramp
+    const v=(vol||0.12)*OPT.master*OPT.sfx*sfxDist;
+    g.gain.setValueAtTime(Math.max(0.0001,v),t0);
+    g.gain.linearRampToValueAtTime(0.0001,t0+dur);
+    s.connect(f); f.connect(g); g.connect(a.destination);
+    s.start(t0, Math.random()*1.5); s.stop(t0+dur+0.03);
   }catch(e){}
 }
 function fireWhoosh(){
+  if(bakedPlay('spell',3)) return;   // pre-rendered variants; synth is the fallback
   // the arc bolt v7: FIRE AS A CREATURE. Built from the house's proven
   // machinery instead of thin hand-rolled layers:
   //  1. ignition roar - a beastVoice preset (detuned saws, tanh gravel, sub
@@ -604,37 +673,31 @@ function fireWhoosh(){
       flutHz:24, flutDepth:0.75, bp0:470, bp1:150, bpQ:1.6,
       gravel:0.52, lp0:880, lp1:250});
     // 2) boom through synthesized-space convolver
-    { const ir=a.createBuffer(1, SR*1.0|0, SR), ird=ir.getChannelData(0);
-      let lpv=0;
-      for(let k=0;k<ird.length;k++){ const t=k/ird.length;
-        lpv+=((Math.random()*2-1)-lpv)*0.12;              // one-pole darkening (kept airy)
-        ird[k]=lpv*Math.pow(1-t,2.6);                     // long dying tail
-      }
-      const cv=a.createConvolver(); cv.buffer=ir;
-      const bn=SR*0.32|0, bb=a.createBuffer(1,bn,SR), bd2=bb.getChannelData(0);
-      for(let k=0;k<bn;k++) bd2[k]=(Math.random()*2-1)*Math.pow(1-k/bn,1.1);
-      const s=a.createBufferSource(); s.buffer=bb;
+    { // boom through the PERSISTENT reverb bus (verbBus: same IR formula,
+      // same 180Hz wet low-cut, built once at audio unlock - the per-call
+      // 48k IR loop + ConvolverNode FFT init was the cataclysm frame hitch)
+      const s=nzSrc(a);
+      const shape=a.createGain(); envCurve(shape,t0,0.32,1.1,1.0);   // the old pow(1-t,1.1) sample fade
       const lp=a.createBiquadFilter(); lp.type='lowpass';
       lp.frequency.setValueAtTime(1350,t0);                 // warm leading edge - a
       lp.frequency.exponentialRampToValueAtTime(380,t0+0.3);  // fireball whoomph, not
                                                               // a whip crack
       const dry=a.createGain(); dry.gain.value=Math.max(0.001,0.175*amp);
       const wet=a.createGain(); wet.gain.value=Math.max(0.001,0.165*amp);
-      s.connect(lp); lp.connect(dry); dry.connect(a.destination);
-      const whp=a.createBiquadFilter(); whp.type='highpass'; whp.frequency.value=180;
-      // the reverb doubling the lows is what smears the blast - low-cut the
-      // WET path only; the dry bass keeps its full weight
-      lp.connect(cv); cv.connect(whp); whp.connect(wet); wet.connect(a.destination);
-      s.start(t0); }
+      s.connect(shape); shape.connect(lp); lp.connect(dry); dry.connect(a.destination);
+      lp.connect(wet); wet.connect(verbBus(a));   // send into the shared reverb trunk
+      s.start(t0, Math.random()*1.5); s.stop(t0+0.4); }
     // the SEAR: ~100ms of high-passed noise on the attack. Clarity lives in
     // the top octaves - the ear reads this as definition, not loudness.
-    { const sd=0.11; const n=SR*sd|0, sb2=a.createBuffer(1,n,SR), sdd=sb2.getChannelData(0);
-      for(let k=0;k<n;k++) sdd[k]=(Math.random()*2-1)*Math.pow(1-k/n,1.3);
-      const s2=a.createBufferSource(); s2.buffer=sb2;
+    { const sd=0.11;
+      const s2=nzSrc(a);
+      const sh2=a.createGain(); envCurve(sh2,t0,sd,1.3,1.0);   // old pow(1-t,1.3) fade
+      s2.connect(sh2);
       const hp2=a.createBiquadFilter(); hp2.type='highpass'; hp2.frequency.value=2600;
       const g2=a.createGain(); g2.gain.setValueAtTime(Math.max(0.001,0.055*amp),t0);
       g2.gain.exponentialRampToValueAtTime(0.0001,t0+sd);
-      s2.connect(hp2); hp2.connect(g2); g2.connect(a.destination); s2.start(t0); }
+      sh2.connect(hp2); hp2.connect(g2); g2.connect(a.destination);
+      s2.start(t0, Math.random()*1.5); s2.stop(t0+sd+0.03); }
     // electric arc over the detonation: a dense crackle burst + one square
     // snap tearing downward (the summonBurst zap school, scaled to the cast)
     { const zd2=0.24*rate, n=SR*zd2|0, zb=a.createBuffer(1,n,SR), zdd=zb.getChannelData(0);
@@ -787,15 +850,17 @@ function beastVoice(o){
       sub.start(t0); sub.stop(t0+dur+0.05);
     }
     if(o.gravel){
-      const n=(a.sampleRate*(dur+0.1))|0, buf=a.createBuffer(1,n,a.sampleRate), d=buf.getChannelData(0);
-      for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n*0.6);
-      const ns=a.createBufferSource(); ns.buffer=buf;
+      const ns=nzSrc(a);   // shared noise; the (1-i/n*0.6) sample fade is the
+      const nsh=a.createGain();   // linear 1 -> 0.4 ramp below (the roar alone
+      nsh.gain.setValueAtTime(1,t0);   // was ~148k samples of per-call JS loop)
+      nsh.gain.linearRampToValueAtTime(0.4,t0+dur+0.1);
+      ns.connect(nsh);
       const lp=a.createBiquadFilter(); lp.type='lowpass';
       lp.frequency.setValueAtTime(o.lp0||560,t0);
       lp.frequency.exponentialRampToValueAtTime(o.lp1||160, t0+dur*0.75);
       const nG=a.createGain(); nG.gain.value=o.gravel;
-      ns.connect(lp); lp.connect(nG); nG.connect(shp);
-      ns.start(t0); ns.stop(t0+dur+0.1);
+      nsh.connect(lp); lp.connect(nG); nG.connect(shp);
+      ns.start(t0, Math.random()*1.5); ns.stop(t0+dur+0.12);
     }
     lfo.start(t0); lfo.stop(t0+dur+0.1);
   }catch(e){}
@@ -935,16 +1000,84 @@ function wraithWail(o){
     vib.start(t0); vib.stop(t0+dur+0.03); s.start(t0);
   }catch(e){}
 }
+// ---------- BAKED SFX: heavy synths pre-rendered at load ----------
+// OfflineAudioContext is exempt from autoplay policy, so baking starts the
+// moment the page loads - during the gate screen, before the first click.
+// Randomized sounds bake several variants to keep combat variety. The live
+// synths below remain BOTH the generator (each bake literally runs them
+// against an offline context) and the runtime fallback, so nothing is lost.
+const BAKE={bufs:{}, done:0, total:0, ready:false};
+function bakeOne(key,dur,fn){
+  BAKE.total++;
+  (async()=>{
+    try{
+      const off=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1, Math.ceil(44100*dur), 44100);
+      const AC0=AC, m0=OPT.master, s0=OPT.sfx, d0=sfxDist, nz0=_nzBuf, vb0=_verb;
+      AC=off; _nzBuf=null; _verb=null; OPT.master=1; OPT.sfx=1; sfxDist=1;
+      try{ fn(); }finally{ AC=AC0; _nzBuf=nz0; _verb=vb0; OPT.master=m0; OPT.sfx=s0; sfxDist=d0; }
+      BAKE.bufs[key]=await off.startRendering();
+    }catch(e){}
+    BAKE.done++; if(BAKE.done>=BAKE.total) BAKE.ready=true;
+  })();
+}
+function startBakes(){
+  if(!(window.OfflineAudioContext||window.webkitOfflineAudioContext)){ BAKE.ready=true; return; }
+  for(let v=0;v<3;v++) bakeOne('spell'+v, 2.4, ()=>fireWhoosh());
+  bakeOne('roar0', 3.3, ()=>roarSynth());
+  for(let v=0;v<3;v++) bakeOne('growl'+v, 0.85, ()=>SFX_growl_live());
+  for(let v=0;v<2;v++) bakeOne('grunt'+v, 0.75, ()=>SFX_grunt_live());
+  for(let v=0;v<2;v++) bakeOne('edie'+v, 1.0, ()=>SFX_edie_live());
+}
+function bakedPlay(base,nVar){
+  const b=BAKE.bufs[base+((Math.random()*nVar)|0)];
+  if(!b) return false;
+  try{
+    const a=audio(), s=a.createBufferSource(); s.buffer=b;
+    const g=a.createGain(); g.gain.value=OPT.master*OPT.sfx*sfxDist;
+    s.connect(g); g.connect(a.destination); s.start();
+    return true;
+  }catch(e){ return false; }
+}
 function roarSynth(){
   // the Lord: the full engine. Swells from a low rumble to full voice over
   // half a second, holds nearly two, and takes a second more to die away.
   window._lastRoarAmp=(0.66)*OPT.master*OPT.sfx*sfxDist;
   window._lastRoarDur=3.0;
+  if(bakedPlay('roar',1)) return;   // pre-rendered at load; synth is the fallback
   beastVoice({amp:0.66, dur:3.0, attack:0.55, start:0.12, holdT:1.9,
     f0:84, f1:33, diveT:1.9, sub0:46, sub1:25, subMix:0.75,
     flutHz:29, flutDepth:0.9, bp0:320, bp1:105, bpQ:2.2,
     gravel:0.45, lp0:560, lp1:150});
 }
+// THE LORD'S ACTION VOICES (boss-owned presets; both carry arena-wide via
+// sfxAcross - the Lord's voice is never lost to distance; the roar and the generic
+// growl are untouched). Charge: his own roar preset at half length, falling -
+// starts at the coil and is still sounding as he hits. Bump: a hard effort
+// bellow with a deeper second voice under it and a body thump at the onset.
+function SFX_bossCharge_live(runT){ const hold=0.35+(runT||CHARGE_RUN_MAX);   // rest of the coil + the run at full voice, dies through the recovery
+  beastVoice({amp:0.5, dur:hold+0.75, attack:0.2, start:0.1, holdT:hold,
+  f0:84, f1:44, diveT:hold, sub0:46, sub1:28, subMix:0.75, flutHz:29, flutDepth:0.9,
+  bp0:320, bp1:120, bpQ:2.2, gravel:0.45, lp0:560, lp1:170}); }
+function SFX_bossBump_live(){
+  // audition L2: hard onset, short hold, then a roar-length tail (1.7s) with
+  // the pitch and bandpass still diving through it - it lingers by envelope,
+  // not by reverb, exactly the way the roar does
+  noiseHit(0.16,0.5,130);
+  beastVoice({amp:0.4, dur:1.7, attack:0.03, holdT:0.3, f0:95, f1:46, diveT:1.2, sub0:52, sub1:26, subMix:1.0,
+    flutHz:26, flutDepth:0.85, bp0:340, bp1:110, bpQ:2.0, gravel:0.65, lp0:560, lp1:150});
+  beastVoice({amp:0.26, dur:1.7, attack:0.05, holdT:0.3, f0:66, f1:34, diveT:1.2, sub0:38, sub1:22, subMix:0.6,
+    flutHz:29, flutDepth:0.9, bp0:280, bp1:100, bpQ:2.2, gravel:0.5, lp0:520, lp1:140});
+}
+function SFX_growl_live(){ beastVoice({amp:0.16, dur:0.55, attack:0.05, holdT:0.18,
+  f0:105+Math.random()*30, f1:62, diveT:0.4, subMix:0.35, sub0:52, sub1:38,
+  flutHz:24, flutDepth:0.7, bp0:420, bp1:150, bpQ:1.8, gravel:0.3, lp0:700, lp1:240}); }
+function SFX_edie_live(){ beastVoice({amp:0.2, dur:0.7, attack:0.03, holdT:0.1,
+  f0:165, f1:44, diveT:0.5, subMix:0.3, sub0:80, sub1:30,
+  flutHz:19, flutDepth:0.55, bp0:620, bp1:130, bpQ:1.6, gravel:0.38, lp0:900, lp1:170}); }
+function SFX_grunt_live(){ beastVoice({amp:0.2, dur:0.42, attack:0.04, holdT:0.14,
+  f0:95, f1:58, diveT:0.3, subMix:0.5, sub0:55, sub1:40,
+  flutHz:22, flutDepth:0.6, bp0:270, bp1:150, bpQ:1.8, gravel:0.3, lp0:520, lp1:220}); }
+startBakes();   // bake during the gate screen: silent, autoplay-exempt, off-thread
 const SFX={
   swing:()=>{noiseHit(0.12,0.16,1600);swordShing();},   // original air + audition winner F
   hit:()=>{noiseHit(0.08,0.14,600);beep(90,0.08,'square',0.06,-40);},
@@ -960,13 +1093,11 @@ const SFX={
   level:()=>{[440,554,659,880].forEach((f,i)=>setTimeout(()=>beep(f,0.15,'square',0.07),i*90));},
   die:()=>{[300,220,160,100].forEach((f,i)=>setTimeout(()=>beep(f,0.3,'sawtooth',0.09),i*160));},
   win:()=>{[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,0.25,'triangle',0.08),i*140));},
-  growl:()=>beastVoice({amp:0.16, dur:0.55, attack:0.05, holdT:0.18,
-    f0:105+Math.random()*30, f1:62, diveT:0.4, subMix:0.35, sub0:52, sub1:38,
-    flutHz:24, flutDepth:0.7, bp0:420, bp1:150, bpQ:1.8, gravel:0.3, lp0:700, lp1:240}),
+  growl:()=>{ window._lastVoiceAmp=0.16*OPT.master*OPT.sfx*sfxDist;
+    if(!bakedPlay('growl',3)) SFX_growl_live(); },
   step:()=>noiseHit(0.045,0.045,420),
-  edie:()=>beastVoice({amp:0.2, dur:0.7, attack:0.03, holdT:0.1,
-    f0:165, f1:44, diveT:0.5, subMix:0.3, sub0:80, sub1:30,
-    flutHz:19, flutDepth:0.55, bp0:620, bp1:130, bpQ:1.6, gravel:0.38, lp0:900, lp1:170}),
+  edie:()=>{ window._lastVoiceAmp=0.2*OPT.master*OPT.sfx*sfxDist;
+    if(!bakedPlay('edie',2)) SFX_edie_live(); },
   boneHit:()=>boneRattle({clicks:4, dur:0.15, amp:0.2}),
   chitter:()=>impChitter({n:3}),
   chitterHurt:()=>impChitter({n:2, f0:880, amp:0.12}),
@@ -977,9 +1108,8 @@ const SFX={
   wail:()=>wraithWail({dur:0.65}),
   wailHurt:()=>wraithWail({dur:0.35, f0:640, peak:1.35, amp:0.09}),
   wailDie:()=>wraithWail({dur:1.15, f0:600, peak:1.1, end:0.32, amp:0.11}),
-  grunt:()=>beastVoice({amp:0.2, dur:0.42, attack:0.04, holdT:0.14,
-    f0:95, f1:58, diveT:0.3, subMix:0.5, sub0:55, sub1:40,
-    flutHz:22, flutDepth:0.6, bp0:270, bp1:150, bpQ:1.8, gravel:0.3, lp0:520, lp1:220}),
+  grunt:()=>{ window._lastVoiceAmp=0.2*OPT.master*OPT.sfx*sfxDist;
+    if(!bakedPlay('grunt',2)) SFX_grunt_live(); },
   gruntDie:()=>{const dv=sfxDist;
     beastVoice({amp:0.28, dur:1.1, attack:0.05, holdT:0.25,
       f0:115, f1:36, diveT:0.8, subMix:0.6, sub0:60, sub1:28,
@@ -990,8 +1120,9 @@ const SFX={
   squeakDie:()=>{const dv=sfxDist; ratSqueak({dur:0.13, up:1.45});
     setTimeout(()=>{const p=sfxDist; sfxDist=dv;
       ratSqueak({f0:1700, dur:0.3, up:1.1, down:0.35, trill:38, amp:0.13}); sfxDist=p;},100);},
-  nova:()=>{beep(900,0.3,'sawtooth',0.07,-700);noiseHit(0.2,0.09,2400);},
   roar:()=>roarSynth(),
+  bossCharge:(runT)=>SFX_bossCharge_live(runT),
+  bossBump:()=>SFX_bossBump_live(),
   rumble:()=>{noiseHit(0.7,0.2,220);beep(42,0.8,'sawtooth',0.1,-14);},
   uiHover:()=>{beep(880,0.03,'triangle',0.03);},
   uiDown:()=>{beep(520,0.04,'square',0.045);},
@@ -1100,7 +1231,7 @@ function initTex(){
   TEX.slime=spriteTex(drawSlime); TEX.imp=spriteTex(drawImp); TEX.wraith=spriteTex(drawWraith);
   TEX.hpot=spriteTex(drawHPot); TEX.mpot=spriteTex(drawMPot); TEX.gold=spriteTex(drawGold);
   TEX.key=spriteTex(drawKey); TEX.keyO=outlinedTex(drawKey); TEX.shrine=spriteTex(drawShrine); TEX.orb=outlinedTex(drawOrb);
-  TEX.bolt=spriteTex(drawBolt); TEX.ebolt=spriteTex(drawEBolt); TEX.spark=spriteTex(drawSpark,16);
+  TEX.bolt=spriteTex(drawBolt); TEX.boltFire=spriteTex(drawBoltFire); TEX.ebolt=spriteTex(drawEBolt); TEX.spark=spriteTex(drawSpark,16);
   TEX.hexorb=spriteTex(drawHexOrb); TEX.doom=spriteTex(drawDoomSkull);
   TEX.hpb=texBauble('#8a1a1a','#ff5a5a','#ffd0d0');   // health-potion red
   TEX.mpb=texBauble('#1a3a8a','#7ab0ff','#d0e4ff');   // mana-potion blue
@@ -1242,7 +1373,7 @@ function syncLights(rdt){
     else pushLight(pk.x, pk.by||0.16, pk.z, 0.3,0.5,1, 0.55*fd);
   }
   for(const p of projectiles){
-    if(!p.hostile) pushLight(p.x,p.y,p.z, 0.45,0.8,1.0, 0.9);
+    if(!p.hostile){ const L=spellPal().light; pushLight(p.x,p.y,p.z, L[0],L[1],L[2], 0.9); }
     else if(p.kind==='hex') pushLight(p.x,p.y,p.z, 0.62,0.28,0.95, 0.75);
     else if(p.kind==='doom') pushLight(p.x,p.y,p.z, 1.0,0.34,0.12, 1.9);
   }
@@ -1289,8 +1420,7 @@ const THEMES=[
 let levelMeshes=[], enemies=[], pickups=[], projectiles=[], particles=[], dmgNums=[], torches=[], corpses=[], merchant=null;
 let pillars=[], pillarTimer=0;
 let openingDoors=[];
-let novaWaves=[];
-let novaEchoes=[];
+let ringFX=[];
 function startDoorOpen(d){
   if(d.open) return;
   d.open=true; d.anim=0;
@@ -1404,11 +1534,23 @@ function clearStairChains(){
   }
   stairChains=[];
 }
+// OWNERSHIP RULE (learned the hard way, twice):
+// spawnShockRing is a feature-NEUTRAL primitive - it draws an expanding ring
+// and nothing else. Every feature that uses it (boss stagger, poison burst,
+// summoner pulse, pillar collapse, enemy death) passes its OWN color/size/
+// duration at its OWN call site. Tuning a feature's ring means editing that
+// feature's call, never this function. If a feature ever needs ring behavior
+// this primitive doesn't have, it gets its own system - do not grow feature
+// logic in here.
+let _ringGeo=null;
 function spawnShockRing(x,z,color,rMul,dur){
-  const rg=new THREE.RingGeometry(0.86,1.0,44); rg.rotateX(-Math.PI/2);
-  const rm=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  // one shared ring geometry for every ring ever - building and disposing a
+  // 44-segment geometry per ring was churn during cataclysms (2+ rings per
+  // wave). Materials stay per-ring (color and opacity animate independently).
+  if(!_ringGeo){ _ringGeo=new THREE.RingGeometry(0.86,1.0,44); _ringGeo.rotateX(-Math.PI/2); }
+  const rm=new THREE.Mesh(_ringGeo,new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
   rm.position.set(x,0.07,z); rm.scale.setScalar(0.25); rm.visible=false;
-  worldGroup.add(rm); novaWaves.push({m:rm,t:0,rMul:rMul||1,dur:dur||0.45});
+  worldGroup.add(rm); ringFX.push({m:rm,t:0,rMul:rMul||1,dur:dur||0.45});
 }
 function mkGlow(scale,opacity,x,y,z,colorHex){
   // the one additive glow sprite: soft light pool used by torches, braziers,
@@ -1483,6 +1625,301 @@ function startPillarCollapse(pl){
   }
   sfxAcross(pl.tx+0.5,pl.tz+0.5,()=>noiseHit(0.5,0.3,700));
 }
+function roarRumble(){ window._camRumDelay=0.45; window._camRum=0.75; }
+// PILLAR TREMBLE (neutral primitive): steps the visual-only shudder that a
+// roar leaves in standing pillars. Callers set trembleDelay/trembleT/wobT;
+// this only animates them. Used by the menu tableau and the idle court.
+function stepPillarTremble(tdt){
+  for(const pl of pillars){
+    if(!(pl.trembleT>0) || pl.state!=='up') continue;
+    if(pl.trembleDelay>0){ pl.trembleDelay-=tdt; continue; }   // wait for the voice to land
+    pl.trembleT-=tdt;
+    pl.wobT+=tdt;
+    const k=Math.min(1, pl.trembleT/0.15);            // eases out at the end
+    // amplitudes ~45% of the demolition shudder: a subtle answer
+    const wob=(Math.sin(pl.wobT*34)*0.013 + Math.sin(pl.wobT*23+1.3)*0.006)*k;
+    const wob2=Math.cos(pl.wobT*29+0.7)*0.009*k;
+    pl.mesh.position.x=pl.tx+0.5+wob;
+    pl.mesh.position.z=pl.tz+0.5+wob2;
+    if(pl.trembleT<=0){ pl.mesh.position.x=pl.tx+0.5; pl.mesh.position.z=pl.tz+0.5; }
+  }
+}
+// THE IDLE COURT: before battle is joined the Lord paces his hall and, every
+// so often, roars into the dark - the same distant voice as behind the menu,
+// with the same stone-and-camera answer. Idle-owned: its own clock and its
+// own tuning. The battle roar (cataclysm breakpoints) is untouched, and this
+// never fires once he has seen you (the caller is the idle branch only).
+const BOSS_IDLE_PACE=1.5;      // idle amble x1.5: a pacing lord, not a statue
+function bossIdleRoar(e,dt){
+  if(e.idleRoarT===undefined) e.idleRoarT=0.9+Math.random()*0.3;   // ~1s in: players rush, the voice must land first
+  e.idleRoarT-=dt;
+  e.idleRoarBusy=Math.max(0,(e.idleRoarBusy||0)-dt);                // the voice still sounding
+  if(e.idleRoarT>0) return;
+  e.idleRoarT=8+Math.random()*9;
+  if(!(AC && AC.state==='running')){ e.idleRoarT=0; return; }        // hold until audio unlocks
+  bossIdleVoice(e);
+}
+function bossIdleVoice(e){
+  // never a whisper: distance colors it, a floor keeps it noticeable
+  sfxDist=Math.max(0.30, distVol(e.x,e.z));
+  try{ SFX.roar(); } finally { sfxDist=1; }
+  for(const pl of pillars) if(pl.state==='up'){
+    pl.trembleDelay=0.42+Math.random()*0.14;          // past the roar's swell
+    pl.trembleT=0.5+Math.random()*0.25; pl.wobT=Math.random()*9; }
+  roarRumble();
+  e.idleRoared=(e.idleRoared||0)+1;
+  e.idleRoarBusy=3.0;                                  // the roar's full length
+}
+// BATTLE JOINED: the moment he sees you, the idle voice sounds one last time
+// as the opening bell - unless it is still sounding from the idle clock.
+function bossEngageRoar(e){
+  if(e.idleRoarBusy>0) return;
+  bossIdleVoice(e);
+  e.engageRoared=true;
+}
+// THE TRAIN MEETS THE STONE: a charge that stalls against a standing pillar
+// brings it down - the full demolition (seal-break, sinking grind, rubble,
+// sound) via startPillarCollapse. Looks one step past his nose along the
+// charge line; a wall or a fallen stump does nothing.
+function bossChargePillar(e){
+  const ax=e.x+e.cdx*(e.r+0.55), az=e.z+e.cdz*(e.r+0.55);
+  for(const pl of pillars){
+    if(pl.state!=='up') continue;
+    if(Math.hypot(ax-(pl.tx+0.5), az-(pl.tz+0.5))<1.15){   // reaches a pillar clipped by his shoulder, not only dead-on
+      startPillarCollapse(pl);
+      sfxAcross(e.x,e.z,SFX.bossBump);                     // his voice on the impact, same as a landed shove
+      e.felledPillar=(e.felledPillar||0)+1; return pl; }
+  }
+  return null;
+}
+// CHARGE LENGTH: chosen at the coil from how far you stand. The run covers
+// that distance plus a stride, bounded: never shorter than CHARGE_RUN_MIN,
+// never longer than CHARGE_RUN_MAX (twice the old fixed 0.82s run, ~11.5u).
+// ============================================================
+// LORD FALL - the Dungeon Lord's death. Not a squash-and-fade: he roars,
+// shakes the hall, and SINKS into the flagstones like a felled pillar over
+// LORD_FALL_T seconds - loud rumble, sustained shake, and a fountain of
+// bright sparks in every colour the whole way down. The fanfare (message,
+// gold, level chime, the big bang) lands when he is gone. Owned here.
+const LORD_FALL_T=3.8;
+const LORD_FALL_HUES=[0xff5a5a,0xffd23a,0x5aff8a,0x5ad2ff,0xd05aff,0xff9a3a,0xffffff];
+const LORD_DEATH_RING_MUL=6.0, LORD_DEATH_RING_DUR=1.3;   // the one GIANT shockwave (cataclysm rings are ~2x)
+function lordFallBegin(e){
+  sfxAcross(e.x,e.z,SFX.roar,1.2);                  // his last voice
+  roarRumble();
+  burst(e.x,0.6,e.z,0xd0a0ff,40,3.0); shake=0.65;
+  // THE GIANT SHOCKWAVE: one ring out across the whole hall - and everything
+  // he summoned dies with him in it (no xp: they were his)
+  spawnShockRing(e.x,e.z,0xffd76a,LORD_DEATH_RING_MUL,LORD_DEATH_RING_DUR);
+  spawnShockRing(e.x,e.z,0xd0a0ff,2.2,0.7);
+  for(let i=enemies.length-1;i>=0;i--){ const o=enemies[i]; if(o.boss||o===e||o.hp<=0) continue;
+    const xp0=o.xp; o.xp=0; o.lordSlain=true;
+    burst(o.x,0.5,o.z,0xffd76a,10,2.2);
+    damageEnemy(o, o.hp+1); o.xp=xp0; }
+  dynLights.push({x:e.x,y:0.8,z:e.z, r:1,g:0.7,b:1, i:3.5, life:0.8});
+  window._lordFell=true;
+}
+// WITCHFIRE ON THE BODY: a struck enemy carries real flames - the wall-torch
+// flame renderer (torches[] instances) pinned to spots on the sprite: both
+// feet, a hip and a shoulder, sized to the creature. Each burns with the
+// torch's own flicker and casts a little light; the feet burn biggest. Lives
+// exactly as long as burnT. Burn-owned tuning; the flame renderer is shared.
+const BURN_SPOTS=[ {ox: 0.0,  oy:0.04, fsc:0.62, li:0.45} ];   // ONE big fire at the feet, where the circle bit (screen-right offset x sc, height x sc); the licks are chosen per body (burnSpotsFor)
+// every burning body gets the big feet fire; man-sized (sc>=0.6) bodies add
+// one small lick, the big ones (sc>=0.95) two. The licks land on RANDOM
+// opaque cells of the creature's own art (upper two-thirds of the sprite),
+// so no two burning skeletons wear their fire in the same place, and a lick
+// never floats in a transparent gap of the billboard.
+const _bodyCells={};
+function bodyCellsFor(type){
+  if(_bodyCells[type]) return _bodyCells[type];
+  const cells=[];
+  try{
+    const img=TEX[type]&&TEX[type].image, ctx=img&&img.getContext&&img.getContext('2d');
+    const d=ctx&&ctx.getImageData(0,0,img.width,img.height).data, g=img.width/16;
+    if(d) for(let r=0;r<11;r++) for(let c=0;c<16;c++){       // rows 0..10 = the upper two-thirds
+      const px=((r*g+g/2)|0)*img.width+((c*g+g/2)|0);
+      if(d[px*4+3]>127) cells.push([c,r]); }
+  }catch(e){}
+  if(!cells.length) cells.push([7,5],[8,8]);                  // headless / empty art: a sane fallback
+  _bodyCells[type]=cells; return cells;
+}
+function burnSpotsFor(e){
+  const n = e.sc<0.6 ? 0 : e.sc<0.95 ? 1 : 2;
+  const spots=[BURN_SPOTS[0]];
+  const cells=bodyCellsFor(e.type), used=new Set();
+  for(let k=0;k<n && used.size<cells.length;k++){
+    let ci; do{ ci=(Math.random()*cells.length)|0; }while(used.has(ci)); used.add(ci);
+    const [c,r]=cells[ci];
+    spots.push({ox:(c+0.5)/16-0.5, oy:1-(r+0.5)/16, fsc:k===0?0.2:0.18, li:0.16, hue:3});   // (sprite is 1 wide x 1 tall, in sc units)
+  }
+  return spots;
+}
+function igniteBurnFlames(e){
+  if(e.burnFl) return;                                  // already alight: the timer was refreshed, the flames stay
+  e.burnFl=burnSpotsFor(e).map(sp=>{ const f={x:e.x,y:sp.oy*e.sc,z:e.z, ox:sp.ox*e.sc, oy:sp.oy*e.sc, fsc:sp.fsc*e.sc,
+      glow:mkGlow(0.9*sp.fsc*e.sc,0.22, e.x,sp.oy*e.sc,e.z, 0xff8a3a), base:null, phase:rnd()*9, li:sp.li, hue:sp.hue||0, burn:true};
+    torches.push(f); return f; });   // (the torch loop gives each flame its embers, smoke and flicker for free)
+}
+function extinguishBurnFlames(e){
+  if(!e.burnFl) return;
+  for(const f of e.burnFl){ const i=torches.indexOf(f); if(i>=0) torches.splice(i,1); worldGroup.remove(f.glow); }
+  e.burnFl=null;
+}
+// WITCHFIRE ON THE STAMPS: a floor or wall circle from a witchfire bolt burns
+// for its life - ONE big fire at the centre. On the floor it stands up; on a
+// wall its base is ON the wall and it grows out along the face's normal
+// (axis = the normal; the flame renderer billboards around that axis).
+const STAMP_FIRE={fsc:0.46, li:0.42, wallFsc:0.62, wallSink:0.12};   // the wall fire: bigger, and its base sunk INTO the wall so the flat footing never shows
+function stampFlames(x,y,z,nx,ny,nz,R){
+  const wall=Math.abs(ny)<=0.9;
+  // the wall fire's base sits BEHIND the face (sunk along -normal): the flame
+  // emerges through the stone with no visible footing, flush with the wall
+  const off=wall?-STAMP_FIRE.wallSink:0.0;
+  const fx=x+nx*off, fy=y+ny*off, fz=z+nz*off;
+  const f={x:fx,y:fy,z:fz, fsc:wall?STAMP_FIRE.wallFsc:STAMP_FIRE.fsc, glow:mkGlow(0.9*STAMP_FIRE.fsc,0.2, x+nx*0.1,y+0.05,z+nz*0.1, 0xff8a3a), base:null, phase:rnd()*9, li:STAMP_FIRE.li, hue:wall?3:0, burn:true, stamp:true,   // wall fire: the LOOSE rounded bottom (no flat footing to show)
+    // the wall flame leans OUT of the wall and up (normal x0.8, up x0.7): base
+    // on the face, tongue reaching into the room - readable from every angle
+    // (a tongue straight along the normal vanishes when viewed head-on)
+    axis: wall ? (()=>{ const ax=nx*0.8, ay=0.7, az=nz*0.8, l=Math.hypot(ax,ay,az); return [ax/l,ay/l,az/l]; })() : null};
+  torches.push(f); return [f];
+}
+function extinguishStampFlames(o){
+  for(const f of o.flames){ const i=torches.indexOf(f); if(i>=0) torches.splice(i,1); worldGroup.remove(f.glow); }
+  o.flames=null;
+}
+// GOLD MAGNET: coins within reach drift to the player - slowly at the edge,
+// snapping in close - so a scattered hoard is swept up without pixel-hunting.
+// Gold only; potions and keys stay put. Walls stop it.
+const GOLD_MAGNET_R=1.7, GOLD_MAGNET_SPD=[1.2,5.5];   // u; u/s at the edge .. at the centre
+function goldMagnet(pk,dt){
+  const dx=P.x-pk.x, dz=P.z-pk.z, d=Math.hypot(dx,dz);
+  if(d>GOLD_MAGNET_R || d<0.01) return;
+  const t=1-d/GOLD_MAGNET_R, sp=GOLD_MAGNET_SPD[0]+(GOLD_MAGNET_SPD[1]-GOLD_MAGNET_SPD[0])*t*t;
+  const st=Math.min(d, sp*dt), nx=pk.x+dx/d*st, nz=pk.z+dz/d*st;
+  if(!solid(nx,nz)){ pk.x=nx; pk.z=nz; pk.spr.position.x=nx; pk.spr.position.z=nz; pk.magnet=true; }
+}
+// THE LOOT EXPLOSION: coins fly out of his corpse the whole way down and a
+// last fistful erupts at the bang. Each coin is a real gold pickup with its
+// own ballistic flight (lordLootStep) that settles into the normal bob.
+const LORD_LOOT_EVERY=0.13, LORD_LOOT_FINAL=10, LORD_LOOT_G=7.5, LORD_COIN_VAL=[4,8];
+const LORD_LOOT_FRAC=2/3;         // the explosion is finished this far into the fall
+function lordLootCoin(x,z,big){
+  const a=Math.random()*6.28, sp=(big?1.2:0.7)+Math.random()*(big?1.6:1.2);   // (trimmed ~25%: a tighter hoard)
+  spawnPickup('gold',{x,z}); const pk=pickups[pickups.length-1];
+  pk.gval=ri(LORD_COIN_VAL[0],LORD_COIN_VAL[1]); pk.lordCoin=true;
+  pk.fly={by:0.5+Math.random()*0.8, bvx:Math.cos(a)*sp, bvy:(big?2.2:1.8)+Math.random()*(big?1.4:2.2), bvz:Math.sin(a)*sp};   // the fistful flies lower: it must land within the final third
+  pk.spr.position.y=pk.fly.by;
+  burst(x,pk.fly.by,z,0xffd23a,3,1.2);
+  return pk;
+}
+function lordLootStep(pk,dt){
+  const f=pk.fly;
+  f.bvy-=dt*LORD_LOOT_G; f.by+=f.bvy*dt;
+  const nx=pk.x+f.bvx*dt, nz=pk.z+f.bvz*dt;
+  if(!solid(nx,nz)){ pk.x=nx; pk.z=nz; } else { f.bvx*=-0.5; f.bvz*=-0.5; }
+  if(f.by<=0.03){
+    f.by=0.03; f.bvy=-f.bvy*0.38; f.bvx*=0.55; f.bvz*=0.55;   // heavy coins: a couple of short bounces and they lie still
+    if(Math.abs(f.bvy)<0.6){ pk.fly=null; pk.spr.position.set(pk.x,0.03,pk.z); return; }   // settled: the normal bob takes over
+    burst(pk.x,0.05,pk.z,0xffd23a,2,0.6);
+  }
+  pk.spr.position.set(pk.x,f.by,pk.z);
+}
+function lordFallStep(c,dt){
+  c.wobT+=dt;
+  // his voice through the fall: the opening roar (lordFallBegin) and a second
+  // one mid-way so he is roaring right up to the bang
+  if(!c.roared2 && c.life<LORD_FALL_T-1.4){ c.roared2=true; sfxAcross(c.x,c.z,SFX.roar,1.2); roarRumble(); }
+  // the loot explosion is over by two-thirds of the fall: the stream runs
+  // until then, the last fistful erupts at that mark, and the coins have the
+  // final third to land and settle while he finishes sinking
+  const lootOpen=c.life>LORD_FALL_T*(1-LORD_LOOT_FRAC);
+  if(lootOpen){ c.lootT=(c.lootT||0)-dt;
+    while(c.lootT<=0){ c.lootT+=LORD_LOOT_EVERY; lordLootCoin(c.x+(Math.random()-0.5)*0.4, c.z+(Math.random()-0.5)*0.4, false); } }
+  else if(!c.lootFinal){ c.lootFinal=true; for(let k=0;k<LORD_LOOT_FINAL;k++) lordLootCoin(c.x,c.z,true); burst(c.x,0.6,c.z,0xffd23a,24,2.8); }
+  shake=Math.max(shake, 0.38);                      // hard SUSTAINED shake: a floor the render decay cannot win against
+  c.rumT-=dt;
+  if(c.rumT<=0){ c.rumT=0.34; c.rumAlt=!c.rumAlt;   // the pillar demolition's grinding rumble cadence
+    sfxAcross(c.x,c.z, c.rumAlt?()=>{SFX.rumble(); noiseHit(0.3,0.5,110);}:()=>noiseHit(0.5,0.25,850), 1.3); }
+  // the fountain: bright sparks flung in every direction, colour cycling
+  c.fxT-=dt;
+  while(c.fxT<=0){ c.fxT+=0.07;
+    const col=LORD_FALL_HUES[(Math.random()*LORD_FALL_HUES.length)|0];
+    burst(c.x+(Math.random()-0.5)*0.5, 0.2+Math.random()*1.2, c.z+(Math.random()-0.5)*0.5, col, 6, 2.2+Math.random()*1.6);
+    if(!pMat.uniforms.map.value) pMat.uniforms.map.value=TEX.spark;
+    for(let k=0;k<3;k++){ const a=Math.random()*6.28, sp=1.5+Math.random()*2.5; _pc.setHex(col);
+      spawnP({x:c.x, y:0.3+Math.random()*0.9, z:c.z, vx:Math.cos(a)*sp, vy:1.2+Math.random()*2.6, vz:Math.sin(a)*sp,
+        life:0.7+Math.random()*0.7, r:_pc.r,g:_pc.g,b:_pc.b, size:0.05+Math.random()*0.05, grav:-2.4, drag:0.5}); }
+    dynLights.push({x:c.x,y:0.7,z:c.z, r:_pc.r,g:_pc.g,b:_pc.b, i:2.2, life:0.25});
+  }
+  c.ringT-=dt;
+  if(c.ringT<=0){ c.ringT=0.55; spawnShockRing(c.x,c.z, LORD_FALL_HUES[(Math.random()*LORD_FALL_HUES.length)|0], 1.3, 0.5); }
+}
+function lordFallEnd(c){
+  // the BANG: he is gone - the floor answers, the hall lights up, the fanfare
+  showMsg('THE DUNGEON LORD FALLS',3,0xffd76a);
+  shake=0.7; SFX.rumble(); SFX.level();
+  sfxAcross(c.x,c.z,()=>{ noiseHit(0.75,0.55,180); beep(38,0.5,'sawtooth',0.5,-30); },1.5);
+  spawnShockRing(c.x,c.z,0xffd76a,2.6,0.8); spawnShockRing(c.x,c.z,0xffffff,1.6,0.5);
+  for(const col of LORD_FALL_HUES) burst(c.x,0.5,c.z,col,16,3.4);
+  dynLights.push({x:c.x,y:0.8,z:c.z, r:1,g:0.85,b:0.5, i:4.5, life:1.1});
+  window._lordFallDone=true;
+}
+// THE SHOVE'S HOP: he leaves the floor for the bump and lands with a shockwave
+const BUMP_HOP_VY=2.0, BUMP_HOP_G=16;            // ~0.25s of air, ~0.125u peak
+const BUMP_HOP_T=2*BUMP_HOP_VY/BUMP_HOP_G;       // flight time
+const CHARGE_SPD_MUL=9.2;                        // x e.spd during the run (was 6.4, then 7.6: a faster train)
+const CHARGE_RUN_MIN=0.45;                       // seconds
+const CHARGE_RUN_MAXU=11.5;                      // the longest run in DISTANCE (2x the old 5.8u), whatever the speed
+const CHARGE_RUN_MAX=CHARGE_RUN_MAXU/(1.1*CHARGE_SPD_MUL);
+function bossChargeRunT(dist){
+  const spd=1.1*CHARGE_SPD_MUL;                  // the Lord's spd
+  return Math.max(CHARGE_RUN_MIN, Math.min(CHARGE_RUN_MAX, (dist+0.8)/spd));
+}
+// THE TRAIN THROUGH THE COURT: during a charge, his own minions in the path
+// are dealt with by where they stand. Dead center (within half his radius of
+// the charge line) they are CRUSHED - killed outright, no xp for you, he does
+// not slow. Off-center they are FLUNG: tossed up and to the side, unharmed.
+// Each minion is touched once per charge (chgSeq).
+const CHARGE_CRUSH_LAT=0.5;      // |lateral| < r*this -> crushed
+const CHARGE_FLING_SIDE=5.2, CHARGE_FLING_FWD=2.4, CHARGE_FLING_UP=3.4, CHARGE_FLING_G=9;
+function bossChargeThroughCourt(e){
+  for(const o of enemies){
+    if(o===e || o.boss || o.hp<=0 || o.chgSeqHit===e.chgSeq) continue;
+    const rx=o.x-e.x, rz=o.z-e.z;
+    const f=rx*e.cdx+rz*e.cdz;                       // ahead of him along the charge
+    const l=rx*e.cdz-rz*e.cdx;                       // lateral offset from the line
+    const reach=e.r+o.r+0.3;
+    if(f<-0.2 || f>reach || Math.abs(l)>e.r+o.r) continue;
+    o.chgSeqHit=e.chgSeq;
+    if(Math.abs(l)<e.r*CHARGE_CRUSH_LAT){
+      // CRUSHED under the bulk
+      o.crushed=true; const xp0=o.xp; o.xp=0;
+      burst(o.x,0.35,o.z,0xc0392b,22,2.4);
+      sfxAcross(o.x,o.z,()=>noiseHit(0.18,0.45,160),0.9);
+      shake=Math.min(0.5,shake+0.08);
+      damageEnemy(o, o.hp+1);
+      o.xp=xp0;
+    } else {
+      // FLUNG: up and out to the side, forward with him a little
+      const side=l>0?1:-1;
+      o.ekx+=(e.cdz*side)*CHARGE_FLING_SIDE + e.cdx*CHARGE_FLING_FWD;
+      o.ekz+=(-e.cdx*side)*CHARGE_FLING_SIDE + e.cdz*CHARGE_FLING_FWD;
+      o.flingVy=CHARGE_FLING_UP; o.flingG=CHARGE_FLING_G; o.flingH=Math.max(o.flingH||0,0.001);
+      o.flung=(o.flung||0)+1;
+      burst(o.x,0.5,o.z,0x9a8a7a,6,1.2);
+      sfxAt(o.x,o.z,()=>noiseHit(0.1,0.25,600));
+    }
+  }
+}
+// the whole engagement: the bell, then he CLOSES - the opening move is the
+// charge, primed to fire the moment you are in its window (2.2-8.5u, LOS).
+// A short fuse lets the roar's swell land before he coils.
+function bossEngage(e){
+  bossEngageRoar(e);
+  e.chgCd=0.45;
+  e.openingCharge=true;
+}
 function roarShattersPillars(){
   // HIS VOICE BREAKS THE STONE: 2-3 pillars give way at once, staggered by a
   // breath so the cracks read as an answer to the roar - and your cover dies
@@ -1531,7 +1968,7 @@ function placeMerchant(x,z){
   worldGroup.add(merchant.rug);
 }
 function clearLevel(){
-  decorColliders=[];
+  decorColliders=[]; floorFlats=[];
   stairsRoom=null;
   wallFaceOcc=new Set();
   for(const m of levelMeshes){ worldGroup.remove(m);
@@ -1560,8 +1997,8 @@ function clearLevel(){
     if(e.lens){ worldGroup.remove(e.lens); e.lens.geometry.dispose(); e.lens=null; } }
   enemies=[]; pickups=[]; projectiles=[]; torches=[]; corpses=[]; doors={}; openingDoors=[];
   clearStairChains();
-  for(const w of novaWaves){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); }
-  novaWaves=[]; novaEchoes=[];
+  for(const w of ringFX){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); }
+  ringFX=[];
 }
 
 function genArena(theme){
@@ -1799,7 +2236,21 @@ function placeFloorFlat(key,cx,cz,wu,hu,rot){
   m.rotation.x=-Math.PI/2; m.rotation.z=rot||0;
   m.position.set(cx,0.012,cz);
   window._decorPts.push([cx,cz,key]);
+  floorFlats.push({cx,cz,hw:wu/2,hh:hu/2,rot:rot||0,y:0.012});   // registered for floorSurfaceY
   return m;
+}
+// FLOOR SURFACE QUERY (neutral primitive): the height of whatever lies on the
+// flagstones at (x,z) - a rug, a decal, anything placeFloorFlat put down -
+// or 0 for bare stone. Ground-hugging FX ask this instead of guessing.
+let floorFlats=[];
+function floorSurfaceY(x,z){
+  let y=0;
+  for(const f of floorFlats){
+    const dx=x-f.cx, dz=z-f.cz, c=Math.cos(-f.rot), s2=Math.sin(-f.rot);
+    const lx=dx*c-dz*s2, lz=dx*s2+dz*c;
+    if(Math.abs(lx)<=f.hw && Math.abs(lz)<=f.hh && f.y>y) y=f.y;
+  }
+  return y;
 }
 let decorColliders=[];
 let stairsRoom=null;
@@ -2689,21 +3140,25 @@ const fGeo=new THREE.InstancedBufferGeometry();
 fGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5,0,0, 0.5,0,0, 0.5,1,0, -0.5,1,0]),3));
 fGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0,0, 1,0, 1,1, 0,1]),2));
 fGeo.setIndex([0,1,2, 0,2,3]);
-const fOff=new Float32Array(FMAX*3), fScl=new Float32Array(FMAX), fPh=new Float32Array(FMAX), fHue=new Float32Array(FMAX);
+const fOff=new Float32Array(FMAX*3), fScl=new Float32Array(FMAX), fPh=new Float32Array(FMAX), fHue=new Float32Array(FMAX), fAxis=new Float32Array(FMAX*3);
 fGeo.setAttribute('iOff', new THREE.InstancedBufferAttribute(fOff,3));
 fGeo.setAttribute('iScl', new THREE.InstancedBufferAttribute(fScl,1));
 fGeo.setAttribute('iHue', new THREE.InstancedBufferAttribute(fHue,1));
+fGeo.setAttribute('iAxis', new THREE.InstancedBufferAttribute(fAxis,3));   // the flame's UP: (0,1,0) for a standing flame; a wall normal for fire growing OUT of a wall
 fGeo.setAttribute('iPh', new THREE.InstancedBufferAttribute(fPh,1));
 fGeo.instanceCount=0;
 const fMat=new THREE.ShaderMaterial({
   uniforms:{ uTime:{value:0}, fogNear:{value:1.5}, fogFar:{value:10.5} },
   vertexShader:
-'attribute vec3 iOff; attribute float iScl; attribute float iPh; attribute float iHue;\n'+
+'attribute vec3 iOff; attribute float iScl; attribute float iPh; attribute float iHue; attribute vec3 iAxis;\n'+
 'varying vec2 vUv; varying float vPh; varying float vFog; varying float vHue;\n'+
 'uniform float fogNear; uniform float fogFar;\n'+
 'void main(){ vUv=uv; vPh=iPh; vHue=iHue;\n'+
 '  vec3 right=vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);\n'+
-'  vec3 wp=iOff + right*position.x*(iScl*0.78) + vec3(0.0,1.0,0.0)*(position.y*iScl);\n'+
+'  // a flame with a sideways axis (wall fire) stays a billboard AROUND that axis:\n'+
+'  // its base on the wall, its tongue pointing out along the normal\n'+
+'  if(iAxis.y<0.9){ vec3 tc=cameraPosition-iOff; vec3 r2=cross(iAxis, tc); if(length(r2)>0.05) right=normalize(r2); }\n'+
+'  vec3 wp=iOff + right*position.x*(iScl*0.78) + iAxis*(position.y*iScl);\n'+
 '  vec4 mv=viewMatrix*vec4(wp,1.0);\n'+
 '  vFog=clamp((-mv.z-fogNear)/(fogFar-fogNear),0.0,1.0);\n'+
 '  gl_Position=projectionMatrix*mv; }',
@@ -2726,12 +3181,17 @@ const fMat=new THREE.ShaderMaterial({
 '  float wob = (n-0.5)*0.85*pow(q.y,1.35) + 0.07*sin(t*3.3+q.y*6.0)*q.y;\n'+
 '  float cx = q.x-0.5 + wob;\n'+
 '  float w = mix(0.33, 0.06, pow(q.y,0.75));\n'+
+'  // LOOSE flames (iHue >= 3: a free-floating lick on a body or a stamp) have\n'+
+'  // a rounded bottom - the width pinches to nothing at the base instead of\n'+
+'  // the flat torch-head footing\n'+
+'  float loose=step(2.5,vHue); float hv=vHue-3.0*loose;\n'+
+'  w = mix(w, w*sqrt(clamp(q.y/0.34,0.0,1.0)), loose);\n'+
 '  float body = step(abs(cx), w);\n'+
 '  body *= step(0.04,q.y) * (1.0-step(0.97,q.y));\n'+
 '  float inten = body * (1.25-q.y*0.5) * (0.62+0.75*n);\n'+
 '  if(inten<0.30) discard;\n'+
 '  // hard 4-color retro palette\n'+
-'  float gh=clamp(vHue,0.0,1.0); float vio=step(1.5,vHue);\n'+
+'  float gh=clamp(hv,0.0,1.0); float vio=step(1.5,hv);\n'+
 '  vec3 col = mix(mix(vec3(0.72,0.10,0.02), vec3(0.03,0.40,0.09), gh), vec3(0.26,0.08,0.48), vio);\n'+
 '  if(inten>0.52) col=mix(mix(vec3(1.0,0.42,0.05), vec3(0.10,0.82,0.20), gh), vec3(0.52,0.20,0.88), vio);\n'+
 '  if(inten>0.74) col=mix(mix(vec3(1.0,0.78,0.12), vec3(0.42,1.0,0.32), gh), vec3(0.78,0.45,1.0),  vio);\n'+
@@ -2756,6 +3216,7 @@ function syncFlames(){
     { const ndx=cam.position.x-t.x, ndz=cam.position.z-t.z, nl=Math.hypot(ndx,ndz)||1;
       fOff[n*3]=t.x+ndx/nl*0.05; fOff[n*3+1]=t.y-0.06; fOff[n*3+2]=t.z+ndz/nl*0.05; }
     fScl[n]=t.fsc||0.42; fPh[n]=t.phase*3.1; fHue[n]=t.hue||0;
+    if(t.axis){ fAxis[n*3]=t.axis[0]; fAxis[n*3+1]=t.axis[1]; fAxis[n*3+2]=t.axis[2]; } else { fAxis[n*3]=0; fAxis[n*3+1]=1; fAxis[n*3+2]=0; }
     n++;
   }
   fGeo.instanceCount=n;
@@ -2763,8 +3224,10 @@ function syncFlames(){
   fGeo.attributes.iScl.needsUpdate=true;
   fGeo.attributes.iPh.needsUpdate=true;
   fGeo.attributes.iHue.needsUpdate=true;
+  fGeo.attributes.iAxis.needsUpdate=true;
   fMat.uniforms.uTime.value=performance.now()*0.001;
   wMat.uniforms.uTime.value=performance.now()*0.001;
+  syncRibbons();
   fMat.uniforms.fogNear.value=scene.fog?scene.fog.near:1.5;
   fMat.uniforms.fogFar.value=scene.fog?scene.fog.far:10.5;
 }
@@ -2821,6 +3284,18 @@ function syncEnemyInstances(){
         // the glow halo sits ON the bearer's billboard plane - punch it toward
         // the camera (the bossglow trick) or it z-fights where they meet
         e.torchT.glow.position.set(e.torchT.x+gdx/gl2*0.1, e.torchT.y-0.05, e.torchT.z+gdz/gl2*0.1); }
+    }
+    if(e.burnFl){
+      // WITCHFIRE flames ride the billboard: each keeps its spot on the body
+      // (screen-right offset x height) through lean and hop, like the torch
+      const rx2=-Math.cos(P.yaw), rz2=Math.sin(P.yaw);
+      const la2=e.leanA||0, c3=Math.cos(la2), s3=Math.sin(la2);
+      for(const f of e.burnFl){
+        const tx3=f.ox*c3 - f.oy*s3, ty3=f.ox*s3 + f.oy*c3;
+        f.x=e.x+rx2*tx3; f.z=e.z+rz2*tx3; f.y=ty3+(e.hopY||0);
+        const gdx=cam.position.x-f.x, gdz=cam.position.z-f.z, gl2=Math.hypot(gdx,gdz)||1;
+        f.glow.position.set(f.x+gdx/gl2*0.1, f.y+0.02, f.z+gdz/gl2*0.1);   // punched toward the camera off the billboard plane
+      }
     }
     if(e.glowSpr){
       // the Lord's eyes and rune blade burn through the dark: a slow breathing
@@ -2883,7 +3358,25 @@ function syncEnemyInstances(){
   }
   for(const c of corpses){
     if(n>=EMAX) break;
-    const uv=ATLAS[c.type]||ATLAS.skel, k=c.life/0.45, n3=n*3, n2=n*2, n4=n*4;
+    const uv=ATLAS[c.type]||ATLAS.skel, n3=n*3, n2=n*2, n4=n*4;
+    if(c.lord){
+      // LORD FALL: full-size, upright, SINKING into the flagstones with a
+      // stone-fighting shudder (the pillar demolition's motion), dissolving
+      // only in the last stretch. Owned by the lord-fall feature.
+      const k=c.life/LORD_FALL_T, sunk=Math.pow(1-k,1.15);
+      const wob=Math.sin(c.wobT*34)*0.028+Math.sin(c.wobT*23+1.3)*0.014, wob2=Math.cos(c.wobT*29+0.7)*0.02;
+      eOff[n3]=c.x+wob; eOff[n3+1]=-sunk*c.sc*1.05; eOff[n3+2]=c.z+wob2;
+      eLean[n]=Math.sin(c.wobT*21)*0.05;
+      eScl[n2]=c.sc; eScl[n2+1]=c.sc;
+      eUVa[n4]=uv[0]; eUVa[n4+1]=uv[1]; eUVa[n4+2]=uv[2]; eUVa[n4+3]=uv[3];
+      // RAPID RED PULSE: the whole body throbs blood-red, ~4.5 beats a second,
+      // brightening as he sinks
+      const pu=0.5+0.5*Math.sin(c.wobT*28), hot=1+sunk*0.6;
+      eTnt[n3]=(1.3+1.2*pu)*hot; eTnt[n3+1]=(0.55-0.35*pu); eTnt[n3+2]=(0.45-0.3*pu);
+      eDis[n]=Math.max(0,(0.25-k)/0.25); n++;
+      continue;
+    }
+    const k=c.life/0.45;
     eOff[n3]=c.x; eOff[n3+1]=0; eOff[n3+2]=c.z;
     eLean[n]=0;
     eScl[n2]=c.sc; eScl[n2+1]=Math.max(0.03,c.sc*k);
@@ -3050,7 +3543,7 @@ function dmgNum(x,y,z,val,color){
 const P={ x:2,z:2, vx:0,vz:0, yaw:0, pitch:0, r:0.27,
   hp:50, maxhp:50, mp:20, maxmp:20, lvl:1, xp:0, gold:0,
   str:3, dex:2, vit:2, swordTier:0, armor:0, hpots:1, mpots:1, keys:0, spellOrbs:0, kx:0, kz:0,
-  poisonT:0, poisonAcc:0, chillT:0, novaCool:0,
+  poisonT:0, poisonAcc:0, chillT:0,
   atkCool:0, spellCool:0, swing:-1, hurtFlash:0, bobT:0, regenT:0 };
 function xpNeed(){ return P.lvl*22; }
 function gainXP(n){
@@ -3060,15 +3553,25 @@ function gainXP(n){
     P.vit++; P.maxhp+=5; P.maxmp+=3; P.str+=1;
     if(P.lvl%2===0) P.dex++;
     P.hp=Math.min(P.maxhp,P.hp+10); P.mp=P.maxmp;
-    if(P.lvl===5) showMsg('FROST NOVA UNLOCKED - PRESS Q', 3, 0x9adcff);
-    else showMsg('LEVEL UP!  LV '+P.lvl, 2.2, 0x9aff9a);
+    showMsg('LEVEL UP!  LV '+P.lvl, 2.2, 0x9aff9a);
     SFX.level();
   }
+}
+// haptic feedback: Android browsers expose navigator.vibrate; iOS exposes
+// nothing, so this silently no-ops there. Throttled so AOE ticks and rapid
+// pickups cannot buzz continuously.
+let _hapT=0;
+function haptic(ms){
+  if(!navigator.vibrate) return;
+  const t=performance.now();
+  if(t-_hapT<80) return;
+  _hapT=t;
+  try{ navigator.vibrate(ms); }catch(e){}
 }
 function hurtPlayer(d,sx,sz){
   if(state.mode!=='play') return;
   d=Math.max(1, d-P.armor);
-  P.hp-=d; P.hurtFlash=0.5; SFX.hurt();
+  P.hp-=d; P.hurtFlash=0.5; SFX.hurt(); haptic(35);
   shake=Math.min(0.5, shake+0.08+d*0.015);
   if(sx!==undefined){
     const px=P.x-sx, pz=P.z-sz, l=Math.hypot(px,pz)||1;
@@ -3219,7 +3722,6 @@ function buildShopItems(){
     {id:'crystal',label:'MANA CRYSTAL +5',   price:70, stock:1},
     {id:'ricochet', label:'RICOCHET SIGIL',  price:60+(P.bounces||0)*30, stock:1},
     {id:'witchfire',label:'WITCHFIRE OIL',   price:70+(P.fireLvl||0)*35, stock:1},
-    {id:'echo',     label:'ECHO CRYSTAL',    price:80+(P.novaEcho||0)*40, stock:1},
     {id:'fang',     label:'VAMPIRE FANG',    price:55+(P.vamp||0)*15, stock:1},
   ];
   const a=ri(0,pool.length-1); let b2=ri(0,pool.length-1);
@@ -3260,8 +3762,6 @@ function buyShop(i){
       showMsg('ARC BOLT RICOCHETS x'+P.bounces,2.2,0x9adcff); SFX.level(); break;
     case 'witchfire': P.fireLvl=(P.fireLvl||0)+1;
       showMsg('ARC BOLT IGNITES - WITCHFIRE '+P.fireLvl,2.2,0xff9a4a); SFX.level(); break;
-    case 'echo': P.novaEcho=(P.novaEcho||0)+1;
-      showMsg('FROST NOVA ECHOES x'+P.novaEcho,2.2,0x9adcff); SFX.level(); break;
     case 'fang': P.vamp=(P.vamp||0)+2;
       showMsg('MELEE KILLS FEED YOU +'+P.vamp+' HP',2.2,0xff8a8a); SFX.level(); break;
     case 'crystal': P.maxmp+=5; P.mp+=5; SFX.level(); break;
@@ -3324,7 +3824,6 @@ document.addEventListener('keydown',e=>{
       if(e.code==='KeyE') interact();
       if(e.code==='Space') tryMelee();
       if(e.code==='KeyF') trySpell();
-      if(e.code==='KeyQ') tryNova();
     }
   }
   if(e.code==='Space') e.preventDefault();
@@ -3454,20 +3953,51 @@ function tryKeyUse(){
   return false;
 }
 function tryMelee(){
+  if(state.mode!=='play'||shopOpen) return;   // no abilities from menus or the grave
   if(P.atkCool>0||P.swing>=0||P.keySwing>=0) return;
+  // MERCHANT COURTESY: an "attack" aimed at the shopkeeper opens the shop
+  // instead - no swing animation, no swing sound (attacking the man you're
+  // about to buy potions from would read wrong). Two guards keep this out
+  // of combat entirely: the swing must contact NO enemy, and no living
+  // enemy may stand near him. Range matches interact (1.25) - barely past
+  // his own radius.
+  if(merchant && !shopOpen && state.mode==='play'){
+    const mdx=merchant.x-P.x, mdz=merchant.z-P.z;
+    const md5=Math.hypot(mdx,mdz);
+    if(md5<1.25){
+      let da=Math.atan2(mdx,mdz)-P.yaw;
+      while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
+      // at grappling distance the facing vector is numerical noise - you
+      // cannot meaningfully face AWAY from a man you are standing against
+      if(md5<0.5 || Math.abs(da)<0.95){
+        let flesh=false;
+        for(const e of enemies){
+          if(e.hp<=0) continue;
+          const ex=e.x-P.x, ez=e.z-P.z;
+          if(Math.hypot(ex,ez)<1.35+P.swordTier*SWORD_REACH_STEP){
+            let ea=Math.atan2(ex,ez)-P.yaw;
+            while(ea>Math.PI)ea-=2*Math.PI; while(ea<-Math.PI)ea+=2*Math.PI;
+            if(Math.abs(ea)<0.95){ flesh=true; break; }
+          }
+        }
+        const crowded=enemies.some(e=>e.hp>0 && Math.hypot(e.x-merchant.x,e.z-merchant.z)<3.2);
+        if(!flesh && !crowded){ openShop(); return; }
+      }
+    }
+  }
   P.swing=0; P.atkCool=Math.max(0.25, 0.45-P.dex*0.012); SFX.swing();
   // predict a wall strike NOW so the stone lands at 50ms into the swing sound
   // (the hit frame at 100-160ms is too late to keep the tuned lineup). Same
   // reach and arc the hit frame will use: wall ahead, no target in the arc,
   // not a door, not the stairwell.
   {
-    const reach=0.95+P.swordTier*0.09;
+    const reach=0.95+P.swordTier*SWORD_REACH_STEP;
     const fx3=P.x+Math.sin(P.yaw)*reach, fz3=P.z+Math.cos(P.yaw)*reach;
     let flesh=false;
     for(const e of enemies){
       if(e.hp<=0) continue;
       const ex=e.x-P.x, ez=e.z-P.z, d2=Math.hypot(ex,ez);
-      if(d2<1.35+P.swordTier*0.09){
+      if(d2<1.35+P.swordTier*SWORD_REACH_STEP){
         let da=Math.atan2(ex,ez)-P.yaw;
         while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
         if(Math.abs(da)<0.95){ flesh=true; break; }
@@ -3580,7 +4110,7 @@ function spawnFleshLightning(e,hitX,hitY,hitZ){
       ex3=Math.max(-HX,Math.min(HX,ex3)); ey3=Math.max(HY0,Math.min(HY1,ey3));
       if(Math.hypot(ex3-cx3,ey3-cy3)<0.02*e.sc) break;       // pinned at the edge
       const m=new THREE.Mesh(_sparkGeo,_sparkBaseMat.clone());
-      m.material.color.setHex(0xdff2ff);
+      m.material.color.setHex(spellPal().lightning);
       m.scale.set(2.6,2.6,1);
       worldGroup.add(m);
       parts.push({m, ax:cx3,ay:cy3, bx:ex3,by:ey3});
@@ -3592,20 +4122,39 @@ function spawnFleshLightning(e,hitX,hitY,hitZ){
   for(let c2=0;c2<N;c2++) chain(ox0,oy0,2+(Math.random()*2|0), c2/N*6.28+Math.random());
   if(parts.length) fleshArcs.push({e, parts, life:0.16+Math.random()*0.05, maxLife:0.21});
 }
+// the victim's feet-circle grows with the giants: the Lord (sc 2.0) and the
+// stair-guarding elites (sc 1.4) would otherwise swallow a 1.9 circle under
+// their bulk. Ordinary enemies keep the standard size.
+const CIRCLE_PULL=0;      // victim circle: fraction of its radius it rides toward the camera. 0 = centred on him (the height fix made the pull unnecessary)
+// The victim circle hugs whatever the victim stands on: floorSurfaceY gives
+// the rug/decal/stone height there and the three layers sit 4/10/16mm above
+// it, re-evaluated every frame as he moves. (At the old fixed 0.08 the ring's
+// chord at the sprite plane sat a visible hand above the feet line - it read
+// as floating up his shins; seen in the headless screenshot rig.)
+const VICTIM_LAYER0=0.004, VICTIM_LAYER_STEP=0.006;   // layers sit 4/10/16mm above whatever surface floorSurfaceY reports
+function victimCircleY(x,z){ return floorSurfaceY(x,z); }   // base: the surface itself; layers add their own clearance
+function victimCircleMul(e){ return (e.boss||e.elite) ? Math.max(1, e.sc/0.85) : e.type==='ogre' ? 1.3 : 1; }   // ogres: a touch wider than the standard
 function spawnCastCircle(x,y,z,nx,ny,nz,sizeMul,life,alpha,follow){
   // the arcane circle, stamped wherever the spell BITES: flush on struck
   // stone, or flat on the ground at a struck creature's feet.
   sizeMul=sizeMul===undefined?1:sizeMul; life=life===undefined?0.5:life;
+  // GROUND stamps (floor bursts, victims' feet) sit on the actual surface at
+  // that spot - rug or stone - with tight layer spacing; wall/ceiling stamps
+  // keep their face clearance. The caller's y is ignored for ground stamps.
+  const ground=ny>0.9;
+  if(ground) y=floorSurfaceY(x,z);
   const texes=castTexes();
-  const spec=[[0x3a63d9, 0.27, 2.2],    // color, size, spin rad/s
-              [0x6fa3ff, 0.21,-3.4],    // opposing
-              [0xbfe0ff, 0.15, 4.8]];
+  const pc=spellPal().circle;
+  const spec=[[pc[0], 0.27, 2.2],    // color, size, spin rad/s
+              [pc[1], 0.21,-3.4],    // opposing
+              [pc[2], 0.15, 4.8]];
   const layers=[];
   for(let i=0;i<3;i++){
     const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
       new THREE.MeshBasicMaterial({map:texes[i], transparent:true, depthWrite:false,
         blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false, color:spec[i][0]}));
-    m.position.set(x+nx*(0.03+i*0.012), y+ny*(0.03+i*0.012), z+nz*(0.03+i*0.012));
+    const lo=(ground||follow) ? VICTIM_LAYER0+i*VICTIM_LAYER_STEP : 0.03+i*0.012;   // a stamp clears its wall; a ground stamp hugs its floor
+    m.position.set(x+nx*lo, y+ny*lo, z+nz*lo);
     if(Math.abs(ny)>0.9) m.rotation.x=-Math.PI/2*Math.sign(ny);   // ground/ceiling: lie flat
     else m.lookAt(x+nx, y, z+nz);
     m.rotateZ(Math.random()*6.28);
@@ -3613,7 +4162,9 @@ function spawnCastCircle(x,y,z,nx,ny,nz,sizeMul,life,alpha,follow){
     worldGroup.add(m);
     layers.push({m, w:spec[i][2], s0:spec[i][1]*sizeMul});
   }
-  castCircles.push({layers, life:life, maxLife:life, alpha:alpha===undefined?0.38:alpha, follow:follow||null, ny:ny});
+  const cc={layers, life:life, maxLife:life, alpha:alpha===undefined?0.38:alpha, follow:follow||null, ny:ny};
+  if(!follow && spellPal()===SPELL_PAL.fire) cc.flames=stampFlames(x,y,z,nx,ny,nz,layers[0].s0*0.5);   // witchfire: the stamp burns (victims burn on their own body)
+  castCircles.push(cc);
 }
 function spawnImpactRing(x,y,z,nx,ny,nz,color,s0){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
@@ -3639,7 +4190,7 @@ function spawnImpactArcs(x,y,z,nx,ny,nz){
       const len=0.08+Math.random()*0.07, jig=ang+(Math.random()-0.5)*1.3;
       const dx3=(tx*Math.cos(jig)+ux*Math.sin(jig)), dy3=(ty*Math.cos(jig)+uy*Math.sin(jig)), dz3=(tz*Math.cos(jig)+uz*Math.sin(jig));
       const m=new THREE.Mesh(_sparkGeo, _sparkBaseMat.clone());
-      m.material.color.setHex(0x9adcff);
+      m.material.color.setHex(spellPal().arcs);
       m.position.set(px3+dx3*len/2, py3+dy3*len/2, pz3+dz3*len/2);
       m.lookAt(px3+dx3, py3+dy3, pz3+dz3);
       m.scale.set(1.4,1.4,len);
@@ -3659,9 +4210,10 @@ function spawnImpactArcs(x,y,z,nx,ny,nz){
 // land instantly now takes ~0.7s of standing in the glyph, and scattering
 // forfeits the remaining ticks. Fields on a struck creature RIDE them like
 // their circle does; ground/wall fields anchor.
-// THE RULE stands: field ticks carry RAW damage only - riders (witchfire burn,
-// any future on-hit effect) belong to the direct impact alone. Aggro from
-// being ticked and xp/gold from field kills are deliberate keeps.
+// Field ticks carry RAW damage (the CONTRACT: marked target sums to exactly D).
+// WITCHFIRE is the exception by design: a witchfire field ignites everyone it
+// ticks (see the tick loop). Aggro from being ticked and xp/gold from field
+// kills are deliberate keeps.
 const boltFieldTicks=(p)=>{
   const total=Math.max(1,Math.round(p.dmg*0.45));
   const b2=Math.floor(total/3), r2=total-b2*3;
@@ -3669,7 +4221,7 @@ const boltFieldTicks=(p)=>{
 };
 const aoeFields=[];
 function spawnBoltField(x,z,ticks,follow){
-  aoeFields.push({x,z, follow:follow||null, ticks:ticks.slice(), idx:0, t:0, interval:0.35});
+  aoeFields.push({x,z, follow:follow||null, ticks:ticks.slice(), idx:0, t:0, interval:0.35, fire:P.fireLvl>0});   // fire: this field ignites what it ticks
 }
 function simBoltFields(dt){
   for(let i=aoeFields.length-1;i>=0;i--){
@@ -3680,7 +4232,13 @@ function simBoltFields(dt){
       const d2=f.ticks[f.idx];
       if(d2>0) for(const e2 of enemies.slice()){
         if(e2.hp<=0) continue;
-        if(Math.hypot(e2.x-f.x,e2.z-f.z)<0.95) damageEnemy(e2,d2);
+        if(Math.hypot(e2.x-f.x,e2.z-f.z)<0.95){
+          damageEnemy(e2,d2);
+          // WITCHFIRE SPREADS: anyone the lingering circle ticks catches fire too
+          // (field damage itself stays raw - the burn is the rider, and it now
+          // rides every tick, not only the impact)
+          if(f.fire && e2.hp>0){ e2.burnT=Math.max(e2.burnT||0, 1.5+P.fireLvl); igniteBurnFlames(e2); }
+        }
       }
       f.idx++; f.t=f.interval;
       if(f.idx>=f.ticks.length) aoeFields.splice(i,1);
@@ -3704,20 +4262,23 @@ function boltImpactFX(x,y,z,bx2,bz2,opt){
     for(let i2=0;i2<12;i2++){
       const th=Math.random()*6.28, phi=Math.acos(2*Math.random()-1), rr=0.1+Math.random()*0.26;
       wakeEmit(x+Math.sin(phi)*Math.cos(th)*rr, y+Math.cos(phi)*rr*0.8, z+Math.sin(phi)*Math.sin(th)*rr,
-        WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.03+Math.random()*0.026);
+        spellPal().wake[(Math.random()*3)|0], Math.random()*6.28, 0.016+Math.random()*0.014);
     }
-    spawnSparks(x,y,z,0,0,{radial:true, n:5, slow:true, shadeHexes:[0x4073ff,0x80c7ff,0xccefff]});
-    spawnImpactPop(x,y,z, 0x9adcff, 0.68);
-    spawnImpactPop(x,y,z, 0xccefff, 0.4, 0.05);
-    dynLights.push({x,y,z, r:0.55,g:0.85,b:1, i:2.4, life:0.2});
+    { const pal=spellPal();
+    spawnSparks(x,y,z,0,0,{radial:true, n:5, slow:true, shadeHexes:pal.sparks});
+    spawnImpactPop(x,y,z, pal.pop[0], 0.68);
+    spawnImpactPop(x,y,z, pal.pop[1], 0.4, 0.05);
+    dynLights.push({x,y,z, r:pal.hitLight[0],g:pal.hitLight[1],b:pal.hitLight[2], i:2.4, life:0.2}); }
     return;
   }
   // ground-lying stamps match the victim's mark; walls stay tighter since
   // face-on viewing already reads larger
-  spawnCastCircle(x,y,z,nx,ny,nz, Math.abs(ny)>0.9?1.9:1.1, Math.abs(ny)>0.9?1.15:0.9, 0.95);
+  // one size everywhere: the circle telegraphs a damage field of identical
+  // radius on every surface, so it claims identical space on every surface
+  spawnCastCircle(x,y,z,nx,ny,nz, 1.9, Math.abs(ny)>0.9?1.15:0.9, 0.95);
   spawnImpactArcs(x,y,z,nx,ny,nz);
-  spawnImpactPop(x,y,z, 0x9adcff, 0.55);
-  dynLights.push({x,y,z, r:0.55,g:0.85,b:1, i:2.0, life:0.18});
+  { const pal=spellPal(); spawnImpactPop(x,y,z, pal.pop[0], 0.55);
+  dynLights.push({x,y,z, r:pal.hitLight[0],g:pal.hitLight[1],b:pal.hitLight[2], i:2.0, life:0.18}); }
 }
 function attachBoltFly(p){
   // the bolt carries its own burn: a looping turbulence source whose volume is
@@ -3753,9 +4314,12 @@ function attachBoltFly(p){
   }catch(e){}
 }
 function stopBoltFly(p){
+  if(p._rib){ p._rib[0].alive=false; p._rib[1].alive=false; p._rib=null; }
+  if(!p.hostile && p.spr && p.spr.material && p.spr.material.dispose) p.spr.material.dispose();
   if(p.fly){ try{ p.fly.g.gain.value=0.0001; p.fly.src.stop(); if(p.fly.zsrc) p.fly.zsrc.stop(); }catch(e){} p.fly=null; }
 }
 function trySpell(){
+  if(state.mode!=='play'||shopOpen) return;   // no abilities from menus or the grave
   if(P.spellCool>0) return;
   if(P.mp<5){ showMsg('NOT ENOUGH MANA',1.2,0x8ab0ff); return; }
   P.mp-=5; P.spellCool=0.6; SFX.spell();
@@ -3768,62 +4332,52 @@ function trySpell(){
     // 0.55 = the camera's true eye height (see the frame() camera block).
     // This was 0.62 - a stale constant that converged every bolt onto a point
     // 7cm ABOVE the real sight ray, visibly overshooting the crosshair.
-    const tx3=P.x+Math.sin(a)*cp*6, ty3=0.55+sy*6, tz3=P.z+Math.cos(a)*cp*6;
-    const ox3=P.x+Math.sin(a)*0.45, oy3=0.16, oz3=P.z+Math.cos(a)*0.45;
-    let vx3=tx3-ox3, vy3=ty3-oy3, vz3=tz3-oz3;
-    const vl=Math.hypot(vx3,vy3,vz3)||1;
-    vx3=vx3/vl*9; vy3=vy3/vl*9; vz3=vz3/vl*9;
+    // converge FAST and from BELOW ONLY: the bolt tracks the sight ray's
+    // height directly, carrying a vertical offset that decays exponentially
+    // (closed ~2.2u out). An aim-at-a-point chord overshoots when steep -
+    // it crosses the ray then bounces back; a decaying offset cannot cross.
+    // launch in the CAMERA'S frame: 0.45 ahead, 0.39 below the view axis -
+    // the spawn holds the same spot at the bottom of the view at ANY pitch.
+    // (A fixed world height slid into frame on down-aims and sank far out of
+    // frame on up-aims.) Level aim reproduces the old numbers exactly.
+    const DOWN=0.39;
+    const ox3=P.x+Math.sin(a)*(cp*0.45+sy*DOWN);
+    const oy3=Math.max(0.06, 0.55+sy*0.45-cp*DOWN);
+    const oz3=P.z+Math.cos(a)*(cp*0.45+sy*DOWN);
+    const vx3=Math.sin(a)*cp*9, vz3=Math.cos(a)*cp*9, vy3=sy*9;   // the ray's own rates
+    const _hx0=Math.random()*6.28;
+    const vl=2.2;   // nominal converge distance (kept for cruiseAt semantics)
     const bsc=Math.abs(sp)<0.01?0.3:0.24;
-    const s=makeSprite(TEX.bolt, bsc, 'add'); s.center.set(0.5,0.5);
+    // both additive: the near-white heart saturates to a solid body; a pure
+    // red additive sprite only adds the red channel and read as a tint
+    const pal=spellPal();
+    const s=makeSprite(TEX[pal.boltTex], bsc, pal.boltBlend); s.center.set(0.5,0.5);
+    s.material=s.material.clone();   // private: each bolt spins on its own phase
+    if(pal.boltBlend==='shared'){ s.material.fog=false; s.material.needsUpdate=true; }   // never dimmed by distance fog
     s.position.set(ox3, oy3, oz3);
     s.scale.set(bsc*2.7, bsc*2.7, 1);
     projectiles.push({spr:s, x:ox3, z:oz3, y:oy3,
       dx:vx3, dz:vz3, dy:vy3, dmg:(Math.abs(sp)<0.01?6:3)+P.lvl, hostile:false, life:2, bounce:P.bounces||0,
       baseSc:bsc, age:0, cruiseDy:Math.sin(P.pitch)*9,   // the look ray's vertical rate
-      cruiseAt:vl/9});                                   // this bolt's exact ray-crossing time
+      vOff:(0.55+Math.tan(P.pitch)*Math.hypot(ox3-P.x,oz3-P.z))-oy3,  // start this far BELOW the ray
+      cruiseAt:vl/9,                                     // this bolt's exact ray-crossing time
+      hxPh:_hx0, _pb:[ox3,oy3,oz3,_hx0],   // trail anchored at the TRUE muzzle:
+      // without this seed the first frame interpolates current-to-current and
+      // the spawn-to-frame-1 stretch never exists - a huge on-screen gap at
+      // point-blank camera distance (the trail 'started mid screen')
+      sx:ox3, sz:oz3, ex:P.x, ez:P.z, aimPitch:P.pitch,  // aim geometry: the RAY
+      // starts at the EYE (ex,ez), not the hand - all reticle-truth distances
+      // measure from there (measuring from the hand overshot every down-aim
+      // by the 0.45 hand offset - nearly double at steep angles)
+      // where the AIM RAY meets the floor (down-aims): the bolt skims until
+      // it has traveled this far, then bursts AT the aimed point instead of
+      // burying itself short during its launch dive
+      floorAimD: P.pitch<-0.02? Math.min(17.5,(0.55-0.12)/Math.tan(-P.pitch)) : undefined});
     if(Math.abs(sp)<0.01) attachBoltFly(projectiles[projectiles.length-1]);
   }
-  // muzzle: hanging slivers only - the arcane circle appears where the
-  // spell BITES (on the struck wall, or under the struck creature)
-  { const mx=P.x+Math.sin(P.yaw)*0.5, mz=P.z+Math.cos(P.yaw)*0.5;
-    wakePuff(mx, 0.24, mz, 5, 0.13); }
+  // muzzle: NOTHING. The twin light-ribbons ignite from the hand - under
+  // the ribbon shader a scattered puff rendered as chunky disconnected bars.
   dynLights.push({x:P.x+Math.sin(P.yaw)*0.5, y:0.3, z:P.z+Math.cos(P.yaw)*0.5, r:0.55,g:0.85,b:1, i:1.1, life:0.15});
-}
-function spawnNovaWave(x,z){
-  // expanding shockwave: two staggered ground rings + a radial shell of frost particles
-  for(const d of [0,0.09]){
-    const rg=new THREE.RingGeometry(0.86,1.0,44); rg.rotateX(-Math.PI/2);
-    const rm=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:0x9adcff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-    rm.position.set(x,0.07,z); rm.scale.setScalar(0.25); rm.visible=false;
-    worldGroup.add(rm); novaWaves.push({m:rm,t:-d});
-  }
-  if(!pMat.uniforms.map.value) pMat.uniforms.map.value=TEX.spark;
-  for(let a=0;a<40;a++){
-    const an=a/40*Math.PI*2+(Math.random()-0.5)*0.12;
-    const sp=4.4+Math.random()*0.9;
-    spawnP({x:x+Math.cos(an)*0.35, y:0.12+Math.random()*0.35, z:z+Math.sin(an)*0.35,
-      vx:Math.cos(an)*sp, vy:0.3+Math.random()*0.5, vz:Math.sin(an)*sp,
-      life:0.42+Math.random()*0.22, r:0.6,g:0.87,b:1, size:0.085, growth:-0.05, grav:-0.35, drag:2.4});
-  }
-  burst(x,0.4,z,0xcfefff,10,1.6);
-}
-function tryNova(){
-  if(P.lvl<5) return; // undiscovered until unlocked
-  if(P.novaCool>0) return;
-  if(P.mp<8){ showMsg('NOT ENOUGH MANA',1.2,0x8ab0ff); return; }
-  P.mp-=8; P.novaCool=4; SFX.nova(); shake=Math.min(0.5,shake+0.15);
-  dynLights.push({x:P.x,y:0.6,z:P.z, r:0.5,g:0.85,b:1, i:2.2, life:0.4});
-  novaBlast(P.x,P.z,1);
-  if(P.novaEcho>0) novaEchoes.push({t:0.85, left:P.novaEcho});
-}
-function novaBlast(x,z,mult){
-  spawnNovaWave(x,z);
-  for(const e of enemies.slice()){
-    if(Math.hypot(e.x-x,e.z-z)<2.3){
-      e.slowT=2.2;
-      damageEnemy(e, Math.max(1, ((8+P.lvl*2)*mult)|0));
-    }
-  }
 }
 function bossRing(e,opts){
   // artillery wave: a full circle of projectiles. Called twice per cataclysm -
@@ -3857,31 +4411,56 @@ function bossRing(e,opts){
   shake=Math.min(0.5, shake+0.3);
   sfxAt(e.x,e.z,()=>{ noiseHit(0.55,0.32,220); beep(84,0.55,'sawtooth',0.1,-46); });
 }
+const BOSS_WAVE_WEIGHT={ ogre:[0.45,2.6], imp:[0.6,2.2] };
+const BOSS_EARLY_KINDS=['rat','skel'];   // the only kinds he summons above 80% hp
+const BOSS_COURT_CAP=14;          // living minions the hall holds before a wave is trimmed
+const BOSS_DESPERATE_RIT=22;      // seconds after a desperate (9-body) wave before the next ritual   // [above 40% hp, below]; unlisted kinds weigh 1
+function BOSS_WAVE_ROSTER(){ return Object.keys(TYPES).filter(k=>!TYPES[k].boss && !TYPES[k].elite).map(k=>TYPES[k]); }
 function spawnBossWave(e){
   // queue the arrivals: they POP IN one at a time, rapid-fire, each announced
   // by his own little green shockwave crack
   e.wave=(e.wave||0)+1;
   sfxAt(e.x,e.z,SFX.growl,1.2); SFX.rumble();
   burst(e.x,1.1,e.z,0xd0a0ff,24,2.4);
-  const defs=[TYPES.skel,TYPES.imp,TYPES.wraith];
-  let count=2+Math.min(5, e.wave-1);                 // 2 at first, up to 7 later
-  if(e._hp0 && e.hp/e._hp0<0.4) count++;             // desperation calls deeper
+  // the whole bestiary answers him: every non-boss, non-elite kind, drawn
+  // evenly from the first wave on (rats to ogres)
+  const hpFrac=e._hp0?e.hp/e._hp0:1;
+  // fresh (above 80%) he calls only vermin - rats and skeletons; the full
+  // bestiary answers once he is bloodied
+  const defs=hpFrac>0.8 ? BOSS_WAVE_ROSTER().filter(d=>BOSS_EARLY_KINDS.includes(d.tex)) : BOSS_WAVE_ROSTER();
+  const desperate=hpFrac<0.4;
+  let count=desperate?9:6;                           // six every time, nine below 40%
+  // the court has a ceiling: a wave only fills the hall up to BOSS_COURT_CAP
+  // living minions - the desperate waves are big, not endless
+  const living=enemies.filter(en=>!en.boss).length + (e.wq?e.wq.length:0);
+  count=Math.max(0, Math.min(count, BOSS_COURT_CAP-living));
+  e.lastWaveDesperate=desperate;
+  // the pick is weighted: while he is strong the heavy hitters (ogre, imp)
+  // are rare; once desperate he leans on them
+  const wOf=(d)=>BOSS_WAVE_WEIGHT[d.tex]?BOSS_WAVE_WEIGHT[d.tex][desperate?1:0]:1;
+  const wSum=defs.reduce((a,d)=>a+wOf(d),0);
   e.wq=e.wq||[]; e.wqT=0;
   for(let i=0;i<count;i++){
-    const d=defs[ri(0,Math.min(defs.length-1, 1+((e.wave/2)|0)))];
-    for(let t2=0;t2<18;t2++){
+    let d=defs[defs.length-1], roll=rnd()*wSum;
+    for(const dd of defs){ roll-=wOf(dd); if(roll<0){ d=dd; break; } }
+    for(let t2=0;t2<30;t2++){
       // they tear through AT HIS SIDE: a tight ring around the Lord himself,
       // never on top of the player but instantly in the fight
       const ang=Math.random()*Math.PI*2, r=1.6+Math.random()*1.7;
       const sx2=e.x+Math.cos(ang)*r, sz2=e.z+Math.sin(ang)*r;
       if(!solid(sx2,sz2) && Math.hypot(sx2-P.x,sz2-P.z)>2.0){
         e.wq.push({d, x:sx2, z:sz2});
+        // a lone rat is no summons: rats arrive as a pair, the second at its side
+        if(d.tex==='rat'){ const a2=ang+0.6, x3=e.x+Math.cos(a2)*r, z3=e.z+Math.sin(a2)*r;
+          e.wq.push({d, x:(!solid(x3,z3)&&Math.hypot(x3-P.x,z3-P.z)>2.0)?x3:sx2, z:(!solid(x3,z3)&&Math.hypot(x3-P.x,z3-P.z)>2.0)?z3:sz2}); }
         break;
       }
     }
   }
 }
-function popWaveArrival(e){
+function popWaveArrival(e,silent){
+  // silent: the second arrival of a pair shares the first one's crack (one
+  // sound per beat, however many land on it)
   const a=e.wq.shift();
   if(!a || enemies.length>=40) return;
   spawnEnemy(a.d, a.x, a.z, 1.35, 1.25);
@@ -3890,6 +4469,8 @@ function popWaveArrival(e){
   spawnShockRing(a.x, a.z, 0x39d962, 0.5, 0.32);
   burst(a.x, 0.5, a.z, 0x55ff77, 10, 1.6);
   dynLights.push({x:a.x,y:0.6,z:a.z, r:0.25,g:1,b:0.35, i:1.8, life:0.3});
+  if(silent) return;
+  window._arrivalCracks=(window._arrivalCracks||0)+1;
   sfxAcross(a.x, a.z, ()=>{
     noiseHit(0.12,0.4,2800);                         // the crack of torn air
     beep(430,0.16,'square',0.13,-240);               // zap settling downward
@@ -3917,7 +4498,6 @@ hpFill.geometry.translate(100,0,0); mpFill.geometry.translate(75,0,0); xpFill.ge
 const txtHP=new GLText(15,0xffb0a0), txtMP=new GLText(15,0xa0c0ff), txtLV=new GLText(16,0xd7c9ff);
 const txtGold=new GLText(16,0xf1d06a), txtFloor=new GLText(16,0xcfd6e0,'right'), txtKeys=new GLText(16,0xf1d06a);
 const txtStats=new GLText(13,0x8890a0);
-const txtNova=new GLText(13,0x9adcff);
 const txtPots=new GLText(15,0xffffff);
 const msgText=new GLText(24,0xffffff,'center'); let msgTime=0;
 const subText=new GLText(15,0x9aa0b0,'center');
@@ -3949,67 +4529,118 @@ function texChevron(){
   return toTex(c);
 }
 function texVersal(){
-  // a real manuscript initial: diapered crimson field, white pen filigree,
-  // acanthus leaves, a gold B with flourished serifs, gems, bosses and pearls
-  const W=96,[c,x]=cnv(W,W);
-  // double gold frame with corner bosses
+  // THE ILLUMINATED B - stroke-built versal, sculpted by eye in the render
+  // rig (rig/versal): a slender waisted stem, two graceful bowls with a
+  // spur, and the crown flowing into one continuous tapering sweep down the
+  // whole left margin - hairline at its waist - landing in the foot serif.
+  // Dressed: diapered crimson, gold pin-dots, corner bosses, right-margin
+  // pen flourishes, vine-filled burnished gold body, dark ring, umber
+  // contour inline, lit edge, berries in the counters.
+  // supersampled 3x: the texture displays LARGER than 96px at the gate, so
+  // drawing at 96 then upscaling blurred every stroke. 288px internal, same
+  // 96-unit coordinates - pixel-art frame stays crisp, strokes gain subpixel.
+  const W=96, SS=3, [c,x]=cnv(W*SS,W*SS);
+  x.scale(SS,SS);
+  // ---- frame + field ----
   x.fillStyle='#e8c33a'; x.fillRect(0,0,W,W);
   x.fillStyle='#7c5a16'; x.fillRect(2,2,W-4,W-4);
   x.fillStyle='#e8c33a'; x.fillRect(3,3,W-6,W-6);
-  x.fillStyle='#4a1018'; x.fillRect(7,7,W-14,W-14);
+  x.fillStyle='#4a1018'; x.fillRect(6,6,W-14+2,W-12);
   for(const [bx,by] of [[0,0],[W-9,0],[0,W-9],[W-9,W-9]]){
     x.fillStyle='#b8922a'; x.fillRect(bx,by,9,9);
     x.fillStyle='#e8c33a'; x.fillRect(bx+1,by+1,7,7);
     x.fillStyle='#8a1a22'; x.fillRect(bx+3,by+3,3,3);
   }
-  // diapered field: dark lattice with gold pin-dots at the crossings
-  x.fillStyle='#3a0c12';
-  for(let d=-W;d<W*2;d+=12){
-    for(let i=0;i<W;i++){ const yy=i, xx=d+i; if(xx>=8&&xx<W-8&&yy>=8&&yy<W-8) x.fillRect(xx,yy,1,1);
-      const xx2=d-i; if(xx2>=8&&xx2<W-8&&yy>=8&&yy<W-8) x.fillRect(xx2,yy,1,1); }
-  }
-  x.fillStyle='#b8922a';
-  for(let yy=14;yy<W-8;yy+=12) for(let xx=14;xx<W-8;xx+=12) x.fillRect(xx,yy,2,2);
-  // white pen filigree: curling hairline spirals in the counters of the field
-  x.fillStyle='rgba(240,236,224,0.85)';
-  const spiral=(sx,sy,s)=>{ const pts=[[0,0],[2,-1],[4,-1],[6,0],[7,2],[6,4],[4,5],[2,4],[2,2],[3,1]];
-    for(const [ax,ay] of pts) x.fillRect(sx+ax*s, sy+ay*s, 1, 1); };
-  spiral(13,20,1); spiral(74,20,1); spiral(13,66,1); spiral(74,66,1);
-  spiral(16,42,1); spiral(72,42,1);
-  // acanthus leaves sprouting from the inner corners
-  x.fillStyle='#5a7a30';
-  for(const [lx,ly,mx] of [[9,9,1],[W-11,9,-1],[9,W-13,1],[W-11,W-13,-1]]){
-    x.fillRect(lx,ly,4,2); x.fillRect(lx+(mx>0?3:-1),ly+2,3,2); x.fillRect(lx+(mx>0?5:-3),ly+4,2,2);
-  }
-  x.fillStyle='#7a9a44';
-  for(const [lx,ly] of [[10,10],[W-9,10],[10,W-11],[W-9,W-11]]) x.fillRect(lx,ly,2,1);
-  // the letter: black ring, gold gradient body, white lit edge, red inline
-  x.font='bold 60px "Courier New",monospace'; x.textAlign='center'; x.textBaseline='middle';
-  x.fillStyle='#0d0508';
-  for(const o of [[-3,0],[3,0],[0,-3],[0,4],[3,3],[-3,3],[3,-2],[-3,-2],[0,2]])
-    x.fillText('B',47+o[0],48+o[1]);
-  const bg=x.createLinearGradient(0,20,0,78);
-  bg.addColorStop(0,'#fff2b0'); bg.addColorStop(0.35,'#e8c33a');
-  bg.addColorStop(0.7,'#c89a2c'); bg.addColorStop(1,'#8a6a1e');
-  x.fillStyle=bg; x.fillText('B',47,48);
-  x.fillStyle='rgba(255,250,220,0.9)'; x.font='bold 54px "Courier New",monospace';
-  x.fillText('B',46,46);                                     // inner lit face
-  x.fillStyle='#a02020'; x.font='bold 40px "Courier New",monospace';
-  x.fillText('B',47,48);                                     // crimson inline heart
-  x.fillStyle='#ffe9a0'; x.font='bold 34px "Courier New",monospace';
-  x.fillText('B',47,47);                                     // gold core
-  // flourished serifs: curls off the stem head and foot
+  x.fillStyle='#380b11';
+  for(let d=-W;d<W*2;d+=10) for(let i2=0;i2<W;i2++){ const xx=d+i2,xx2=d-i2;
+    if(xx>=8&&xx<W-8&&i2>=8&&i2<W-8) x.fillRect(xx,i2,1,1);
+    if(xx2>=8&&xx2<W-8&&i2>=8&&i2<W-8) x.fillRect(xx2,i2,1,1); }
+  x.fillStyle='#a8842a';
+  for(let yy=13;yy<W-8;yy+=10) for(let xx=13;xx<W-8;xx+=10) x.fillRect(xx,yy,1,1);
+  try{
+  // ---- pen flourishes, right margin (the letter owns the left) ----
+  const cub=(p,t)=>{ const u=1-t; return [
+    u*u*u*p[0][0]+3*u*u*t*p[1][0]+3*u*t*t*p[2][0]+t*t*t*p[3][0],
+    u*u*u*p[0][1]+3*u*u*t*p[1][1]+3*u*t*t*p[2][1]+t*t*t*p[3][1]]; };
+  const dab=(px2,py,w)=>{ const n=Math.max(1,Math.round(w));
+    for(let k=0;k<n;k++){ const off=k-(n-1)/2;
+      x.fillRect(Math.round(px2+off*0.77),Math.round(py-off*0.64),1,1);
+      if(w>1.6) x.fillRect(Math.round(px2+off*0.77),Math.round(py-off*0.64)+1,1,1); } };
+  const swash=(pts,wMax,pr)=>{ for(let i2=0;i2<=110;i2++){ const t=i2/110,[qx,qy]=cub(pts,t);
+    const w=pr==='out'?0.6+(wMax-0.6)*Math.pow(1-t,1.4):0.6+(wMax-0.6)*Math.pow(Math.sin(Math.PI*t),0.85);
+    dab(qx,qy,w); } };
+  const spir=(cx,cy,r0,tn,dir,wm)=>{ for(let i2=0;i2<=130;i2++){ const t=i2/130;
+    const a=dir*t*tn*6.283, r=r0*Math.pow(1-t*0.92,1.25);
+    dab(cx+Math.cos(a)*r, cy+Math.sin(a)*r*0.92, 0.6+(wm-0.6)*Math.pow(1-t,1.2)); }
+    x.fillRect(Math.round(cx)-1,Math.round(cy)-1,2,2); };
   x.fillStyle='#e8c33a';
-  x.fillRect(26,20,10,3); x.fillRect(24,23,3,4); x.fillRect(26,73,10,3); x.fillRect(24,69,3,4);
-  x.fillStyle='#fff2b0'; x.fillRect(26,20,10,1); x.fillRect(26,73,10,1);
-  // azure gems at the edge midpoints, pearls beside the bosses
-  for(const [gx,gy] of [[W/2-2,1],[W/2-2,W-6],[1,W/2-2],[W-6,W/2-2]]){
-    x.fillStyle='#2a3a7a'; x.fillRect(gx,gy,5,5);
-    x.fillStyle='#8ab0ff'; x.fillRect(gx+1,gy+1,2,2);
+  swash([[42,82],[62,93],[82,90],[90,76]],2.6,'mid'); spir(89,74,6,1.1,1,1.6);
+  swash([[60,14],[74,3],[90,6],[92,22]],2.6,'out');   spir(91,23,6,1.15,1,1.6);
+  // ---- the letter: stroke-built polygons (sculpted coordinates) ----
+  const catmull=(A)=>{ const pts=[];
+    for(let i2=0;i2<A.length-1;i2++){
+      const p0=A[Math.max(0,i2-1)],p1=A[i2],p2=A[i2+1],p3=A[Math.min(A.length-1,i2+2)];
+      for(let k=0;k<18;k++){ const t=k/18,t2=t*t,t3=t2*t;
+        pts.push([
+          0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+          0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)]); } }
+    pts.push(A[A.length-1].slice()); return pts; };
+  const strokePoly=(A,widths)=>{ const pts=catmull(A), N=pts.length, L=[], R=[];
+    const wAt=t=>{ for(let i2=0;i2<widths.length-1;i2++){ const [t0,w0]=widths[i2],[t1,w1]=widths[i2+1];
+        if(t<=t1) return w0+(w1-w0)*Math.max(0,(t-t0))/(t1-t0); } return widths[widths.length-1][1]; };
+    for(let i2=0;i2<N;i2++){ const t=i2/(N-1);
+      const a=pts[Math.max(0,i2-1)], b=pts[Math.min(N-1,i2+1)];
+      let nx=-(b[1]-a[1]), ny=b[0]-a[0]; const nl=Math.hypot(nx,ny)||1; nx/=nl; ny/=nl;
+      const w=wAt(t)/2;
+      L.push([pts[i2][0]+nx*w, pts[i2][1]+ny*w]); R.push([pts[i2][0]-nx*w, pts[i2][1]-ny*w]); }
+    return L.concat(R.reverse()); };
+  const ellipseStroke=(cx,cy,rx,ry,a0,a1,widths)=>{ const A=[];
+    for(let i2=0;i2<=14;i2++){ const a=a0+(a1-a0)*i2/14; A.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]); }
+    return strokePoly(A,widths); };
+  const POLYS=[
+    strokePoly([[36,15],[34,30],[33,46],[34,64],[36,82]],[[0,8.5],[0.5,7],[1,9]]),
+    strokePoly([[49,17.2],[38,12.6],[25,11.5],[14,15.5],[7,27],[5,44],[7,60],[12,72.5],[19,80],[30,83.6]],
+      [[0,4.2],[0.18,5.6],[0.42,3.0],[0.62,2.2],[0.82,3.6],[1,5]]),
+    strokePoly([[26,83],[34,81],[41,81.6]],[[0,5],[1,4.2]]),
+    ellipseStroke(49,29.5,17,13,-2.7,2.7,[[0,5.5],[0.28,8],[0.62,8],[1,5.5]]),
+    ellipseStroke(52,61,21.5,18,-2.7,2.7,[[0,6],[0.32,9.5],[0.68,9.5],[1,6]]),
+  ];
+  const tracePath=(ctx)=>{ ctx.beginPath();
+    for(const poly of POLYS){ ctx.moveTo(poly[0][0],poly[0][1]);
+      for(let i2=1;i2<poly.length;i2++) ctx.lineTo(poly[i2][0],poly[i2][1]);
+      ctx.closePath(); } };
+  // dark ring under everything
+  tracePath(x); x.strokeStyle='#140a06'; x.lineWidth=4.4; x.lineJoin='round'; x.stroke();
+  // vine-filled burnished body via mask
+  const [oc,og]=cnv(W*SS,W*SS); og.scale(SS,SS);
+  tracePath(og); og.fillStyle='#000'; og.fill();
+  og.globalCompositeOperation='source-atop';
+  const gg=og.createLinearGradient(0,8,0,88);
+  gg.addColorStop(0,'#fce9a0'); gg.addColorStop(0.5,'#e8c33a'); gg.addColorStop(1,'#8a6716');
+  og.fillStyle=gg; og.fillRect(0,0,W,W);
+  og.fillStyle='#2c4418';
+  for(let yy=8;yy<88;yy++){ const vx=46+Math.sin(yy*0.22)*13; og.fillRect(Math.round(vx),yy,2,1); }
+  og.fillStyle='#5a7a30';
+  for(let yy=12;yy<86;yy+=9){ const vx=46+Math.sin(yy*0.22)*13, s2=(yy/9)%2?1:-1;
+    og.fillRect(Math.round(vx+s2*2),yy,3,2); og.fillRect(Math.round(vx+s2*4),yy-1,2,2); }
+  og.fillStyle='#8a1a22';
+  for(const yy of [20,46,72]){ const vx=46+Math.sin(yy*0.22)*13; og.fillRect(Math.round(vx-2),yy,2,2); }
+  x.drawImage(oc,0,0,W,W);   // draw back in logical units (context is scaled)
+  // contour inline + lit edge
+  tracePath(x); x.strokeStyle='#5c470f'; x.lineWidth=1.5; x.stroke();
+  x.save(); x.translate(-0.8,-0.8); tracePath(x);
+  x.strokeStyle='rgba(255,250,235,0.6)'; x.lineWidth=0.9; x.stroke(); x.restore();
+  // berries in the counters
+  for(const [mx,my] of [[52,29],[55,61]]){
+    x.fillStyle='#8a1a22'; x.fillRect(mx-2,my-1,3,3);
+    x.fillStyle='#d84a52'; x.fillRect(mx-2,my-1,1,1);
+    x.fillStyle='#5a7a30'; x.fillRect(mx+1,my-3,1,2); x.fillRect(mx+2,my-4,2,1);
   }
-  x.fillStyle='#f5f0e0';
-  for(const [px2,py2] of [[12,4],[W-15,4],[12,W-7],[W-15,W-7],[4,12],[W-7,12],[4,W-15],[W-7,W-15]])
-    x.fillRect(px2,py2,3,3);
+  }catch(e){
+    // headless or ancient canvas: a plain gold B keeps the gate alive
+    try{ x.font='bold 60px Georgia,serif'; x.textAlign='center'; x.textBaseline='middle';
+      x.fillStyle='#e8c33a'; x.fillText('B',47,49); }catch(e2){}
+  }
   return toTex(c);
 }
 function texScroll(){
@@ -4283,14 +4914,23 @@ const gateDecor=[gateFrame,gateVersal,gateScrollL,gateScrollR,gateWyrm,gateWarde
 const gateVeil=uiSprite(texBlack(),4000,4000); gateVeil.renderOrder=44;
 gateVeil.material.depthTest=false; gateVeil.visible=false;
 const gateArrow=uiSprite(texChevron(),58,38); gateArrow.renderOrder=46;
+// the loading veil: only ever seen if the knock comes before the bakes finish
+const loadBg=uiQuad(340,16,0x14141e,0.92); loadBg.renderOrder=46; loadBg.visible=false;
+const loadEdge=uiQuad(346,22,0x4a4a5c,0.5); loadEdge.renderOrder=45; loadEdge.visible=false;
+const loadFill=uiQuad(332,8,0xe8c33a,0.95); loadFill.renderOrder=47; loadFill.visible=false;
+loadFill.geometry.translate(166,0,0);
+const loadTxt=new GLText(13,0xe8c33a,'center'); loadTxt.set('KINDLING THE DEPTHS'); loadTxt.mesh.renderOrder=47; loadTxt.mesh.visible=false;
+let gateLoading=false;
+hud.add(loadBg); hud.add(loadEdge); hud.add(loadFill); hud.add(loadTxt.mesh);
 gateArrow.material.depthTest=false; gateArrow.visible=false;
 // the drop cap owns the B: body lines 1-2 flow beside it, line 3 returns
 // to the margin, in the manuscript manner. [text, color, size, align, x, y]
 const GATE_LINES=[
-  ['ELOW THE BARROW-GATES, THE DARK IS PATIENT.',0xb8a888,15,'left',-150,112],
-  ['IT HAS SWALLOWED KNIGHTS AND KINGS ALIKE,',  0xb8a888,15,'left',-150, 86],
-  ['AND SUPPED ON AGES MEN CALL ANCIENT.',      0xb8a888,15,'left',-214, 60],
-  ['YOURS IS ALREADY WRITTEN.',0xb03030,17,'center',0,-16],
+  ['ELOW THE BARROW-GATES, THE DARK LIES',     0xb8a888,15,'left',-150,112],
+  ['COILED, HUNGRY, AND PATIENT. IT HAS',       0xb8a888,15,'left',-150, 84],
+  ['SWALLOWED KNIGHTS AND KINGS ALIKE,',        0xb8a888,15,'left',-214, 56],
+  ['AND SUPPED ON AGES ANCIENT.',               0xb8a888,15,'left',-214, 28],
+  ['IT HUNGERS STILL.',0xb03030,17,'center',0,-16],   // after kings and ages: appetite unbroken - and you knock anyway
   ['- KNOCK, AND DESCEND -',   0xe8c33a,17,'center',0,-76],
 ];
 const gateTxts=GATE_LINES.map(([t,cl,sz,al,gx,gy])=>{ const g=new GLText(sz,cl,al);
@@ -4314,6 +4954,11 @@ function positionGateCorners(){
 let gateFade=-1;   // -1 idle; >0 counting down after the knock
 function beginDescend(){
   if(state.mode!=='gate' || gateFade>=0) return;
+  if(!BAKE.ready){
+    gateLoading=true;
+    audio(); if(AC&&AC.state==='suspended') AC.resume();   // the CLICK is the
+    return;   // unlock gesture - claim it now; the descent resumes when ready
+  }
   gateFade=0.4;
   audio(); if(AC&&AC.state==='suspended') AC.resume();
   startMusic();                 // the knock IS the gesture: music rises with the fade
@@ -4427,7 +5072,6 @@ function shopDesc(it){
     case 'crystal': return ['A SHARD OF THE FROZEN DEEP.','+5 TO YOUR DEEPEST MANA.'];
     case 'ricochet': return ['ARC BOLT LEARNS TO REBOUND','FROM STONE AND EARTH.','+1 BOUNCE  (NOW: '+(P.bounces||0)+')'];
     case 'witchfire': return ['ARC BOLT CARRIES WITCHFIRE:','STRUCK FOES BURN.','(NOW: LEVEL '+(P.fireLvl||0)+')'];
-    case 'echo': return ['FROST NOVA SOUNDS TWICE:','THE ECHO STRIKES WHERE','YOU STAND.  (NOW: '+(P.novaEcho||0)+')'];
     case 'fang': return ['AN OLD THIRST AWAKENS.','MELEE KILLS RESTORE','+'+((P.vamp||0)+2)+' HEALTH.'];
   }
   return [''];
@@ -4513,10 +5157,13 @@ function syncShop(){
 }
 // ---------- options menu (GL): sensitivity + volumes ----------
 let optOpen=false, optSel=0;
+// volume rows: max == the tuned baseline (the OPT defaults), so a fresh
+// game shows every volume at 100% and users can only go DOWN from the mix
+// as shipped - never 114%, never louder than the baseline.
 const OPT_ROWS=[
   {key:'sens',   label:'SENSITIVITY', min:0.3, max:2.5, step:0.1},
-  {key:'master', label:'MASTER VOL',  min:0,   max:1,   step:0.05},
-  {key:'music',  label:'MUSIC VOL',   min:0,   max:1,   step:0.05},
+  {key:'master', label:'MASTER VOL',  min:0,   max:1.15,step:0.05},
+  {key:'music',  label:'MUSIC VOL',   min:0,   max:0.8, step:0.05},
   {key:'sfx',    label:'EFFECTS VOL', min:0,   max:1,   step:0.05},
 ];
 const optBg=uiSprite(null,470,320); optBg.renderOrder=40; optBg.material.opacity=0.97;
@@ -4542,7 +5189,20 @@ function mkMenuBtn(label,w,h,fx,screens){
 const mbDescend =mkMenuBtn('DESCEND INTO THE DEPTHS',380,62,()=>enterPlay(),['title']);
 const mbContinue=mkMenuBtn('CONTINUE',300,58,()=>enterPlay(),['pause']);
 const mbEndGame =mkMenuBtn('END GAME',300,58,()=>endRun(),['pause']);
-const mbOptions =mkMenuBtn('OPTIONS',240,52,()=>openOptions(),['title','pause']);
+// one Options button per screen: the title's is a small secondary under the
+// big DESCEND banner; the pause one matches its 300x58 siblings. Sharing one
+// object across screens meant one size fit neither.
+const mbOptionsT=mkMenuBtn('OPTIONS',240,52,()=>openOptions(),['title']);
+const mbFull=mkMenuBtn('FULLSCREEN',240,52,()=>{
+  const el=document.documentElement;
+  const inFS=document.fullscreenElement||document.webkitFullscreenElement;
+  try{
+    if(inFS){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
+    else{ const rq=el.requestFullscreen||el.webkitRequestFullscreen; if(rq) rq.call(el); }
+  }catch(e){}
+  setTimeout(resize,300); setTimeout(resize,800);
+},['title']);
+const mbOptionsP=mkMenuBtn('OPTIONS',300,58,()=>openOptions(),['pause']);
 const mbRetry  =mkMenuBtn('RETRY THIS FLOOR',330,60,()=>retryFloor(),['dead']);
 const mbAbandon=mkMenuBtn('ABANDON RUN',260,50,()=>endRun(),['dead']);
 const mbNewRun =mkMenuBtn('DESCEND AGAIN',300,58,()=>startRun(),['win']);
@@ -4552,8 +5212,16 @@ function buildTitleScene(){
   // vermin wander the flagstones - a threat display, not a random room.
   floorNum=5; genLevel(5);
   msgTime=0;                                   // no FLOOR 5 banner on the menu
-  // vermin drifting about aimlessly
-  const TRASH=[TYPES.rat,TYPES.rat,TYPES.rat,TYPES.skel,TYPES.skel,TYPES.cult,TYPES.rat];
+  // the wandering cast: drawn fresh each load from EVERY common kind -
+  // rats and skeletons, but also slimes, imps, wraiths, cultists, ogres.
+  // Never elites, never the boss (he is already the centerpiece).
+  const eligible=Object.keys(TYPES).filter(k=>!TYPES[k].boss && !TYPES[k].elite);
+  // VARIETY-FIRST: shuffle the roster and deal it out - every common kind
+  // appears exactly once among the wanderers (random draws once put four
+  // imps on the flagstones; a shuffled deal cannot repeat)
+  const bag=eligible.slice();
+  for(let i2=bag.length-1;i2>0;i2--){ const j2=(Math.random()*(i2+1))|0; const t2=bag[i2]; bag[i2]=bag[j2]; bag[j2]=t2; }
+  const TRASH=bag.slice(0,7).map(k=>TYPES[k]);
   for(const ty of TRASH){
     for(let tries=0;tries<10;tries++){
       const a=Math.random()*6.28, r2=4+Math.random()*5;
@@ -4561,11 +5229,14 @@ function buildTitleScene(){
       if(!solid(tx,tz)){ spawnEnemy(ty,tx,tz,1,1); break; }
     }
   }
-  // guaranteed foreground cast: a torch-bearing skeleton and an orb-lit cultist
-  // near the vantage, anchored there so they keep ambling in view
+  // guaranteed foreground cast: two random common kinds near the vantage,
+  // anchored there so they keep ambling in view
   // row 14 is entirely clear of the pillar ring: jitter can never land on stone
-  for(const [ty,fx,fz] of [[TYPES.skel, MS/2-1.9+Math.random()*0.7, 14.25+Math.random()*0.6],
-                           [TYPES.cult, MS/2+1.6+Math.random()*0.7, 14.35+Math.random()*0.6]]){
+  const fgA=eligible[(Math.random()*eligible.length)|0];
+  let fgB=eligible[(Math.random()*eligible.length)|0];
+  while(fgB===fgA) fgB=eligible[(Math.random()*eligible.length)|0];   // always a mixed pair
+  for(const [ty,fx,fz] of [[TYPES[fgA], MS/2-1.9+Math.random()*0.7, 14.25+Math.random()*0.6],
+                           [TYPES[fgB], MS/2+1.6+Math.random()*0.7, 14.35+Math.random()*0.6]]){
     let placed=false;
     for(let tries=0;tries<8 && !placed;tries++){
       const tx=fx+(tries?Math.random()*0.8-0.4:0), tz=fz+(tries?Math.random()*0.5-0.25:0);
@@ -4578,7 +5249,7 @@ function buildTitleScene(){
   // heavy fog: the Lord is a shape in the murk, not a portrait
   scene.fog.near=1.6; scene.fog.far=11.5;
   // fixed vantage from the south end, looking down the carpet at him
-  P.x=MS/2; P.z=17.5; P.yaw=Math.PI; P.pitch=0.03;
+  P.x=MS/2; P.z=16.8; P.yaw=Math.PI; P.pitch=0.03;   // a step closer: the Lord reads clearly behind the menu
   titleT=0;
 }
 function endRun(){
@@ -4595,6 +5266,7 @@ function menuBtnAt(x,y){
   return null;
 }
 let menuPressed=null, menuTouchBtn=null, menuTouchIdB=-1, menuMX=1e9, menuMY=1e9;
+let lookT0=0, lookAcc=0;   // look-touch tap detection: birth time + total travel
 function titleAudioKick(){
   if(state.mode==='gate'){ beginDescend(); return; }
   if(state.mode!=='title') return;
@@ -4621,19 +5293,27 @@ function menuRelease(x,y){
 function syncMenu(){
   const s=state.mode, onScreen=(s==='title'||s==='pause'||s==='dead'||s==='win') && !optOpen;
   for(const b of menuBtns){
-    const vis=onScreen && b.screens.includes(s);
+    const vis=onScreen && b.screens.includes(s) && !b.hidden;
     b.plate.visible=vis; b.txt.mesh.visible=vis;
     if(!b.plate.material.map){ b.plate.material.map=texPlate(b.w,b.h,12); b.plate.material.needsUpdate=true; }
   }
   if(s==='title'){
-    midTitle.mesh.position.set(0,4,1);
-    mbDescend.cx=0; mbDescend.cy=-64;
-    mbOptions.cx=0; mbOptions.cy=-144;
+    // TALL SCREENS: spread the furniture vertically - title+tagline rise,
+    // buttons sink - opening the middle so the Lord reads through the murk.
+    // Baseline design height ~540 (VH/2=270): below that nothing moves.
+    const headroom=Math.max(0, VH/2-270);
+    const btnDown=Math.min(headroom*0.5, Math.max(0,VH/2-273));   // mbFull keeps >=24u floor gap
+    const tagUp=Math.min(headroom*0.4, 60);
+    midTitle.mesh.position.set(0,4+tagUp,1);
+    mbDescend.cx=0; mbDescend.cy=-64-btnDown;
+    mbOptionsT.cx=0; mbOptionsT.cy=-144-btnDown;
+    mbFull.cx=0; mbFull.cy=-220-btnDown;   // same edge gap (~23) as descend->options
+    mbFull.hidden=!touchMode;   // desktop has F11; the button is touch-only
   } else if(s==='pause'){
     midTitle.mesh.position.set(0,34,1);
     mbContinue.cx=0; mbContinue.cy=-18;
-    mbEndGame.cx=0;  mbEndGame.cy=-82;
-    mbOptions.cx=0;  mbOptions.cy=-142;
+    mbOptionsP.cx=0;  mbOptionsP.cy=-82;
+    mbEndGame.cx=0;  mbEndGame.cy=-146;   // the destructive choice sits LAST
   } else if(s==='dead'){
     midTitle.mesh.position.set(0,80,1);
     mbRetry.cx=0;   mbRetry.cy=-22;
@@ -4687,7 +5367,7 @@ function syncOptions(){
     optFills[i].position.set(-108,y,1.7);
     const t=(OPT[r.key]-r.min)/(r.max-r.min);
     optFills[i].scale.x=Math.max(0.001,t);
-    optVals[i].set(r.key==='sens'?OPT.sens.toFixed(1)+'x':((OPT[r.key]*100)|0)+'%');
+    optVals[i].set(r.key==='sens'?OPT.sens.toFixed(1)+'x':(Math.round(OPT[r.key]/r.max*100))+'%');   // percent of BASELINE
     optVals[i].mesh.position.set(112,y-7,1.6);
   }
 }
@@ -4711,31 +5391,44 @@ bossBg.visible=bossFill.visible=bossName.mesh.visible=false;
 // weapon
 // tiered sword art: each upgrade lengthens the blade (pommel stays anchored at the bottom)
 const weaponTexCache=[];
+const SWORD_REACH_STEP=0.12;      // reach per tier (was 0.09): the longer blade bites further
+const WEAPON_CELLS=37, WEAPON_BLADE0=9, WEAPON_BLADE_STEP=4;   // canvas rows; base blade cells; cells per tier
+const WEAPON_H=556*WEAPON_CELLS/27;                              // sprite height in UI units (aspect kept: 96:6*cells)
+const WEAPON_LIFT=(WEAPON_H-556)/2;                               // geometry shift: puts the swing pivot back at the old sprite centre
 function weaponTexFor(tier){
   tier=Math.max(0,Math.min(4,tier|0));
   if(weaponTexCache[tier]) return weaponTexCache[tier];
-  const [c,x]=cnv(96,162); x.imageSmoothingEnabled=false;
-  const g=6;
+  // WEAPON_CELLS tall (was 27): room for a blade that really grows - +4
+  // cells per tier (was +2), so tier 4 is nearly three times the base blade.
+  // The hilt sits in the same bottom rows; the extra canvas is all headroom.
+  const [c,x]=cnv(96,WEAPON_CELLS*6); x.imageSmoothingEnabled=false;
+  const g=6, H0=WEAPON_CELLS-9;    // the crossguard row (18 in the old 27-cell canvas)
   function p(ax,ay,w,h,col){ x.fillStyle=col; x.fillRect(ax*g,ay*g,w*g,h*g); }
-  const bl=9+tier*2;               // blade length: +2 cells per tier
-  const bTop=18-bl;                // grows upward
+  const bl=WEAPON_BLADE0+tier*WEAPON_BLADE_STEP;   // blade length in cells
+  const bTop=H0-bl;                // grows upward
   p(7,bTop,2,bl,'#c9ccd6');        // blade core
   p(6,bTop+1,1,bl-2,'#9aa0ae');    // dark edge
   p(9,bTop+1,1,bl-2,'#eef0f5');    // bright edge
   p(7,bTop,2,1,'#f5f7fb');         // tip glint
   if(tier>=2) p(8,bTop+2,1,bl-4,'#f5f7fb');           // fuller shine
   if(tier>=3){ p(6,bTop,1,1,'#f5f7fb'); p(9,bTop,1,1,'#f5f7fb'); } // flared tip
-  p(4,18,8,1,'#8a6a30'); p(5,19,6,1,'#a9863e');       // crossguard
-  p(7,20,2,4,'#5a4322');                              // grip
-  p(6,24,4,1,'#d8b23a');                              // pommel
+  p(4,H0,8,1,'#8a6a30'); p(5,H0+1,6,1,'#a9863e');     // crossguard
+  p(7,H0+2,2,4,'#5a4322');                            // grip
+  p(6,H0+6,4,1,'#d8b23a');                            // pommel
   weaponTexCache[tier]=toTex(c);
   return weaponTexCache[tier];
 }
 const weaponTex=weaponTexFor(0);
-const weapon=uiSprite(weaponTex, 330,556);
+const weapon=uiSprite(weaponTex, 330,WEAPON_H);
+// PIVOT = the old sprite centre (278u above the hilt end), not the taller
+// sprite's centre: every swing constant (roll, lunge tilt, travel, stretch)
+// was tuned around that point, so the hilt and the lower blade move exactly
+// as they always did whatever the tier - the extra blade simply reaches
+// further. (Geometry shifted up; positions stay the old values.)
+weapon.geometry.translate(0,WEAPON_LIFT,0);
 weapon.renderOrder=19;
 
-for(const m of [hpBg,hpFill,mpBg,mpFill,xpBg,xpFill,txtHP.mesh,txtMP.mesh,txtLV.mesh,txtGold.mesh,txtFloor.mesh,txtKeys.mesh,txtStats.mesh,txtNova.mesh,txtPots.mesh,msgText.mesh,subText.mesh,crossV,crossH,vignette,icoH,icoM,icoK,icoHGlow,icoMGlow,screenBg,bigTitle.mesh,midTitle.mesh,mmQuad,bigMapQuad,weapon,shopEdge,shopBg,shopTitle.mesh,shopGold.mesh,shopFoot.mesh,bossBg,bossFill,bossName.mesh]) hud.add(m);
+for(const m of [hpBg,hpFill,mpBg,mpFill,xpBg,xpFill,txtHP.mesh,txtMP.mesh,txtLV.mesh,txtGold.mesh,txtFloor.mesh,txtKeys.mesh,txtStats.mesh,txtPots.mesh,msgText.mesh,subText.mesh,crossV,crossH,vignette,icoH,icoM,icoK,icoHGlow,icoMGlow,screenBg,bigTitle.mesh,midTitle.mesh,mmQuad,bigMapQuad,weapon,shopEdge,shopBg,shopTitle.mesh,shopGold.mesh,shopFoot.mesh,bossBg,bossFill,bossName.mesh]) hud.add(m);
 for(const t of shopLines) hud.add(t.mesh);
 hud.add(cntH.mesh); hud.add(cntM.mesh);
 setShopVisible(false);
@@ -4743,19 +5436,36 @@ for(const t of smallLines) hud.add(t.mesh);
 
 function layoutHUD(){
   const L=-VW/2+16, B=-VH/2+16, R=VW/2-16, T=VH/2-16;
-  hpBg.position.set(L+102,B+42,0); hpFill.position.set(L+2,B+42,0.1);
-  txtHP.mesh.position.set(L+214,B+34,0.2);
-  mpBg.position.set(L+77,B+16,0); mpFill.position.set(L+2,B+16,0.1);
-  txtMP.mesh.position.set(L+164,B+8,0.2);
-  xpBg.position.set(L+102,B+64,0); xpFill.position.set(L+2,B+64,0.1);
-  txtLV.mesh.position.set(L+214,B+57,0.2);
+  // vitals cluster anchor: desktop lives bottom-left; on touch the left hand
+  // COVERS that corner, so the bars move to top-center where nothing rests
+  // touch vitals anchor: top-CENTER normally, but portrait's narrow width
+  // runs a centered cluster into the minimap - portrait tucks it top-LEFT
+  const tPort = touchMode && VH>VW;
+  // touch vitals get WIDER bars + larger text - glanceable mid-fight.
+  // phone landscape most (smallest physical bars), portrait less (narrow),
+  // tablet a moderate step both ways.
+  HUD_WMUL = !touchMode ? 1 : (PHONE_UI ? (tPort?1.2:1.45) : (tPort?1.25:1.3));
+  HUD_TMUL = !touchMode ? 1 : (PHONE_UI ? (tPort?1.15:1.28) : 1.15);
+  const bL = tPort ? L+SAFE.l : (touchMode ? -115 : L);
+  const bB = touchMode ? VH/2-100 : B;
+  const wm=HUD_WMUL, tm=HUD_TMUL;
+  hpBg.scale.x=wm; mpBg.scale.x=wm; xpBg.scale.x=wm;   // left edges stay put; bars grow right
+  hpBg.position.set(bL+2+100*wm,bB+42,0); hpFill.position.set(bL+2,bB+42,0.1);
+  txtHP.mesh.position.set(bL+4+210*wm,bB+34,0.2);
+  mpBg.position.set(bL+2+75*wm,bB+16,0); mpFill.position.set(bL+2,bB+16,0.1);
+  txtMP.mesh.position.set(bL+4+160*wm,bB+8,0.2);
+  xpBg.position.set(bL+2+100*wm,bB+64,0); xpFill.position.set(bL+2,bB+64,0.1);
+  txtLV.mesh.position.set(bL+4+210*wm,bB+57,0.2);
+  for(const t of [txtHP,txtMP,txtLV]) t.mesh.scale.setScalar(tm);
   icoH.position.set(-108,B+42,0.2); icoM.position.set(-46,B+42,0.2);
   txtPots.mesh.position.set(L+316,B+32,0.2);
   icoK.position.set(L+300,B+12,0.2); txtKeys.mesh.position.set(L+316,B+4,0.2);
   for(let i=0;i<keyIcos.length;i++) keyIcos[i].position.set(16+i*26, B+42+(i%2?3:-2), 0.2);
-  txtGold.mesh.position.set(L+2,B+80,0.2);
+  // gold rides with the vitals: top-center beside the bars on touch (its old
+  // bottom-left spot sat alone under the player's hand), bottom-left on desktop
+  if(touchMode) txtGold.mesh.position.set(bL+238, bB+34, 0.2);
+  else txtGold.mesh.position.set(L+2,B+80,0.2);
   txtStats.mesh.position.set(L+110,B+81,0.2);
-  txtNova.mesh.position.set(L+2,B+97,0.2);
   txtFloor.mesh.position.set(R,T-18,0.2);
   mmQuad.position.set(R-72,T-90,0.2);
   bigMapQuad.position.set(0,0,0.5);
@@ -4939,12 +5649,12 @@ function snapshotFloor(){
     p:{ hp:P.hp, maxhp:P.maxhp, mp:P.mp, maxmp:P.maxmp, lvl:P.lvl, xp:P.xp, gold:P.gold,
         str:P.str, dex:P.dex, vit:P.vit, swordTier:P.swordTier, armor:P.armor,
         hpots:P.hpots, mpots:P.mpots, keys:P.keys, spellOrbs:P.spellOrbs||0,
-        bounces:P.bounces||0, fireLvl:P.fireLvl||0, novaEcho:P.novaEcho||0, vamp:P.vamp||0 } };
+        bounces:P.bounces||0, fireLvl:P.fireLvl||0, vamp:P.vamp||0 } };
 }
 function retryFloor(){
   if(!floorSnap) { startRun(); return; }
   Object.assign(P, floorSnap.p);
-  Object.assign(P, {kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,novaCool:0,atkCool:0,spellCool:0,swing:-1,keySwing:-1,hurtFlash:0});
+  Object.assign(P, {kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,atkCool:0,spellCool:0,swing:-1,keySwing:-1,hurtFlash:0});
   applyWeaponTint(); closeShop();
   floorNum=floorSnap.floor;
   genLevel(floorNum);
@@ -4979,8 +5689,9 @@ function startRun(skipPlay){
   titleSceneOn=false;
   floorNum=TEST_BOSS_JUMP?TEST_FLOOR:1;
   state.runSeed=(Math.random()*1e9)|0;
-  Object.assign(P,{hp:50,maxhp:50,mp:20,maxmp:20,lvl:1,xp:0,gold:0,str:3,dex:2,vit:2,swordTier:0,armor:0,hpots:1,mpots:1,keys:0,spellOrbs:0,bounces:0,fireLvl:0,novaEcho:0,vamp:0,keySwing:-1,kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,novaCool:0,atkCool:0,spellCool:0,swing:-1,hurtFlash:0});
+  Object.assign(P,{hp:50,maxhp:50,mp:20,maxmp:20,lvl:1,xp:0,gold:0,str:3,dex:2,vit:2,swordTier:0,armor:0,hpots:1,mpots:1,keys:0,spellOrbs:0,bounces:0,fireLvl:0,vamp:0,keySwing:-1,kx:0,kz:0,poisonT:0,poisonAcc:0,chillT:0,atkCool:0,spellCool:0,swing:-1,hurtFlash:0});
   closeShop(); applyWeaponTint();
+  if(TEST_FIRE>0) P.fireLvl=TEST_FIRE;   // TEST: witchfire from the first cast
   if(TEST_BOSS_JUMP){
     // TEST LOADOUT: level 10 with three sword upgrades, stats mirroring
     // nine honest level-ups (vit/str per level, dex on evens, hp/mp growth)
@@ -4992,6 +5703,7 @@ function startRun(skipPlay){
     P.swordTier=3; applyWeaponTint();
   }
   genLevel(floorNum);
+  if(TEST_BOSS_JUMP && TEST_BOSS_HP>0){ const bL=enemies.find(en=>en.boss); if(bL){ bL.hp=bL.maxhp=TEST_BOSS_HP; } }
   snapshotFloor();
   if(!skipPlay){ state.mode='play'; syncScreens(); startDrone(); if(!touchMode) canvas.requestPointerLock(); }
 }
@@ -5060,7 +5772,6 @@ function update(dt){
   drawMinimap(); // every frame: the player arrow tracks in realtime on both maps
   // cooldowns / swing
   P.atkCool=Math.max(0,P.atkCool-dt); P.spellCool=Math.max(0,P.spellCool-dt);
-  P.novaCool=Math.max(0,P.novaCool-dt);
   P.chillT=Math.max(0,P.chillT-dt);
   if(P.poisonT>0){
     P.poisonT-=dt; P.poisonAcc+=dt;
@@ -5081,7 +5792,7 @@ function update(dt){
     if(P.swing>0.10 && P.swing<0.16){
       // hit frame
       {
-        const reach=0.95+P.swordTier*0.09;
+        const reach=0.95+P.swordTier*SWORD_REACH_STEP;
         const fx3=P.x+Math.sin(P.yaw)*reach, fz3=P.z+Math.cos(P.yaw)*reach;
         const dk=(fx3|0)+','+(fz3|0), dd3=doors[dk];
         if(dd3 && !dd3.open && dd3.hitSwing!==P.swingId){
@@ -5096,7 +5807,7 @@ function update(dt){
       for(const e of enemies.slice()){
         if(e.hp<=0) continue;
         const ex=e.x-P.x, ez=e.z-P.z, d=Math.hypot(ex,ez);
-        if(d<1.35+P.swordTier*0.09){
+        if(d<1.35+P.swordTier*SWORD_REACH_STEP){
           const ang=Math.atan2(ex,ez);
           let da=ang-P.yaw; while(da>Math.PI)da-=2*Math.PI; while(da<-Math.PI)da+=2*Math.PI;
           if(Math.abs(da)<0.95 && e.hitThisSwing!==P.swingId){
@@ -5119,7 +5830,7 @@ function update(dt){
       if(P.struckSwing!==P.swingId && P.stairSwing!==P.swingId){
         // a deliberate strike INTO the descent: facing straight down the
         // stairwell axis, blade reaching its back half or the arch itself
-        const sr=0.95+P.swordTier*0.09;
+        const sr=0.95+P.swordTier*SWORD_REACH_STEP;
         const fdx=Math.sin(P.yaw), fdz=Math.cos(P.yaw);
         let hitBack=false;
         if(tileAt(P.x,P.z)===T_STAIRS){
@@ -5191,9 +5902,13 @@ function update(dt){
   for(let i=enemies.length-1;i>=0;i--){
     const e=enemies[i];
     e.flash=Math.max(0,e.flash-dt*4);
-    e.slowT=Math.max(0,(e.slowT||0)-dt);
     e.painT=Math.max(0,(e.painT||0)-dt);
     gaitStep(e,dt);
+    if(e.flingH>0||e.flingVy){                       // airborne (tossed): a ballistic lift on top of the gait hop
+      e.flingVy-=(e.flingG||9)*dt; e.flingH=Math.max(0,(e.flingH||0)+e.flingVy*dt);
+      if(e.flingH<=0){ e.flingVy=0; }
+      e.hopY=(e.hopY||0)+e.flingH;
+    }
     if(e.boss) bossBladeFX(e,dt);
     if(e.ekx||e.ekz){
       const kr=moveCircle(e.x,e.z, e.ekx*dt, e.ekz*dt, e.r);
@@ -5204,12 +5919,12 @@ function update(dt){
     }
     const b=1+e.flash*2;
     if(e.windup>0){ e.tR=b+0.8; e.tG=b*0.5; e.tB=b*0.5; }
-    else if(e.slowT>0){ e.tR=b*0.55; e.tG=b*0.8; e.tB=b*1.5; }
     else { e.tR=b; e.tG=b; e.tB=b; }
     const dx2=P.x-e.x, dz2=P.z-e.z, dist=Math.hypot(dx2,dz2);
     if(e.state==='idle'){
       if(dist<7 && losGrid(e.x,e.z,P.x,P.z)){ e.state='chase';
-        aggroVoice(e);   // ALWAYS cry on sight-aggro: at 7u an enemy is ~60% sunk in
+        if(e.boss) bossEngage(e);   // the Lord's opening bell + charge (see bossEngage)
+        else aggroVoice(e);   // ALWAYS cry on sight-aggro: at 7u an enemy is ~60% sunk in
                          // fog (small vermin effectively invisible), so the voice is
                          // the player's only fair warning - a coin-flip cue meant
                          // packs charged half-silent out of the murk
@@ -5218,6 +5933,7 @@ function update(dt){
         // off duty they amble around their post, menu-vermin style: pick a
         // spot near home, walk there slowly, stand a while, pick another.
         if(e.hx===undefined){ e.hx=e.x; e.hz=e.z; }
+        if(e.boss) bossIdleRoar(e,dt);
         if(e.wpT>0){ e.wpT-=dt; }
         else if(e.wtx===undefined){
           const R=e.boss?3.2:e.elite?1.1:2.2;
@@ -5230,7 +5946,7 @@ function update(dt){
           const wdx=e.wtx-e.x, wdz=e.wtz-e.z, wd=Math.hypot(wdx,wdz);
           if(wd<0.3){ e.wtx=undefined; e.wpT=0.8+Math.random()*2.4; }
           else {
-            const sp=wanderSpd(e)*(e.slowT>0?0.45:1)*(e.gaitMul||1);
+            const sp=wanderSpd(e)*(e.gaitMul||1)*(e.boss?BOSS_IDLE_PACE:1);
             const r2=moveCircle(e.x,e.z, wdx/wd*sp*dt, wdz/wd*sp*dt, e.r);
             e._mv=true;
             const stepped=Math.hypot(r2[0]-e.x, r2[1]-e.z);
@@ -5271,6 +5987,13 @@ function update(dt){
         if(e.boss){
           e.patT-=dt;
           e.actFlare=Math.max(0,(e.actFlare||0)-dt);
+          // HIS CLOCKS NEVER STOP: the charge cooldown, the shove cooldown and
+          // the kiting clocks tick through every pattern (summon, barrage,
+          // stillness included) - a ritual buys him no pause on the rest
+          e.chgCd=(e.chgCd===undefined?8:e.chgCd)-dt;
+          e.bmpCd=(e.bmpCd===undefined?2:e.bmpCd)-dt;
+          e.hurtAgo=(e.hurtAgo===undefined?99:e.hurtAgo)+dt;
+          e.kiteCd=(e.kiteCd||0)-dt;
           // THE RITUAL CLOCK: his powers run on their own fuse. Charges and
           // shoves cannot postpone it, and the first ritual comes fast once
           // battle is joined - a leveled player gets no free wail-on-him window.
@@ -5287,6 +6010,7 @@ function update(dt){
             e.pat='barrage'; e.patT=2.5; e.bFired=0;
             e.actFlare=2.5;
             sfxAcross(e.x,e.z,SFX.roar,1.1);         // the Lord's voice fills the arena
+            roarRumble();
             roarShattersPillars();                   // and the stone answers it
           }
           // rituals come faster as death nears: full-health pace x1, x0.55 at the end
@@ -5295,10 +6019,10 @@ function update(dt){
             e.ritT-=dt;
           if(e.wq && e.wq.length){
             e.wqT=(e.wqT||0)-dt;
-            if(e.wqT<=0){ e.wqT=0.16; popWaveArrival(e); }
+            if(e.wqT<=0){ e.wqT=0.16; popWaveArrival(e); if(e.wq.length && Math.random()<0.5) popWaveArrival(e,true); }   // one or two per beat, ONE crack
           }
           // crouch/charge posture eases toward its target squash
-          const sqT=e.pat==='crouch'?0.8 : e.pat==='charge'?0.9 : e.pat==='slump'?0.85 : 1;
+          const sqT=e.pat==='crouch'?0.8 : e.pat==='charge'?0.9 : 1;
           e.squash=(e.squash||1)+(sqT-(e.squash||1))*Math.min(1,dt*9);
           if(e.pat==='summon'){
             wx=0; wz=0; e.windup=0;
@@ -5328,13 +6052,14 @@ function update(dt){
             if(e.sFired===3 && e.patT<=0.35){ spawnBossWave(e); e.sFired=4; }
             if(e.patT<=0){
               e.castBld=0;
-              e.pat='normal'; e.patT=5; e.ritT=19*hpF;   // a real fight between rituals
+              e.pat='normal'; e.patT=5; e.ritT=e.lastWaveDesperate?BOSS_DESPERATE_RIT:14*hpF;   // a real fight between rituals; a desperate wave buys him no faster clock
             }
           } else if(e.pat==='barrage'){
             wx=0; wz=0; e.windup=0;                      // he stands his ground
             if(e.bFired===0 && e.patT<=0.85){
               bossRing(e,{n:22, spd:3.6, size:0.44, swl:0.16, rMul:2.0, smoke:48});          // doom wave
               sfxAcross(e.x,e.z,SFX.roar,1.1);           // he roars INTO the volley
+              roarRumble();
               e.bFired=1;
             }
             if(e.bFired===1 && e.patT<=0.45){
@@ -5344,26 +6069,31 @@ function update(dt){
             if(e.bFired===2 && e.patT<=0.08){
               bossRing(e,{n:14, spd:2.9, size:0.5, swl:0.24, a0:0.11, rMul:2.3, rDur:0.7, smoke:36});  // the heavy last wave
               sfxAcross(e.x,e.z,SFX.roar,1.1);
+              roarRumble();
               e.bFired=3;
             }
-            if(e.patT<=-0.4){ e.pat='slump'; e.patT=2.0; }
-          } else if(e.pat==='slump'){
-            // spent: he sags forward, defenseless. Your window.
-            wx=0; wz=0; e.windup=0;
-            e.leanBias=0.09;
-            if(e.patT<=0){ e.pat='normal'; e.patT=6; e.ritT=16*hpF; e.leanBias=0; }
+            // no slump any more (the sag read as a coil from across the hall):
+            // the cataclysm ends in a brief upright STILLNESS instead
+            if(e.patT<=-0.4){ e.pat='still'; e.patT=1.5; e.leanBias=0; }
+          } else if(e.pat==='still'){
+            // the breath after the cataclysm: upright, unmoving, no attacks
+            wx=0; wz=0; e.windup=0; e.leanBias=0;
+            if(e.patT<=0){ e.pat='normal'; e.patT=6; e.ritT=12*hpF; }
           } else if(e.pat==='crouch'){
             wx=0; wz=0; e.windup=0;
+            // a beat into the coil his voice comes - the growl is the last
+            // warning before the run (audition C4, timed crouch > growl > charge)
+            if(!e.chgVoiced && e.patT<=0.35){ e.chgVoiced=true; const rt=e.chgRunT||CHARGE_RUN_MAX; sfxAcross(e.x,e.z,()=>SFX.bossCharge(rt)); }
             e.leanBias=Math.sign(e.cdx*(-Math.cos(P.yaw))+e.cdz*Math.sin(P.yaw))*0.1;
             if(Math.random()<dt*22)                      // dust scuffing as he coils
               spawnP({x:e.x+(Math.random()-0.5)*0.5, y:0.04, z:e.z+(Math.random()-0.5)*0.5,
                 vx:(Math.random()-0.5)*0.4, vy:0.2, vz:(Math.random()-0.5)*0.4,
                 life:0.4, r:0.5,g:0.47,b:0.42, size:0.045, grav:-0.5, drag:2});
-            if(e.patT<=0){ e.pat='charge'; e.patT=0.82; e.chgHit=false;
+            if(e.patT<=0){ e.pat='charge'; e.patT=e.chgRunT||CHARGE_RUN_MAX; e.chgHit=false; e.chgSeq=(e.chgSeq||0)+1;
               sfxAt(e.x,e.z,()=>noiseHit(0.3,0.28,180)); shake=Math.min(0.5,shake+0.12); }
           } else if(e.pat==='charge'){
             wx=0; wz=0; e.windup=0; e.leanBias=0;
-            const cs=e.spd*6.4*dt;      // a freight-train rush: faster, and much further
+            const cs=e.spd*CHARGE_SPD_MUL*dt;      // a freight-train rush: faster, and much further
             const r2=moveCircle(e.x,e.z, e.cdx*cs, e.cdz*cs, e.r);
             const moved=Math.hypot(r2[0]-e.x, r2[1]-e.z);
             e.x=r2[0]; e.z=r2[1]; e._mv=true;
@@ -5371,20 +6101,47 @@ function update(dt){
               spawnP({x:e.x-e.cdx*0.4, y:0.05, z:e.z-e.cdz*0.4,
                 vx:-e.cdx*0.6+(Math.random()-0.5)*0.5, vy:0.3+Math.random()*0.3, vz:-e.cdz*0.6+(Math.random()-0.5)*0.5,
                 life:0.5, r:0.52,g:0.49,b:0.44, size:0.055, grav:-0.4, drag:1.8});
+            bossChargeThroughCourt(e);                 // his own summons in the way: crushed or flung
             if(!e.chgHit && dist<1.05){
               e.chgHit=true; hurtPlayer((e.dmg*1.4)|0, e.x, e.z);
               shake=Math.min(0.5,shake+0.2);
+              sfxAcross(e.x,e.z,SFX.bossBump);              // the train lands: the shove's voice on impact
             }
-            if(moved<cs*0.3){ e.patT=0; }               // hit a wall: the charge dies there
+            // HIT MEANS HIT: any lost speed (a glancing slide off a pillar's edge)
+            // or solid rock at his nose ends the charge on the spot - no sliding
+            // around the stone - and if it was a pillar, the pillar dies too
+            const nose=solid(e.x+e.cdx*(e.r+0.08), e.z+e.cdz*(e.r+0.08));
+            if(moved<cs*0.85 || nose){
+              e.patT=0;
+              bossChargePillar(e);
+            }
             if(e.patT<=0){ e.pat='chgrec'; e.patT=0.6; }
           } else if(e.pat==='bump'){
             wx=0; wz=0; e.windup=0;
+            // THE LANDING: the hop comes down and the flagstones answer with a
+            // small shockwave, dust and a jolt (bump-owned tuning)
+            if(!e.bmpLanded && e.flingVy<=0 && !(e.flingH>0)){
+              e.bmpLanded=true;
+              spawnShockRing(e.x,e.z, 0x8f7f6c, 0.9, 0.32);
+              for(let k=0;k<14;k++){
+                const a=Math.random()*6.28, sp=0.9+Math.random()*1.3;
+                spawnP({x:e.x+Math.cos(a)*0.35, y:0.04, z:e.z+Math.sin(a)*0.35,
+                  vx:Math.cos(a)*sp, vy:0.25+Math.random()*0.4, vz:Math.sin(a)*sp,
+                  life:0.35+Math.random()*0.3, r:0.5,g:0.47,b:0.42, size:0.045, grav:-1.6, drag:1.6});
+              }
+              shake=Math.min(0.5,shake+0.1);
+              sfxAt(e.x,e.z,()=>noiseHit(0.14,0.35,180));
+            }
             const bs=e.spd*3.4*dt;
             const rb=moveCircle(e.x,e.z, e.cdx*bs, e.cdz*bs, e.r);
             e.x=rb[0]; e.z=rb[1]; e._mv=true;
             if(!e.bmpHit && dist<1.15){
               e.bmpHit=true; hurtPlayer((e.dmg*0.8)|0, e.x, e.z);
-              shake=Math.min(0.5,shake+0.12);
+              // THE SHOVE LANDS: his bulk throws you off his knees along the
+              // bump line (on top of hurtPlayer's radial nudge) and the view
+              // jolts - bump-owned tuning, nothing shared with charge/hurt
+              P.kx+=e.cdx*5.5; P.kz+=e.cdz*5.5;
+              shake=Math.min(0.55,shake+0.3);
             }
             if(e.patT<=0){ e.pat='normal'; e.patT=2; e.bmpCd=2.2+Math.random()*1.2; }
           } else if(e.pat==='chgrec'){
@@ -5395,26 +6152,33 @@ function update(dt){
             // attack is the cataclysm, and it announces itself
             // the SHOVE: standing at his knees is not safe. A quick forward
             // bump every couple of seconds, telegraphed by a flare.
-            e.bmpCd=(e.bmpCd===undefined?2:e.bmpCd)-dt;
             if(e.bmpCd<=0 && dist<1.5){
-              e.pat='bump'; e.patT=0.22; e.bmpHit=false;
+              e.pat='bump'; e.patT=BUMP_HOP_T+0.08; e.bmpHit=false; e.bmpLanded=false;
+              e.flingVy=BUMP_HOP_VY; e.flingG=BUMP_HOP_G; e.flingH=Math.max(e.flingH||0,0.001);   // he HOPS into the shove
               const dl=dist||1; e.cdx=dx2/dl; e.cdz=dz2/dl;
               e.actFlare=0.5;
-              sfxAt(e.x,e.z,SFX.growl);
+              sfxAcross(e.x,e.z,SFX.bossBump);              // the shove's own voice (audition B3g)
             }
             // MELEE LOITERING: hug his blade too long and he answers with the
             // full charge - a freight train from point blank
             e.meleeT = dist<2.2 ? (e.meleeT||0)+dt : Math.max(0,(e.meleeT||0)-dt*1.5);
             // the second pattern: coil low toward the player, pause, then CHARGE
-            e.chgCd=(e.chgCd===undefined?8:e.chgCd)-dt;
+            // KITING: hurt from range and he answers by CLOSING - a charge on
+            // its own short clock (kiteCd), leaving the regular charge cooldown
+            // and the ritual clock untouched. Window reaches 12u: even a run
+            // that falls short eats most of the gap.
+            if(e.hurtAgo<1.5 && dist>2.5 && e.kiteCd<=0 && losGrid(e.x,e.z,P.x,P.z)){ e.kiteCd=4.0; e.kiteGo=true; }
+            if(e.hurtAgo>3) e.kiteGo=false;            // the sting faded: stand down
             if((e.chgCd<=0 && dist>2.2 && dist<8.5 && losGrid(e.x,e.z,P.x,P.z))
+               || (e.kiteGo && dist>2.2 && dist<12 && losGrid(e.x,e.z,P.x,P.z))
                || (e.meleeT||0)>4){
+              e.kiteGo=false;
               const dl=dist||1;
-              e.cdx=dx2/dl; e.cdz=dz2/dl;               // direction is chosen NOW
+              e.cdx=dx2/dl; e.cdz=dz2/dl;               // direction is chosen NOW - and so is the length:
+              e.chgRunT=bossChargeRunT(dist);           // enough run to reach where you stand, plus a stride
               e.meleeT=0;
-              e.pat='crouch'; e.patT=0.8;
+              e.pat='crouch'; e.patT=0.5; e.chgVoiced=false;   // crouch (0.5s), THEN the voice, then the run
               e.actFlare=1.0;
-              sfxAt(e.x,e.z,SFX.growl);
             }
             if(e.ritT<=0){
               e.cyc=(e.cyc||0)+1;
@@ -5426,7 +6190,7 @@ function update(dt){
         }
       }
       if(wx||wz){
-        const sm=(e.slowT>0?0.45:1)*(e.gaitMul||1);
+        const sm=(e.gaitMul||1);
         const [ex,ez]=moveCircle(e.x,e.z, wx*e.spd*sm*dt, wz*e.spd*sm*dt, e.r, e.r*0.55);
         e._mv=true;
         // stuck? wanted to move, barely did: force the flow route for a while
@@ -5464,18 +6228,11 @@ function update(dt){
         e.hp-=bd; dmgNum(e.x,0.9*e.sc+0.2,e.z,bd);
         if(e.hp<=0) damageEnemy(e,0);
       }
-      if(Math.random()<dt*26){
-        const hot=Math.random()<0.55;
-        spawnP({x:e.x+(Math.random()-0.5)*0.36, y:0.2+Math.random()*0.65*e.sc, z:e.z+(Math.random()-0.5)*0.36,
-          vx:(Math.random()-0.5)*0.2, vy:1.1+Math.random()*0.7, vz:(Math.random()-0.5)*0.2,
-          life:0.35+Math.random()*0.3, r:1, g:hot?0.85:0.5, b:hot?0.3:0.12,
-          size:0.11+Math.random()*0.05, growth:-0.16, grav:-0.2, drag:1.4});
-      }
-      if(Math.random()<dt*7)
-        spawnP({x:e.x+(Math.random()-0.5)*0.2, y:0.85*e.sc+0.2, z:e.z+(Math.random()-0.5)*0.2,
-          vx:(Math.random()-0.5)*0.1, vy:0.6, vz:(Math.random()-0.5)*0.1,
-          life:0.8+Math.random()*0.4, r:0.25,g:0.23,b:0.22, size:0.09, growth:0.14, grav:-0.1, drag:1});
-      if(Math.random()<dt*8) dynLights.push({x:e.x,y:0.6,z:e.z, r:1,g:0.6,b:0.25, i:0.55, life:0.12});
+      // the FIRE itself is the torch flame system riding the body (burnFl, see
+      // igniteBurnFlames); here only a few small embers lift off the flames
+      if(e.burnT<=0) extinguishBurnFlames(e);
+      // (no smoke over the head either - the old burn's dark puffs are gone; the
+      // flames carry their own light via the torch system)
     }
   }
   // projectiles
@@ -5493,7 +6250,23 @@ function update(dt){
         p.life=Math.min(p.life+0.6,2.8);
         wakePuff(p.x,p.y,p.z,4,0.1); SFX.hit();
       } else { dead=true;
-        if(!p.hostile){ spawnBoltField(p.x,p.z,boltFieldTicks(p),null); boltImpactFX(p.x,p.y,p.z,p.dx,p.dz); wakePuff(p.x,p.y,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit); }
+        if(!p.hostile){
+          // near-wall shots die mid-climb, below where the reticle points.
+          // While still converging, anchor the impact at the AIM RAY's height
+          // at this distance - the bolt's rise stays visual, the mark lands
+          // where the player aimed. (Damage field is 2D: zero balance change.)
+          let iy2=p.y;
+          if(p.cruiseDy!==undefined && p.sx!==undefined){
+            const hd2=Math.hypot(p.x-p.ex,p.z-p.ez);
+            iy2=Math.max(0.12, Math.min(wallH-0.12, 0.55+Math.tan(p.aimPitch)*hd2));
+          }
+          // point-blank casts spawn the bolt INSIDE the wall (hand offset is
+          // 0.45): step back along the flight until open air so the mark,
+          // field, and sound all live on the visible face, never in the rock
+          let ix3=p.x, iz3=p.z;
+          { const vl4=Math.hypot(p.dx,p.dz)||1, ux4=p.dx/vl4, uz4=p.dz/vl4;
+            for(let t4=0; t4<=1.0 && solid(ix3,iz3); t4+=0.06){ ix3=p.x-ux4*t4; iz3=p.z-uz4*t4; } }
+          spawnBoltField(ix3,iz3,boltFieldTicks(p),null); boltImpactFX(ix3,iy2,iz3,p.dx,p.dz); wakePuff(ix3,iy2,iz3,6,0.12); sfxAt(ix3,iz3,SFX.boltHit); }
         else burst(p.x,p.y,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); }
     }
     else {
@@ -5504,12 +6277,16 @@ function update(dt){
           if(!p.hostile && p.bounce>0){
             p.bounce--; p.dy=-p.dy; p.cruiseDy=undefined;
             p.y=Math.max(0.06,Math.min(wallH-0.06,p.y));
-            burst(p.x,p.y,p.z,0x9adcff,5,1.2); SFX.hit();
+            burst(p.x,p.y,p.z,spellPal().bounce,5,1.2); SFX.hit();
           } else {
+            if(!p.hostile && p.dy<0 && p.floorAimD!==undefined && p.bounce<=0
+               && Math.hypot(p.x-p.ex,p.z-p.ez) < p.floorAimD-0.05){
+              p.y=0.07; p.dy=0; p.cruiseDy=undefined; p.vOff=undefined;   // skim: the aimed point is still ahead
+            } else {
             dead=true;
             { const iy=Math.max(0.1,Math.min(wallH-0.1,p.y));
               if(!p.hostile){ spawnBoltField(p.x,p.z,boltFieldTicks(p),null); boltImpactFX(p.x,iy,p.z,p.dx,p.dz,{ny:p.dy>0?-1:1}); wakePuff(p.x,iy,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit); }
-              else burst(p.x,iy,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); }
+              else burst(p.x,iy,p.z, (p.kind==='hex'?0xc04ae8:p.kind==='doom'?0xff4a2a:0xff7ab0), 6, 1.4); } }
           }
         }
       }
@@ -5546,18 +6323,35 @@ function update(dt){
       }
       if(!p.hostile && p.baseSc!==undefined){
         p.age+=dt;
+        if(p.floorAimD!==undefined && !dead
+           && Math.hypot(p.x-p.ex,p.z-p.ez) >= p.floorAimD){
+          dead=true;
+          spawnBoltField(p.x,p.z,boltFieldTicks(p),null);
+          boltImpactFX(p.x,0.12,p.z,p.dx,p.dz,{ny:1});
+          wakePuff(p.x,0.12,p.z,6,0.12); sfxAt(p.x,p.z,SFX.boltHit);
+        }
         // convergence carries the bolt to the crosshair point ~6u out; past it,
         // ease onto the look ray so distant flight goes where the player aimed
         // instead of continuing the climb it needed to reach eye level
-        if(p.cruiseDy!==undefined && p.age>=p.cruiseAt*0.8){
-          // blend onto the look ray starting just before the crossing (smooth,
-          // no visible kink - safe now that the converge target matches the
-          // TRUE eye height), then settle exactly once the blend window closes
-          p.dy+=(p.cruiseDy-p.dy)*Math.min(1,dt*12);
-          if(p.age>=p.cruiseAt+0.15){ p.dy=p.cruiseDy; p.cruiseDy=undefined; }
+        if(p.vOff!==undefined){
+          // ride (ray height - offset); the offset only ever shrinks, so the
+          // approach is monotonic from below - no crossing, no bounce
+          p.vOff*=Math.max(0,1-12*dt);
+          const hd3=Math.hypot(p.x-p.ex,p.z-p.ez);
+          p.y=0.55+Math.tan(p.aimPitch)*hd3 - p.vOff;
+          p.dy=p.cruiseDy;
+          if(p.vOff<0.004){ p.vOff=undefined; p.cruiseDy=undefined; }
         }
+        // one scale formula, two composed effects:
+        //  launch: spawns big and shrinks over 0.32s (the long-standing feel)
+        //  range:  smaller overall near the hand, growing once past ~2u
         const k=Math.min(1, p.age/0.32);
-        const gs=p.baseSc*(1+1.7*(1-k)*(1-k));
+        const launch=1+1.7*(1-k)*(1-k);
+        // self-contained: this block must not reach into the emission block's
+        // scope (doing so threw every frame and froze the game on first cast)
+        const hd7=Math.hypot(p.x-p.ex,p.z-p.ez);
+        const ez7=(e0,e1,x)=>{const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
+        const gs=p.baseSc*launch*(0.75 + ez7(1.2,2.2,hd7)*0.4 + ez7(4,5.5,hd7)*0.6);   // 0.75 -> 1.15 -> 1.75
         p.spr.scale.set(gs,gs,1);
       }
       if(p.hostile){
@@ -5567,17 +6361,52 @@ function update(dt){
       }
       else {
         // double spiral around the flight axis; motes hang and dissolve behind
-        p.hxPh=(p.hxPh===undefined? Math.random()*6.28 : p.hxPh)+dt*24;
+        // spin eases off past 2u: full 34 rad/s density is right up close,
+        // but at range the coils packed too tight - slower spin = wider pitch
+        { const hdS=Math.hypot(p.x-p.ex,p.z-p.ez);
+          const tS=Math.min(1,Math.max(0,(hdS-2)/1.2));
+          p.hxPh+=dt*(26-tS*(tS*(3-2*tS))*8); }    // 26 -> 18 rad/s by 3.2u (overall calmer spin)
         const vl3=Math.hypot(p.dx,p.dy,p.dz)||1;
         const ax=p.dx/vl3, ay=p.dy/vl3, az=p.dz/vl3;
         let rx=-az, rz=ax; const rl2=Math.hypot(rx,rz)||1; rx/=rl2; rz/=rl2;
         const ux=ay*rz, uy=az*rx-ax*rz, uz=-ay*rx;   // axis x right
-        const R=0.035;   // hug the bolt
-        for(const ss of [0,Math.PI]){
-          const c2=Math.cos(p.hxPh+ss), sn2=Math.sin(p.hxPh+ss);
-          wakeEmit(p.x+(rx*c2+ux*sn2)*R, p.y+(uy*sn2)*R, p.z+(rz*c2+uz*sn2)*R,
-            WAKE_SHADES[(Math.random()*3)|0], p.hxPh+ss, 0.034+Math.random()*0.02);
+        // TWO eased growth stages for helix and bolt alike:
+        //  stage 1 (4..6.5u): the moderate bloom - "close" was right
+        //  stage 2 (8..11u):  bigger still, for truly long shots
+        const hd6=Math.hypot(p.x-p.ex,p.z-p.ez);
+        const eze=(e0,e1,x)=>{const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
+        //  stage 1 (1.2..2.2u): the close-range growth, as we had it
+        //  stage 2 (4..5.5u):   bigger still
+        const g1=eze(1.2,2.2,hd6), g2=eze(4,5.5,hd6);
+        const g1h=eze(2,3.2,hd6);               // the helix's first bloom starts ~2u
+        const R=0.022*(1 + g1h*0.55 + g2*1.85); // 0.022 -> 0.034 -> 0.075
+        // append points along the ANALYTIC helix to the two ribbon strips -
+        // the strip shares vertices between sections, so the band is one
+        // unbroken smooth surface whatever the sampling
+        p.spr.material.rotation=-p.hxPh;  // the bolt spins WITH its helix (screen-measured: helix turns clockwise; sprite rotation is CCW-positive, hence the sign)
+        if(!p._rib){ const wk=spellPal().wake; p._rib=[ribbonStart(wk[0]), ribbonStart(wk[2])]; }
+        const prevB=p._pb||[p.x,p.y,p.z,p.hxPh-dt*26];
+        const SUB=4;
+        for(let k2=1;k2<=SUB;k2++){
+          const t5=k2/SUB;
+          const bx5=prevB[0]+(p.x-prevB[0])*t5, by5=prevB[1]+(p.y-prevB[1])*t5,
+                bz5=prevB[2]+(p.z-prevB[2])*t5, ph5=prevB[3]+(p.hxPh-prevB[3])*t5;
+          let si=0;
+          for(const ss of [0,Math.PI]){
+            const c2=Math.cos(ph5+ss), sn2=Math.sin(ph5+ss);
+            const odx=(rx*c2+ux*sn2), ody=(uy*sn2), odz=(rz*c2+uz*sn2);   // radial unit
+            // the whip is a DISTANCE effect: near the player it reads as
+            // distortion (magnified displacement, extrusion off the true
+            // path), so points born close carry ZERO fling - the near trail
+            // behaves exactly as before the whip existed
+            const wg=Math.min(1,Math.max(0,(hd6-2)/1.2));   // whip fully in by 3.2u
+            const fl2=R*4.2*wg;
+            ribbonPoint(p._rib[si], bx5+odx*R, by5+ody*R, bz5+odz*R,
+              odx*fl2, ody*fl2, odz*fl2);
+            si++;
+          }
         }
+        p._pb=[p.x,p.y,p.z,p.hxPh];
         dynLights.push({x:p.x,y:p.y,z:p.z, r:0.45,g:0.75,b:1, i:0.5, life:0.05});
       }
     }
@@ -5593,9 +6422,14 @@ function update(dt){
               const tk=boltFieldTicks(p);
               damageEnemy(e, p.dmg-(tk[0]+tk[1]+tk[2]));   // impact = D minus the ticks:
               spawnBoltField(p.x,p.z,tk,e);                // marked target sums to EXACTLY D
-              boltImpactFX(p.x,p.y,p.z,p.dx,p.dz,{flesh:true}); spawnCastCircle(e.x,0.05,e.z,0,1,0,1.9,1.15,1.0,e); if(e.hp>0) spawnFleshLightning(e,p.x,p.y,p.z);
+              boltImpactFX(p.x,p.y,p.z,p.dx,p.dz,{flesh:true});
+              // the circle rides a living victim; a victim killed outright leaves
+              // it STAMPED where he fell (so with witchfire it burns there, like
+              // a floor stamp, for the circle's full life instead of dying with him)
+              spawnCastCircle(e.x,victimCircleY(e.x,e.z),e.z,0,1,0,1.9*victimCircleMul(e),1.15,1.0, e.hp>0?e:null);
+              if(e.hp>0) spawnFleshLightning(e,p.x,p.y,p.z);
             } else damageEnemy(e,p.dmg);
-            if(!p.hostile && P.fireLvl>0 && e.hp>0){ e.burnT=1.5+P.fireLvl; }   // rider: IMPACT-ONLY, struck enemy only - the pulse never ignites
+            if(!p.hostile && P.fireLvl>0 && e.hp>0){ e.burnT=1.5+P.fireLvl; igniteBurnFlames(e); }   // the struck enemy ignites at once; the field ignites the rest as it ticks
             dead=true; if(!p.hostile) wakePuff(p.x,0.55,p.z,7,0.16); else burst(p.x,0.5,p.z,0x9adcff,10,1.8); break; }
         }
       }
@@ -5637,7 +6471,8 @@ function update(dt){
         worldGroup.remove(pk.spr); pickups.splice(i,1); continue;
       }
     } else {
-      pk.spr.position.y=0.03+Math.sin(pk.bob)*0.03;
+      if(pk.fly) lordLootStep(pk,dt);                 // flung coin (lord fall): ballistic until it settles
+      else { pk.spr.position.y=0.03+Math.sin(pk.bob)*0.03; if(pk.kind==='gold') goldMagnet(pk,dt); }
       if(pk.glowS){
         pk.glowS.material.opacity=0.3+0.13*Math.sin(pk.bob*1.7);
         // tiny bubbles fizz up out of the bottle
@@ -5654,6 +6489,7 @@ function update(dt){
     const d=Math.hypot(P.x-pk.x,P.z-pk.z);
     if(d<0.5){
       let took=true;
+      haptic(8);   // every collected pickup taps the hand (Android only)
       if(pk.kind==='hpb'){
         const h=4+((P.lvl*0.5)|0);
         P.hp=Math.min(P.maxhp, P.hp+h);
@@ -5668,7 +6504,7 @@ function update(dt){
       }
       else if(pk.kind==='hpot'){ P.hpots++; SFX.pickup(); showMsg('HEALTH POTION',1,0xff8a8a); }
       else if(pk.kind==='mpot'){ P.mpots++; SFX.pickup(); showMsg('MANA POTION',1,0x8ab0ff); }
-      else if(pk.kind==='gold'){ const g=ri(6,18)+floorNum*3; P.gold+=g; SFX.gold(); showMsg('+'+g+' GOLD',1,0xf1d06a); }
+      else if(pk.kind==='gold'){ const g=pk.gval||(ri(6,18)+floorNum*3); P.gold+=g; SFX.gold(); showMsg('+'+g+' GOLD',1,0xf1d06a); }
       else if(pk.kind==='key'){ P.keys++; SFX.pickup(); showMsg('FOUND A KEY',1.6,0xf1d06a); }
       else if(pk.kind==='orb'){
         P.spellOrbs=(P.spellOrbs||0)+1;
@@ -5723,7 +6559,8 @@ function update(dt){
       if(t2>=1) openingDoors.splice(i,1);
     }
   }
-  // arena pillars fall ONLY to his roar now (startPillarCollapse); the
+  // arena pillars fall to his roar (roarShattersPillars) and to his charge
+  // meeting them head-on (bossChargePillar) - both via startPillarCollapse; the
   // random timer sleeps forever, but the sinking physics below lives on
   for(let i=pillarQ.length-1;i>=0;i--){
     const q=pillarQ[i]; q.t-=dt;
@@ -5848,26 +6685,16 @@ function update(dt){
     t.glow.material.opacity=0.3+f*0.08;
     const rate=(t.fsc||0.42)>0.3?1:0.5;
     if(Math.random()<dt*2.4*rate){
-      if(t.hue) spawnEmber(t.x, t.y+0.1, t.z, 0.32,1,0.38);
+      if(t.hue===1||t.hue===2) spawnEmber(t.x, t.y+0.1, t.z, 0.32,1,0.38);
       else spawnEmber(t.x, t.y+0.16, t.z);
     }
-    if(Math.random()<dt*1.5*rate) spawnSmoke(t.x, t.y+(t.hue?0.14:0.24), t.z);
+    if(!t.burn && Math.random()<dt*1.5*rate) spawnSmoke(t.x, t.y+((t.hue===1||t.hue===2)?0.14:0.24), t.z);   // witchfire flames (burn) throw no smoke: too much on screen
   }
   // particles / dmg numbers
   for(let i=corpses.length-1;i>=0;i--){
     const c=corpses[i]; c.life-=dt;
-    if(c.life<=0) corpses.splice(i,1);
-  }
-  // echo crystal: the nova re-detonates wherever you are now
-  for(let i=novaEchoes.length-1;i>=0;i--){
-    const q=novaEchoes[i]; q.t-=dt;
-    if(q.t<=0){
-      SFX.nova();
-      dynLights.push({x:P.x,y:0.6,z:P.z, r:0.5,g:0.85,b:1, i:1.8, life:0.35});
-      novaBlast(P.x,P.z,0.6);
-      q.left--;
-      if(q.left>0) q.t=0.85; else novaEchoes.splice(i,1);
-    }
+    if(c.lord) lordFallStep(c,dt);
+    if(c.life<=0){ if(c.lord) lordFallEnd(c); corpses.splice(i,1); }
   }
   // embers drift up out of the stairwell
   if(Math.hypot(P.x-stairsPos.x-0.5,P.z-stairsPos.z-0.5)<8 && Math.random()<dt*7){
@@ -5876,14 +6703,14 @@ function update(dt){
       vx:(Math.random()-0.5)*0.1, vy:0.5+Math.random()*0.3, vz:(Math.random()-0.5)*0.1,
       life:1.7+Math.random()*0.8, r:0.95,g:0.6,b:0.28, size:0.05, growth:-0.015, grav:-0.12, drag:0.7});
   }
-  for(let i=novaWaves.length-1;i>=0;i--){
-    const w=novaWaves[i]; w.t+=dt;
+  for(let i=ringFX.length-1;i>=0;i--){
+    const w=ringFX[i]; w.t+=dt;
     if(w.t<0){ w.m.visible=false; continue; }
     w.m.visible=true;
     const k=Math.min(1,w.t/(w.dur||0.45)), e2=1-(1-k)*(1-k);
     w.m.scale.setScalar(0.25+e2*2.2*(w.rMul||1));
     w.m.material.opacity=0.9*(1-k*k);
-    if(k>=1){ worldGroup.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); novaWaves.splice(i,1); }
+    if(k>=1){ worldGroup.remove(w.m); w.m.material.dispose(); ringFX.splice(i,1); }   // geometry is shared: never dispose
   }
   simParticles(dt,3);
   writeParticleBuffers();
@@ -5972,10 +6799,19 @@ function spawnSparks(x,y,z,nx,nz,opt){
 function simSparks(dt){
   for(let i=castCircles.length-1;i>=0;i--){
     const o=castCircles[i]; o.life-=dt;
-    if(o.life<=0){ for(const L of o.layers){ worldGroup.remove(L.m); L.m.material.dispose(); L.m.geometry.dispose(); } castCircles.splice(i,1); continue; }
+    if(o.life<=0){ for(const L of o.layers){ worldGroup.remove(L.m); L.m.material.dispose(); L.m.geometry.dispose(); } if(o.flames) extinguishStampFlames(o); castCircles.splice(i,1); continue; }
     const t=1-o.life/o.maxLife;
     if(o.follow && o.follow.hp>0 && enemies.indexOf(o.follow)>=0){
-      for(const L of o.layers){ L.m.position.x=o.follow.x; L.m.position.z=o.follow.z; }
+      // the victim's circle rides a little TOWARD the camera: a billboard's
+      // opaque pixels hide whatever lies behind its plane, so a circle centred
+      // exactly on the feet showed only as a crescent peeking through the leg
+      // gaps up close ("on his shins"). Pulled forward by ~half its radius,
+      // the ring sits in front of the feet where it can be seen whole.
+      const fx=o.follow.x, fz=o.follow.z;
+      const cx=cam.position.x-fx, cz=cam.position.z-fz, cl=Math.hypot(cx,cz)||1;
+      const R=o.layers[0].s0*0.5, pull=Math.min(R*CIRCLE_PULL, cl*0.5);
+      const px2=fx+cx/cl*pull, pz2=fz+cz/cl*pull, sy=floorSurfaceY(px2,pz2);   // rug, stone, whatever is under him now
+      let li=0; for(const L of o.layers){ L.m.position.x=px2; L.m.position.z=pz2; L.m.position.y=sy+VICTIM_LAYER0+(li++)*VICTIM_LAYER_STEP; }
     }
     for(const L of o.layers){
       L.m.rotateZ(L.w*dt);                         // each layer spins its own way
@@ -6050,66 +6886,233 @@ function spawnEmber(x,y,z,r,g,b){
 // A double helix of small motes left hanging behind the bolt, one draw call.
 // Shader does the magic: each mote wobbles subtly (more as it dissolves),
 // sparkles, and fades over WAKE_LIFE. Three shades of blue per cast.
-const WMAX=256, WAKE_LIFE=0.55;
+const WMAX=2048, WAKE_LIFE=0.42;  // quads now serve ONLY impact debris: brief flecks, not trail
 const wGeo=new THREE.InstancedBufferGeometry();
 wGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5,-0.5,0, 0.5,-0.5,0, 0.5,0.5,0, -0.5,0.5,0]),3));
 wGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0,0, 1,0, 1,1, 0,1]),2));
 wGeo.setIndex([0,1,2, 0,2,3]);
 const wOff=new Float32Array(WMAX*3), wCol=new Float32Array(WMAX*3),
-      wBirth=new Float32Array(WMAX).fill(-1e9), wPh=new Float32Array(WMAX), wScl=new Float32Array(WMAX);
+      wBirth=new Float32Array(WMAX).fill(-1e9), wPh=new Float32Array(WMAX), wScl=new Float32Array(WMAX),
+      wDir=new Float32Array(WMAX*3), wLen=new Float32Array(WMAX);
 wGeo.setAttribute('iOff', new THREE.InstancedBufferAttribute(wOff,3));
 wGeo.setAttribute('iCol', new THREE.InstancedBufferAttribute(wCol,3));
 wGeo.setAttribute('iBirth', new THREE.InstancedBufferAttribute(wBirth,1));
 wGeo.setAttribute('iPh', new THREE.InstancedBufferAttribute(wPh,1));
 wGeo.setAttribute('iScl', new THREE.InstancedBufferAttribute(wScl,1));
+wGeo.setAttribute('iDir', new THREE.InstancedBufferAttribute(wDir,3));
+wGeo.setAttribute('iLen', new THREE.InstancedBufferAttribute(wLen,1));
 wGeo.instanceCount=WMAX;
 const wMat=new THREE.ShaderMaterial({
   uniforms:{ uTime:{value:0}, fogNear:{value:1.5}, fogFar:{value:10.5} },
   vertexShader:
 'attribute vec3 iOff; attribute vec3 iCol; attribute float iBirth; attribute float iPh; attribute float iScl;\n'+
+'attribute vec3 iDir; attribute float iLen;\n'+
 'varying vec2 vUv; varying vec3 vCol; varying float vAge; varying float vPh; varying float vFog;\n'+
 'uniform float uTime; uniform float fogNear; uniform float fogFar;\n'+
 'void main(){ vUv=uv; vCol=iCol; vPh=iPh;\n'+
 '  vAge=clamp((uTime-iBirth)/'+WAKE_LIFE+', 0.0, 1.0);\n'+
 '  vec3 right=vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);\n'+
 '  vec3 up=vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);\n'+
-'  vec3 wob=(right*sin(uTime*9.0+iPh)+up*cos(uTime*7.3+iPh*1.7))*(0.016*vAge);\n'+
-'  vec3 wp=iOff+wob + (right*position.x + up*position.y)*iScl;\n'+
+'  float dxp=dot(iDir,right), dyp=dot(iDir,up);\n'+
+'  float dl=max(0.0001,length(vec2(dxp,dyp)));\n'+
+'  vec2 axA=vec2(dxp,dyp)/dl, axB=vec2(-axA.y,axA.x);\n'+
+'  vec2 lp=axA*(position.x*iLen*1.25) + axB*(position.y*iScl);\n'+
+'  vec3 wob=(right*sin(uTime*9.0+iPh)+up*cos(uTime*7.3+iPh*1.7))*(0.007*vAge);\n'+
+'  vec3 wp=iOff+wob + right*lp.x + up*lp.y;\n'+
 '  vec4 mv=viewMatrix*vec4(wp,1.0);\n'+
 '  vFog=clamp((-mv.z-fogNear)/(fogFar-fogNear),0.0,1.0);\n'+
 '  gl_Position=projectionMatrix*mv; }',
   fragmentShader:
+// DEBRIS-ONLY SHADER. This material serves impact flecks and nothing else.
+// It deliberately does NOT share code with the flight-trail ribbon (ribMat):
+// that coupling twice let trail tuning corrupt impact visuals. Edit this
+// for impacts; edit ribMat for the trail; never fuse them again.
 'uniform float uTime;\n'+
 'varying vec2 vUv; varying vec3 vCol; varying float vAge; varying float vPh; varying float vFog;\n'+
 'void main(){ if(vAge>=1.0) discard;\n'+
 '  vec2 q=vUv-0.5;\n'+
 '  float cA=cos(vPh), sA=sin(vPh);\n'+
 '  vec2 rq=vec2(q.x*cA-q.y*sA, q.x*sA+q.y*cA);\n'+
-'  float d=length(vec2(rq.x*3.1, rq.y))*2.0;   // thin sliver, rotated per-mote\n'+
-'  float core=pow(max(0.0,1.0-d),1.3);\n'+
-'  float pin=pow(max(0.0,1.0-d),6.0);          // hot center line\n'+
-'  float spark=0.85+0.15*sin(uTime*26.0+vPh*7.0);\n'+
-'  float a=min(1.0,(core*1.9+pin*0.9))*pow(1.0-vAge,1.4)*spark*(1.0-vFog*0.45);\n'+
-'  gl_FragColor=vec4(vCol*(1.2+0.9*pin)*a, a); }',
+'  float d=length(vec2(rq.x*2.6, rq.y))*2.0;   // small soft-edged fleck\n'+
+'  float body=1.0-smoothstep(0.55,0.95,d);\n'+
+'  float a=body*pow(1.0-vAge,1.3)*(1.0-vFog*0.45);\n'+
+'  gl_FragColor=vec4(vCol*(1.0+0.4*(1.0-d))*a, a); }',
   transparent:true, depthWrite:false, blending:THREE.AdditiveBlending });
 const wMesh=new THREE.Mesh(wGeo,wMat); wMesh.frustumCulled=false; worldGroup.add(wMesh);
 let wCursor=0;
-const WAKE_SHADES=[[0.25,0.45,1],[0.5,0.78,1],[0.8,0.94,1]];
-function wakeEmit(x,y,z,shade,ph,scl){
+const WAKE_SHADES=[[0.28,0.4,0.78],[0.44,0.58,0.88],[0.66,0.78,0.94]];   // arcane slate blues, not synthwave
+// SPELL PALETTE: the arc bolt is arcane blue until WITCHFIRE is bought; then
+// every piece of it - ribbon trail, wake debris, sprite, flight light, the
+// impact (pop, sparks, arcs, flesh lightning, light) and the arcane circles -
+// turns to the matching shades of red. One lookup, spellPal(), feeds them all.
+const SPELL_PAL={
+  arc:  { wake:WAKE_SHADES, boltTex:'bolt', boltBlend:'add', core:[1.05,1.05,1.05], light:[0.45,0.8,1.0], hitLight:[0.55,0.85,1],
+          circle:[0x3a63d9,0x6fa3ff,0xbfe0ff], pop:[0x9adcff,0xccefff], sparks:[0x4073ff,0x80c7ff,0xccefff],
+          arcs:0x9adcff, lightning:0xdff2ff, bounce:0x9adcff },
+  // RED, not orange: the three shades run crimson / scarlet / pale rose,
+  // the same three steps of value the blues take
+  fire: { wake:[[0.72,0.06,0.08],[0.92,0.18,0.16],[1.0,0.5,0.46]], boltTex:'boltFire', boltBlend:'add', core:[1.1,0.42,0.36], light:[1.0,0.28,0.22], hitLight:[1,0.32,0.28],
+          circle:[0xc01818,0xff4038,0xffb4ac], pop:[0xff4a40,0xffd2cc], sparks:[0xd81616,0xff4a40,0xffc8c2],
+          arcs:0xff4a40, lightning:0xffe4e0, bounce:0xff4a40 } };
+function spellPal(){ return (P.fireLvl>0)?SPELL_PAL.fire:SPELL_PAL.arc; }
+function wakeEmit(x,y,z,shade,ph,scl,dx4,dy4,dz4,len){
   const i=wCursor; wCursor=(wCursor+1)%WMAX;
   wOff[i*3]=x; wOff[i*3+1]=y; wOff[i*3+2]=z;
   wCol[i*3]=shade[0]; wCol[i*3+1]=shade[1]; wCol[i*3+2]=shade[2];
   wBirth[i]=performance.now()*0.001; wPh[i]=ph; wScl[i]=scl;
+  if(dx4===undefined){ const a2=Math.random()*6.28; dx4=Math.cos(a2); dy4=(Math.random()-0.5); dz4=Math.sin(a2); len=0.026; }
+  wDir[i*3]=dx4; wDir[i*3+1]=dy4; wDir[i*3+2]=dz4; wLen[i]=len===undefined?0.06:len;
   wGeo.attributes.iOff.needsUpdate=true; wGeo.attributes.iCol.needsUpdate=true;
   wGeo.attributes.iBirth.needsUpdate=true; wGeo.attributes.iPh.needsUpdate=true;
-  wGeo.attributes.iScl.needsUpdate=true;
+  wGeo.attributes.iScl.needsUpdate=true; wGeo.attributes.iDir.needsUpdate=true;
+  wGeo.attributes.iLen.needsUpdate=true;
+}
+// ---------- RIBBON STRIPS: the real trail renderer ----------
+// One continuous triangle strip per helix strand: a polyline of points
+// extruded to width in the vertex shader. Consecutive sections SHARE their
+// vertices, so overlaps and seams are geometrically impossible - the band
+// is one unbroken surface. Cross-strip coordinate (aSide) drives the
+// lightline profile continuously along the whole curve.
+const RIB_PTS=6144, RIB_LIFE=0.9, RIB_HALFW=0.017;   // boss-fight volley headroom (measured peak 4528)   // full life; NEAR sections age faster in-shader
+const ribTrails=[];   // {pts:[{x,y,z,b}], shade, alive}
+const ribGeo=new THREE.BufferGeometry();
+const ribPos=new Float32Array(RIB_PTS*2*3), ribDir=new Float32Array(RIB_PTS*2*3),
+      ribSide=new Float32Array(RIB_PTS*2), ribBir=new Float32Array(RIB_PTS*2),
+      ribCol=new Float32Array(RIB_PTS*2*3), ribRad=new Float32Array(RIB_PTS*2*3);
+ribGeo.setAttribute('position', new THREE.BufferAttribute(ribPos,3).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aDir', new THREE.BufferAttribute(ribDir,3).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aSide', new THREE.BufferAttribute(ribSide,1).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aBir', new THREE.BufferAttribute(ribBir,1).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aCol', new THREE.BufferAttribute(ribCol,3).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setAttribute('aRad', new THREE.BufferAttribute(ribRad,3).setUsage(THREE.DynamicDrawUsage));
+const ribIdx=new Uint32Array(RIB_PTS*6);
+ribGeo.setIndex(new THREE.BufferAttribute(ribIdx,1).setUsage(THREE.DynamicDrawUsage));
+ribGeo.setDrawRange(0,0);
+const ribMat=new THREE.ShaderMaterial({
+  // uCore: the strip's hot core colour. White for the arc bolt; the fire
+  // palette hands in a red-hot core so the trail reads red up close too
+  uniforms:{ uTime:{value:0}, fogNear:{value:1.5}, fogFar:{value:10.5}, uCore:{value:new THREE.Vector3(1.05,1.05,1.05)} },
+  vertexShader:
+'attribute vec3 aDir; attribute float aSide; attribute float aBir; attribute vec3 aCol; attribute vec3 aRad;\n'+
+'varying float vSide; varying float vAge; varying vec3 vCol; varying float vFog; varying float vWhip; varying float vDg;\n'+
+'uniform float uTime; uniform float fogNear; uniform float fogFar;\n'+
+'void main(){ vSide=aSide; vCol=aCol; vWhip=clamp(length(aRad)*14.0,0.0,1.0);\n'+
+'  float rawAge=clamp((uTime-aBir)/'+RIB_LIFE+', 0.0, 1.0);\n'+
+'  // DISTANCE-SCALED RETREAT: near sections age ~1.64x (the tuned quick\n'+
+'  // retreat, dead by ~0.55s); far sections live the full life - the\n'+
+'  // "many builds ago" long visible tail, restored where it reads\n'+
+'  float vDep0=-(viewMatrix*vec4(position,1.0)).z;\n'+
+'  float dg=smoothstep(1.2, 2.2, vDep0);\n'+
+'  vAge=clamp(rawAge*mix(1.64, 0.92, dg), 0.0, 1.0);\n'+
+'  vec3 right=vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);\n'+
+'  vec3 up=vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);\n'+
+'  float dxp=dot(aDir,right), dyp=dot(aDir,up);\n'+
+'  vec2 t2=vec2(dxp,dyp); float tl=max(0.0001,length(t2)); t2/=tl;\n'+
+'  vec2 perp=vec2(-t2.y,t2.x);\n'+
+'  // taper floor scales with camera distance: up close a 15% hair is\n'+
+'  // sub-pixel, so nearby tails only thin to 45%; far tails keep the hair\n'+
+'  float vDep=vDep0;\n'+
+'  float wMin=mix(0.45, 0.28, smoothstep(1.2, 2.2, vDep));\n'+   // far floor raised: 15% was sub-pixel at range
+'  // near the camera the shrink is FAST ease-in (big to small in ~0.1 of\n'+
+'  // life) - a slow taper right in front of the eye just reads as a small\n'+
+'  // trail. Far tails keep the leisurely 0.32 window.\n'+
+'  float win=mix(0.11, 0.32, smoothstep(1.2, 2.2, vDep));\n'+
+'  // the ease-in exponent is a NEAR effect only - it had leaked into the\n'+
+'  // far branch and sped up distant tapering that was never asked to change\n'+
+'  float expo=mix(0.65, 1.0, smoothstep(1.2, 2.2, vDep));\n'+
+'  float tt=pow(smoothstep(0.0, win, vAge), expo);\n'+
+'  float w='+RIB_HALFW+'*mix(1.0, wMin, tt);\n'+
+'  // CENTRIFUGAL whip: released from the spin, each point flings outward\n'+
+'  // along its birth radial - accelerating with age. Fling scales with the\n'+
+'  // local helix radius, so distant (wider) trail whips visibly in circles.\n'+
+'  vec3 wp=position + aRad*pow(vAge,1.1) + (right*perp.x + up*perp.y)*aSide*w;\n'+
+'  vec4 mv=viewMatrix*vec4(wp,1.0);\n'+
+'  vDg=dg;\n'+
+'  vFog=clamp((-mv.z-fogNear)/(fogFar-fogNear),0.0,1.0);\n'+
+'  gl_Position=projectionMatrix*mv; }',
+  fragmentShader:
+'uniform float uTime; uniform vec3 uCore;\n'+
+'varying float vSide; varying float vAge; varying vec3 vCol; varying float vFog; varying float vWhip; varying float vDg;\n'+
+'void main(){ if(vAge>=1.0) discard;\n'+
+'  float ay=abs(vSide);\n'+
+'  float body=1.0-smoothstep(0.72,0.95,ay);\n'+
+'  float halo=exp(-max(0.0,ay-0.95)*4.5)*0.4;\n'+
+'  float fade=pow(1.0-vAge, mix(2.6, 1.35, vDg));\n'+   // near: retreat plunge; far: the old lingering glow
+'  // solid at the LEADING edge, easing to translucency down the tail:\n'+
+'  // fresh ribbon burns near-opaque, the history behind it goes ghostly\n'+
+'  float lead=mix(1.0, mix(0.45, 0.75, vDg), smoothstep(0.0, 0.35, vAge));\n'+   // far plateau brighter
+'  // EMBER TIPS: the retreat fade was killing exactly the points the whip\n'+
+'  // flings - so whipped tips re-brighten as flying sparks before dying\n'+
+'  float tip=smoothstep(0.22, 0.5, vAge)*(1.0-vAge)*0.85*vWhip;\n'+   // embers ONLY where the whip flings - near trail fades monotonically, no dip-rise strobe
+'  float a=min(1.0,(body*1.6+halo))*max(lead*fade, tip)*(1.0-vFog*0.45);\n'+
+'  vec3 col=mix(uCore, vCol*1.6, smoothstep(0.08,0.55,ay));\n'+
+'  gl_FragColor=vec4(col*a, a); }',
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
+const ribMesh=new THREE.Mesh(ribGeo,ribMat); ribMesh.frustumCulled=false; worldGroup.add(ribMesh);
+function ribbonStart(shade){ const t={pts:[],shade,alive:true}; ribTrails.push(t); return t; }
+function ribbonPoint(t,x,y,z,rdx,rdy,rdz){
+  t.pts.push({x,y,z,rdx:rdx||0,rdy:rdy||0,rdz:rdz||0,b:performance.now()*0.001});
+  if(t.pts.length>260) t.pts.shift();   // hard bound per strand - the age
+  // prune is the normal path; this guards clock skew and volley stacking
+}
+let _ribHadContent=false;
+function syncRibbons(){
+  if(!ribTrails.length){
+    if(_ribHadContent){ ribGeo.setDrawRange(0,0); _ribHadContent=false; }
+    return;   // idle: no CPU rebuild, no buffer upload
+  }
+  const now=performance.now()*0.001;
+  let vi=0, ii=0;
+  for(let ti=ribTrails.length-1;ti>=0;ti--){
+    const t=ribTrails[ti];
+    while(t.pts.length && now-t.pts[0].b>RIB_LIFE) t.pts.shift();
+    if(!t.pts.length && !t.alive){ ribTrails.splice(ti,1); continue; }
+    const n=t.pts.length;
+    if(n<2) continue;
+    const base=vi/1;   // vertex index base (2 verts per point)
+    for(let k=0;k<n;k++){
+      if(vi+2>RIB_PTS*2) break;
+      const p0=t.pts[k];
+      const pa=t.pts[Math.max(0,k-1)], pb=t.pts[Math.min(n-1,k+1)];
+      let dx=pb.x-pa.x, dy=pb.y-pa.y, dz=pb.z-pa.z;
+      const dl=Math.hypot(dx,dy,dz)||1; dx/=dl; dy/=dl; dz/=dl;
+      for(const sd of [-1,1]){
+        const v3=vi*3;
+        ribPos[v3]=p0.x; ribPos[v3+1]=p0.y; ribPos[v3+2]=p0.z;
+        ribDir[v3]=dx; ribDir[v3+1]=dy; ribDir[v3+2]=dz;
+        ribSide[vi]=sd; ribBir[vi]=p0.b;
+        ribCol[v3]=t.shade[0]; ribCol[v3+1]=t.shade[1]; ribCol[v3+2]=t.shade[2];
+        ribRad[v3]=p0.rdx; ribRad[v3+1]=p0.rdy; ribRad[v3+2]=p0.rdz;
+        vi++;
+      }
+    }
+    const ptsWritten=(vi-base)/2;
+    for(let k=0;k<ptsWritten-1;k++){
+      const a2=base+k*2;
+      ribIdx[ii++]=a2; ribIdx[ii++]=a2+1; ribIdx[ii++]=a2+2;
+      ribIdx[ii++]=a2+1; ribIdx[ii++]=a2+3; ribIdx[ii++]=a2+2;
+    }
+  }
+  ribGeo.attributes.position.needsUpdate=true;
+  ribGeo.attributes.aDir.needsUpdate=true;
+  ribGeo.attributes.aSide.needsUpdate=true;
+  ribGeo.attributes.aBir.needsUpdate=true;
+  ribGeo.attributes.aCol.needsUpdate=true;
+  ribGeo.attributes.aRad.needsUpdate=true;
+  ribGeo.index.needsUpdate=true;
+  ribGeo.setDrawRange(0,ii);
+  _ribHadContent=ii>0;
+  ribMat.uniforms.uTime.value=now;
+  { const c=spellPal().core; ribMat.uniforms.uCore.value.set(c[0],c[1],c[2]); }
+  ribMat.uniforms.fogNear.value=scene.fog?scene.fog.near:1.5;
+  ribMat.uniforms.fogFar.value=scene.fog?scene.fog.far:10.5;
 }
 function wakePuff(x,y,z,n,spread){
   // a scatter of hanging wake slivers: magic residue that dissolves in place.
   // The replacement for every circle burst the arc bolt used to throw.
   for(let i=0;i<n;i++)
     wakeEmit(x+(Math.random()-0.5)*spread*2, y+(Math.random()-0.5)*spread*1.6, z+(Math.random()-0.5)*spread*2,
-      WAKE_SHADES[(Math.random()*3)|0], Math.random()*6.28, 0.03+Math.random()*0.024);
+      spellPal().wake[(Math.random()*3)|0], Math.random()*6.28, 0.016+Math.random()*0.012);
 }
 function spawnTrail(x,y,z,r,g,b){
   spawnP({x,y,z, vx:(Math.random()-0.5)*0.5, vy:(Math.random()-0.5)*0.5, vz:(Math.random()-0.5)*0.5,
@@ -6201,10 +7204,12 @@ function flowSteer(e){
   return [tx/l, tz/l];
 }
 function damageEnemy(e,d){
+  haptic(12);
   e.hp-=d; e.flash=1; SFX.hit(); hitstop=0.05;
   burst(e.x,0.5,e.z,0xc0392b,5,1.2);
   dmgNum(e.x,0.9*e.sc+0.2,e.z,d);
-  if(e.state==='idle') e.state='chase';
+  if(e.state==='idle'){ e.state='chase'; if(e.boss) bossEngage(e); }   // struck from afar: the bell still rings, and he comes
+  if(e.boss) e.hurtAgo=0;                                                // the kiting clock (see the boss charge block)
   // typed pain foley, throttled so rapid hits don't stack squeals
   if(e.hp>0 && (e.painT||0)<=0 && PAIN_FX[e.type]){
     e.painT=0.28;
@@ -6235,10 +7240,7 @@ function damageEnemy(e,d){
       clearStairChains();
     }
     if(e.boss){
-      showMsg('THE DUNGEON LORD FALLS',3,0xffd76a);
-      burst(e.x,0.6,e.z,0xd0a0ff,30,2.6); shake=0.6;
-      spawnPickup('gold',{x:e.x+0.3,z:e.z}); spawnPickup('gold',{x:e.x-0.3,z:e.z}); spawnPickup('gold',{x:e.x,z:e.z+0.3});
-      SFX.level();
+      lordFallBegin(e);                               // the long fall (see LORD FALL): the fanfare comes at its end
     }
     else if(e.type==='slime' && e.sc>0.5){
       const MINI={tex:'slime',hp:6,dmg:2,spd:2.1,xp:3,sc:0.42,ranged:false,kb:1.5};
@@ -6259,7 +7261,9 @@ function damageEnemy(e,d){
     if(e.lens){ worldGroup.remove(e.lens); e.lens.geometry.dispose(); e.lens=null; }
     if(e.torchT){ const ti=torches.indexOf(e.torchT); if(ti>=0) torches.splice(ti,1);
       worldGroup.remove(e.torchT.glow); }
-    corpses.push({x:e.x, z:e.z, type:e.type, life:0.45, sc:e.sc});
+    if(e.burnFl) extinguishBurnFlames(e);
+    if(e.boss) corpses.push({x:e.x, z:e.z, type:e.type, life:LORD_FALL_T, sc:e.sc, lord:true, wobT:Math.random()*9, fxT:0, rumT:0, ringT:0.3});
+    else corpses.push({x:e.x, z:e.z, type:e.type, life:0.45, sc:e.sc});
     enemies.splice(enemies.indexOf(e),1);
   }
 }
@@ -6272,17 +7276,19 @@ function syncHUD(){
   const hudVis = state.mode==='play';
   for(const el of [hpBg,hpFill,mpBg,mpFill,xpBg,xpFill,txtHP.mesh,txtMP.mesh,txtLV.mesh,
                    txtGold.mesh,txtFloor.mesh,txtPots.mesh,icoH,icoM,mmQuad]) el.visible=hudVis;
-  hpFill.scale.x=Math.max(0.001,P.hp/P.maxhp);
+  if(touchMode){ icoH.visible=icoM.visible=false; }   // mobile: the touch potion
+  // buttons (with their own counts and glows) own this - the desktop bottle
+  // cluster duplicating them bottom-center was pure clutter
+  hpFill.scale.x=Math.max(0.001,P.hp/P.maxhp)*HUD_WMUL;
   hpFill.material.color.setHex(P.poisonT>0 ? 0x57c96a : 0xc0392b);
-  mpFill.scale.x=Math.max(0.001,P.mp/P.maxmp);
-  xpFill.scale.x=Math.max(0.001,P.xp/xpNeed());
+  mpFill.scale.x=Math.max(0.001,P.mp/P.maxmp)*HUD_WMUL;
+  xpFill.scale.x=Math.max(0.001,P.xp/xpNeed())*HUD_WMUL;
   txtHP.set(P.hp+'/'+P.maxhp);
   txtMP.set(P.mp+'/'+P.maxmp);
   txtLV.set('LV '+P.lvl);
   txtGold.set('    '+P.gold);
   txtStats.set('STR '+P.str+'  DEX '+P.dex+'  VIT '+P.vit+'  ARM '+P.armor);
   txtStats.mesh.visible = bigMap && state.mode==='play';
-  txtNova.mesh.visible=false; // replaced by the nova crystal icon
   const boss=enemies.find(e=>e.boss);
   const showBoss=!!boss && boss.state!=='idle' && state.mode==='play';
   bossBg.visible=bossFill.visible=bossName.mesh.visible=showBoss;
@@ -6293,7 +7299,7 @@ function syncHUD(){
   txtFloor.set('FLOOR '+floorNum+' / 5');
   txtPots.mesh.visible=false;
   cntH.set(''+P.hpots); cntM.set(''+P.mpots);
-  const cvis = state.mode==='play' && !shopOpen;
+  const cvis = state.mode==='play' && !shopOpen && !touchMode;
   cntH.mesh.visible=cntM.mesh.visible=cvis;
   cntH.mesh.position.set(icoH.position.x, icoH.position.y-8, 0.4);
   cntM.mesh.position.set(icoM.position.x, icoM.position.y-8, 0.4);
@@ -6303,9 +7309,10 @@ function syncHUD(){
   icoHGlow.position.set(icoH.position.x, icoH.position.y, 0.14);
   icoMGlow.position.set(icoM.position.x, icoM.position.y, 0.14);
   if(touchMode){
-    txtKeys.set('  '+P.keys);
-    txtKeys.mesh.visible = P.keys>0;
-    icoK.visible = P.keys>0 && hudVis;
+    // mobile shows NO key counter: the key held in hand at a locked door is
+    // the whole interface - less chrome on a small screen
+    txtKeys.mesh.visible=false;
+    icoK.visible=false;
     for(const s of keyIcos) s.visible=false;
   } else {
     // one big key per key held: the pile IS the counter
@@ -6381,7 +7388,19 @@ function setIcons(){ icoH.material.map=TEX.hpotUI; icoM.material.map=TEX.mpotUI;
   for(const s of keyIcos){ s.material.map=TEX.key; s.material.needsUpdate=true; if(!s.parent) hud.add(s); } }
 
 let last=performance.now(), acc=0;
+// DIMENSION WATCHDOG: mobile browsers (Samsung especially) change the window
+// - URL bar collapse, rotation, zoom - without reliably firing resize or
+// visualViewport events. A missed resize leaves the scene rendering into a
+// stale-sized sub-rect with ghost buffer content beside it. Cheap per-frame
+// check: if reality disagrees with the last layout, force a full resize.
+function dimWatchdog(){
+  if(W!==window.innerWidth || H!==window.innerHeight ||
+     canvas.width!==Math.max(2,(W*DPR)|0) || canvas.height!==Math.max(2,(H*DPR)|0)){
+    resize();
+  }
+}
 function stepSim(rdt){
+  dimWatchdog();
   lockGraceT=Math.max(0, lockGraceT-rdt);
   // fixed 60 Hz simulation regardless of render rate: identical feel at 5, 22, or 60 fps
   acc+=Math.min(rdt,0.4);
@@ -6403,6 +7422,19 @@ function frame(now){
   const sx=(Math.random()-0.5)*shake*0.07, sy=(Math.random()-0.5)*shake*0.07;
   const eye=0.55 + ((keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD']||joyId>=0)&&state.mode==='play' ? Math.sin(P.bobT*2)*0.018 : 0);
   cam.position.set(P.x+sx, eye+sy, P.z+sx*0.6);
+  // ROAR RUMBLE: a faint vertical tremor only - no lateral jitter, no roll,
+  // deliberately small so nobody gets seasick. Fires wherever he roars:
+  // the menu AND the fight (stacks under the normal impact shake).
+  if((state.mode==='title'||state.mode==='gate'||state.mode==='play') && window._camRum>0){
+    if(window._camRumDelay>0) window._camRumDelay-=dt;
+    else{
+      window._camRum-=dt;
+      const pr=1-Math.max(0,window._camRum)/0.75;
+      const k=Math.sin(Math.PI*Math.min(1,pr));                  // swells in, dies out
+      const tR=performance.now()*0.001;
+      cam.position.y += (Math.sin(tR*31)*0.6+Math.sin(tR*47+1.7)*0.4)*0.011*k;
+    }
+  }
   cam.rotation.order='YXZ';
   cam.rotation.y=P.yaw+Math.PI; // face -z convention fix
   cam.rotation.x=P.pitch;
@@ -6413,8 +7445,26 @@ function frame(now){
       const gp=performance.now()*0.0016;
       gateArrow.material.opacity=0.35+0.45*(0.5+0.5*Math.sin(gp));      // slow pulse
       gateArrow.position.set(0,-192+5*Math.sin(gp*0.9),2);
-      // the versal breathes like candle-lit gold leaf
-      gateVersal.material.opacity=0.85+0.15*Math.sin(performance.now()*0.0013);
+      loadBg.visible=loadEdge.visible=loadFill.visible=loadTxt.mesh.visible=gateLoading;
+      if(gateLoading){
+        gateArrow.visible=false;                    // the chevron yields to the bar
+        loadEdge.position.set(0,-256,1.9); loadBg.position.set(0,-256,2);
+        loadFill.position.set(-166,-256,2.1);
+        loadFill.scale.x=Math.max(0.02, BAKE.done/Math.max(1,BAKE.total));
+        loadTxt.mesh.position.set(0,-288,2.1);
+        loadTxt.mesh.material.opacity=0.7+0.3*Math.sin(performance.now()*0.004);
+        if(BAKE.ready){
+          gateLoading=false; gateArrow.visible=true;
+          // hide NOW: this branch only runs in gate mode, so anything left
+          // visible here follows the player into the menu and the dungeon
+          loadBg.visible=loadEdge.visible=loadFill.visible=loadTxt.mesh.visible=false;
+          beginDescend();
+        }
+      }
+      // the versal stands still: burnished gold leaf, not a screen effect.
+      // (the old subtle "breathing" read as candlelight on the small plain B;
+      // on the sculpted letter it reads as a pulsing bug)
+      gateVersal.material.opacity=1;
       // the halo breathes; the flame itself is the game's shader, self-animated
       const ft=performance.now()*0.001;
       const fl=0.9+0.1*Math.sin(ft*11)+0.05*Math.sin(ft*23+1.7);
@@ -6457,6 +7507,7 @@ function frame(now){
         e.x=r2[0]; e.z=r2[1];
       }
     }
+    stepPillarTremble(tdt);
     P.yaw=Math.PI+Math.sin(titleT*0.13)*0.055;
     P.pitch=0.03+Math.sin(titleT*0.07)*0.012;
     // every so often the Lord roars in the distance - only once audio is unlocked
@@ -6471,6 +7522,14 @@ function frame(now){
           // announcement noticeable however deep the Lord has paced
           sfxDist=Math.max(0.30, distVol(bL.x,bL.z));
           try{ SFX.roar(); } finally { sfxDist=1; }
+          // his voice moves the stone: standing pillars tremble briefly -
+          // menu-only, visual-only (no fall, no shockwave, no pillar sfx)
+          for(const pl of pillars) if(pl.state==='up'){
+            // the roar SWELLS (~0.55s attack): stone answers the voice, it
+            // does not anticipate it - delay past the swell, then tremble
+            pl.trembleDelay=0.42+Math.random()*0.14;
+            pl.trembleT=0.5+Math.random()*0.25; pl.wobT=Math.random()*9; }
+          roarRumble();   // the view feels his voice too
         }
       } else window._roarT=0;   // hold at the ready until audio unlocks
     }
@@ -6491,6 +7550,7 @@ function frame(now){
     smallLines[0].mat.opacity=0.6+Math.sin(tnow2*4.2)*0.35;
     logoGlow.material.opacity=0.16+Math.sin(tnow2*1.7)*0.06;
   } else if(smallLines[0].mat.opacity!==1) smallLines[0].mat.opacity=1;
+  if(state.mode==='play') stepPillarTremble(Math.min(dt,0.05));
   syncMenu();
   syncFlames();
   syncLights(dt);
@@ -6510,68 +7570,126 @@ renderer.clearDepth();
 // ---------- touch controls (all GL, activates on first touch) ----------
 let touchMode=false, joyId=-1, lookId=-1, joyAX=0, joyAY=0, joyVX=0, joyVY=0, lastLX=0, lastLY=0;
 const touchButtons=[];
-function mkBtn(iconTex,size,fx){
-  const plate=uiSprite(texPlate(size,size,11),size,size); plate.renderOrder=24; plate.material.opacity=0.72;
+function mkBtn(iconTex,size,fx,round){
+  const plate=uiSprite(round?texPlateRound(size):texPlate(size,size,11),size,size); plate.renderOrder=24; plate.material.opacity=0.72;
   const ico=uiSprite(iconTex,size*0.62,size*0.62); ico.renderOrder=25;
   hud.add(plate); hud.add(ico);
   const b={w:size,h:size,fx,mesh:plate,ico,cx:0,cy:0};
   touchButtons.push(b); return b;
 }
+// the same glow treatment the PC HUD gives its potions: tinted soft light
+// behind each bottle, 2x the icon footprint, sitting under the icon layer
+const tGlowH=uiSprite(null,186,186), tGlowM=uiSprite(null,186,186);
+tGlowH.renderOrder=23; tGlowM.renderOrder=23;
+hud.add(tGlowH); hud.add(tGlowM);
 const touchCntH=new GLText(21,0xffffff,'center'), touchCntM=new GLText(21,0xffffff,'center');
 touchCntH.mesh.renderOrder=touchCntM.mesh.renderOrder=32;
 hud.add(touchCntH.mesh); hud.add(touchCntM.mesh);
 const joyBase=uiQuad(124,124,0x1a1a26,0.35), joyNub=uiQuad(48,48,0x8890a0,0.55);
 joyBase.renderOrder=24; joyNub.renderOrder=25; hud.add(joyBase); hud.add(joyNub);
-const btnAtk=mkBtn(weaponTex,80,()=>tryMelee());
-const btnSpell=mkBtn(null,62,()=>trySpell());
-const btnNova=mkBtn(null,62,()=>tryNova());
-const btnUse=mkBtn(null,62,()=>interact());
+const PHONE_UI=Math.min(window.innerWidth,window.innerHeight)<=500;
+const btnAtk=mkBtn(weaponTex,PHONE_UI?96:88,()=>tryMelee(),true);
+// the weapon texture is 96x162 - forced square it rendered SQUISHED. True
+// aspect, sized so the blade tip clears the plate's top rim a touch.
+// uiSprite geometry is PRE-SIZED (btnAtk.w*0.62 square): scale is a
+// MULTIPLIER, not pixels. Absolute values here made a ~2600-unit quad -
+// the invisible sword, the gray smear, the buried potion bottles.
+{ btnAtk.ico.scale.set(0.5/0.62, (0.5*162/96)/0.62, 1); btnAtk.icoDY=btnAtk.w*0.10; }
+const btnSpell=mkBtn(null,PHONE_UI?78:72,()=>trySpell(),true);
+const btnUse=mkBtn(null,PHONE_UI?72:68,()=>interact(),true);
 const btnHP=mkBtn(null,74,()=>drink('h')); btnHP.noPlate=true; btnHP.ico.scale.set(2.05,2.05,1);
 const btnMP=mkBtn(null,74,()=>drink('m')); btnMP.noPlate=true; btnMP.ico.scale.set(2.05,2.05,1);
 const btnPause=mkBtn(spriteTex(drawPauseIco,32),42,()=>{ if(state.mode==='play') enterPause(); });
 function layoutTouch(){
-  const R=VW/2-16, B2=-VH/2+16;
-  btnAtk.cx=R-64;  btnAtk.cy=B2+160;
-  btnUse.cx=R-64;  btnUse.cy=B2+240;
-  btnSpell.cx=R-160; btnSpell.cy=B2+110;
-  btnNova.cx=R-160;  btnNova.cy=B2+178;
-  btnHP.cx=-VW/2+56; btnHP.cy=B2+256;
-  btnMP.cx=-VW/2+56; btnMP.cy=B2+336;
-  btnPause.cx=-VW/2+42; btnPause.cy=VH/2-96;
-  joyBase.position.set(-VW/2+112, B2+150, 0.4);
+  const R=VW/2-16-SAFE.r, B2=-VH/2+16+SAFE.b;   // clear the notch and home bar
+  const PORT=VH>VW;   // orientation is dynamic - rotation re-runs this layout
+  // thumbs pivot at the held corners with limited reach - the action cluster
+  // arcs around the right pivot (sword nearest, spell inward along the arc,
+  // interact above). Portrait holds are one-handed and lower: the arc drops
+  // and tightens so everything stays inside the resting thumb's sweep.
+  if(PHONE_UI && !PORT){
+    btnAtk.cx=R-66;  btnAtk.cy=B2+150;
+    btnUse.cx=R-70;  btnUse.cy=B2+268;   // clear of the bigger sword: ~34u edge gap
+    btnSpell.cx=R-172; btnSpell.cy=B2+112;
+  } else if(PHONE_UI){          // phone PORTRAIT: low tight one-thumb arc
+    btnAtk.cx=R-62;   btnAtk.cy=B2+150;
+    btnSpell.cx=R-168; btnSpell.cy=B2+116;
+    btnUse.cx=R-98;   btnUse.cy=B2+252;
+  } else if(!PORT){
+    btnAtk.cx=R-72;   btnAtk.cy=B2+130;
+    btnSpell.cx=R-190; btnSpell.cy=B2+102;
+    btnUse.cx=R-108;  btnUse.cy=B2+242;
+  } else {                      // tablet PORTRAIT: arc rides a bit higher
+    btnAtk.cx=R-76;   btnAtk.cy=B2+170;
+    btnSpell.cx=R-198; btnSpell.cy=B2+138;
+    btnUse.cx=R-112;  btnUse.cy=B2+286;
+  }
+  // phone vs tablet: on a phone the thumbs anchor at the screen corners, so
+  // the potions climb higher and ANGLE INWARD along the left thumb's natural
+  // arc - two distinct diagonal targets instead of a vertical stack. Tablets
+  // keep the stack (hands float freer on a big slab).
+  // both devices get the inward potion arc (two diagonal targets along the
+  // left thumb's sweep); tablet radii are larger, and the arc clears the
+  // joystick below so drinking never means hunting over the stick
+  if(PHONE_UI && !PORT){
+    btnHP.cx=-VW/2+SAFE.l+64;  btnHP.cy=B2+300;
+    btnMP.cx=-VW/2+SAFE.l+126; btnMP.cy=B2+372;   // upper one tips toward center
+  } else if(PHONE_UI){          // phone portrait: arc hugs lower, tighter
+    btnHP.cx=-VW/2+SAFE.l+60;  btnHP.cy=B2+286;
+    btnMP.cx=-VW/2+SAFE.l+118; btnMP.cy=B2+352;
+  } else if(!PORT){
+    btnHP.cx=-VW/2+SAFE.l+68;  btnHP.cy=B2+312;
+    btnMP.cx=-VW/2+SAFE.l+142; btnMP.cy=B2+390;
+  } else {                      // tablet portrait
+    btnHP.cx=-VW/2+SAFE.l+72;  btnHP.cy=B2+330;
+    btnMP.cx=-VW/2+SAFE.l+148; btnMP.cy=B2+404;
+  }
+  btnPause.cx=VW/2-212; btnPause.cy=VH/2-90;   // left of the minimap plate with a ~24u gap
+  joyBase.position.set(-VW/2+SAFE.l+112, B2+150, 0.4);
 }
 function syncTouchUI(){
   layoutTouch();
   const show=touchMode && state.mode==='play' && !shopOpen;
   if(TEX.bolt && !btnSpell.ico.material.map){
-    btnSpell.ico.material.map=TEX.bolt; btnNova.ico.material.map=TEX.snow;
-    btnUse.ico.material.map=TEX.door; btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
+    btnSpell.ico.material.map=TEX.bolt;
+    btnUse.ico.material.map=TEX.handUI;   // the same hand the door prompt shows
+    btnHP.ico.material.map=TEX.hpotUI; btnMP.ico.material.map=TEX.mpotUI;
+    tGlowH.material.map=TEX.glow; tGlowH.material.color.setHex(0xff5a5a); tGlowH.material.needsUpdate=true;
+    tGlowM.material.map=TEX.glow; tGlowM.material.color.setHex(0x7ab0ff); tGlowM.material.needsUpdate=true;
     for(const b of touchButtons){ b.ico.material.needsUpdate=true; }
   }
   for(const b of touchButtons){
-    const vis = show && (b!==btnNova || P.lvl>=5);
+    const vis = show;
+    b.active=vis;   // hit-testing honors THIS: a hidden button must never eat a touch
     b.mesh.visible=vis && !b.noPlate; b.ico.visible=vis && !!b.ico.material.map;
-    b.mesh.position.set(b.cx,b.cy,0.4); b.ico.position.set(b.cx,b.cy,0.5);
+    b.mesh.position.set(b.cx,b.cy,0.4); b.ico.position.set(b.cx,b.cy+(b.icoDY||0),0.5);
   }
-  btnNova.ico.material.opacity = P.novaCool>0?0.3:1;
   touchCntH.mesh.visible=touchCntM.mesh.visible=show;
   touchCntH.set(''+P.hpots); touchCntM.set(''+P.mpots);
   touchCntH.mesh.position.set(btnHP.cx, btnHP.cy-11, 0.6);
   touchCntM.mesh.position.set(btnMP.cx, btnMP.cy-11, 0.6);
+  tGlowH.visible=btnHP.ico.visible && !!tGlowH.material.map;
+  tGlowM.visible=btnMP.ico.visible && !!tGlowM.material.map;
+  tGlowH.position.set(btnHP.cx, btnHP.cy, 0.42);
+  tGlowM.position.set(btnMP.cx, btnMP.cy, 0.42);
   joyBase.visible=show; joyNub.visible=show;
-  if(joyId>=0) joyNub.position.set(joyAX+joyVX*38, joyAY+joyVY*38, 0.5);
-  else joyNub.position.set(joyBase.position.x, joyBase.position.y, 0.5);
+  { const nr=PHONE_UI?38:46;
+    if(joyId>=0) joyNub.position.set(joyAX+joyVX*nr, joyAY+joyVY*nr, 0.5);
+  else joyNub.position.set(joyBase.position.x, joyBase.position.y, 0.5); }
 }
 function tpos(t){ return [(t.clientX-W/2)/UIS, (H/2-t.clientY)/UIS]; }
 function hitBtn(x,y){
   for(const b of touchButtons){
+    if(!b.active) continue;   // inactive buttons must never eat a touch:
+                              // a hidden button once made a silent dead square
+                              // where the look-drag never got the finger
     if(Math.abs(x-b.cx)<b.w/2+14 && Math.abs(y-b.cy)<b.h/2+14) return b;
   }
   return null;
 }
 function onTouchStart(ev){
   if(ev.preventDefault) ev.preventDefault();
-  touchMode=true;
+  if(!touchMode){ touchMode=true; layoutHUD(); }   // re-anchor the vitals for touch
   for(const t of ev.changedTouches){
     const [x,y]=tpos(t);
     if(state.mode==='title'||state.mode==='pause'){
@@ -6596,10 +7714,16 @@ function onTouchStart(ev){
       if(!bought && y<-138) closeShop();
       continue;
     }
+    // full map on touch: with it open, ANY tap closes it (the whole screen
+    // is the dismiss target); with it closed, a tap on the minimap opens it
+    if(bigMap){ bigMap=false; continue; }
+    { const mmx=VW/2-72, mmy=VH/2-90;
+      if(Math.abs(x-mmx)<80 && Math.abs(y-mmy)<80){ bigMap=true; continue; } }
     const b=hitBtn(x,y);
     if(b){ b.fx(); continue; }
     if(x<0 && joyId<0){ joyId=t.identifier; joyAX=x; joyAY=y; joyVX=0; joyVY=0; }
-    else if(lookId<0){ lookId=t.identifier; lastLX=t.clientX; lastLY=t.clientY; }
+    else if(lookId<0){ lookId=t.identifier; lastLX=t.clientX; lastLY=t.clientY;
+      lookT0=performance.now(); lookAcc=0; }   // tap candidate until it moves
   }
 }
 function onTouchMove(ev){
@@ -6617,12 +7741,14 @@ function onTouchMove(ev){
     }
     if(t.identifier===joyId){
       const [x,y]=tpos(t);
-      let jx=(x-joyAX)/52, jy=(y-joyAY)/52;
+      const jr=PHONE_UI?52:62;   // tablet thumbs sweep wider: finer analog
+      let jx=(x-joyAX)/jr, jy=(y-joyAY)/jr;
       const l=Math.hypot(jx,jy); if(l>1){ jx/=l; jy/=l; }
       joyVX=jx; joyVY=jy;
     } else if(t.identifier===lookId){
       const dx4=t.clientX-lastLX, dy4=t.clientY-lastLY;
       lastLX=t.clientX; lastLY=t.clientY;
+      lookAcc+=Math.abs(dx4)+Math.abs(dy4);
       if(dx4>220||dx4<-220||dy4>220||dy4<-220) continue; // touch glitch spike: resync, don't snap
       P.yaw  -= dx4*0.0048*OPT.sens;
       P.pitch -= dy4*0.00392*OPT.sens;
@@ -6639,7 +7765,16 @@ function onTouchEnd(ev){
       menuTouchBtn=null; menuTouchIdB=-1;
     }
     if(t.identifier===joyId){ joyId=-1; joyVX=0; joyVY=0; }
-    if(t.identifier===lookId) lookId=-1;
+    if(t.identifier===lookId){
+      lookId=-1;
+      // TAP on the look side (short + still): context action. The hand
+      // prompt decides - interact when something's in reach, else swing.
+      // Real camera drags exceed 14px instantly, so they never trigger this.
+      if(performance.now()-lookT0<280 && lookAcc<=14 &&
+         state.mode==='play' && !shopOpen && !bigMap){
+        if(handKind!=='') interact(); else tryMelee();
+      }
+    }
   }
 }
 canvas.addEventListener('touchstart',onTouchStart,{passive:false});
@@ -6660,6 +7795,22 @@ function texPanel(w,h){
   const riv=(px2,py2)=>{ x.fillStyle='#0b0b11'; x.beginPath(); x.arc(px2,py2,4,0,7); x.fill();
     x.fillStyle='#5c5c6c'; x.beginPath(); x.arc(px2-1.2,py2-1.2,2.2,0,7); x.fill(); };
   riv(11,11); riv(w-11,11); riv(11,h-11); riv(w-11,h-11);
+  return toTex(c);
+}
+function texPlateRound(d){
+  // circular action-button plate: the square texPlate language (dark stone
+  // fill, steel rim, soft top highlight) wrapped in a circle
+  const [c,x]=cnv(d,d);
+  x.beginPath(); x.arc(d/2,d/2,d/2-1.5,0,6.2832); x.closePath();
+  x.save(); x.clip();
+  for(let j=0;j<d;j+=2)for(let i=0;i<d;i+=2){
+    const v=15+((Math.random()*9)|0);
+    x.fillStyle='rgb('+v+','+v+','+(v+7)+')'; x.fillRect(i,j,2,2);
+  }
+  x.restore();
+  x.strokeStyle='#4a4a5c'; x.lineWidth=2.5; x.stroke();
+  x.strokeStyle='rgba(255,255,255,0.12)'; x.lineWidth=1;
+  x.beginPath(); x.arc(d/2,d/2,d/2-4,Math.PI*1.05,Math.PI*1.95); x.stroke();
   return toTex(c);
 }
 function texPlate(w,h,cut,hollow){
@@ -6739,7 +7890,6 @@ const skinBoss=uiSprite(texPlate(424,30,10,true),424,30); skinBoss.renderOrder=1
 const skinHP=uiSprite(texPlate(224,24,9),224,24); skinHP.renderOrder=18;
 const skinMP=uiSprite(texPlate(174,24,9),174,24); skinMP.renderOrder=18;
 const icoGold=uiSprite(null,20,20); icoGold.renderOrder=22;
-const novaIco=uiSprite(null,22,22); novaIco.renderOrder=22;
 const handIco=uiSprite(null,50,50); handIco.renderOrder=22;
 const handKey=uiSprite(null,26,26); handKey.renderOrder=23;
 const handLbl=new GLText(15,0xcfd6e0,'center'); handLbl.mesh.renderOrder=23;
@@ -6776,7 +7926,7 @@ const titleLogo=uiSprite(texLogo(),656,168); titleLogo.renderOrder=31;
 const logoGlow=uiSprite(texGlow(),980,420); logoGlow.renderOrder=30;
 logoGlow.material.blending=THREE.AdditiveBlending; logoGlow.material.depthWrite=false;
 logoGlow.material.color.setHex(0xe8c33a); logoGlow.material.opacity=0.0;
-for(const m of [skinMM,skinBoss,skinHP,skinMP,icoHeart,icoCrys,icoGold,novaIco,handIco,handKey,handLbl.mesh,keyHand,moodV,logoGlow,titleLogo]) hud.add(m);
+for(const m of [skinMM,skinBoss,skinHP,skinMP,icoHeart,icoCrys,icoGold,handIco,handKey,handLbl.mesh,keyHand,moodV,logoGlow,titleLogo]) hud.add(m);
 shopBg.material.map=texPanel(528,404);
 tipBg.material.map=texPanel(252,178); tipBg.material.needsUpdate=true;
 for(const el of [tipBg,tipTitle.mesh,tipChev.mesh,tipPrice.mesh]) hud.add(el);
@@ -6798,10 +7948,10 @@ function syncTheme(){
   skinMM.position.set(mmQuad.position.x, mmQuad.position.y, -0.5);
   skinBoss.visible=bossBg.visible;
   skinBoss.position.set(bossBg.position.x, bossBg.position.y+6, -0.5);
-  skinHP.visible=inPlay; skinHP.position.set(hpBg.position.x, hpBg.position.y, -0.4);
-  skinMP.visible=inPlay; skinMP.position.set(mpBg.position.x, mpBg.position.y, -0.4);
-  icoHeart.visible=inPlay; icoHeart.position.set(hpBg.position.x-100, hpBg.position.y, 0.25);
-  icoCrys.visible=inPlay; icoCrys.position.set(mpBg.position.x-75, mpBg.position.y, 0.25);
+  skinHP.visible=inPlay; skinHP.position.set(hpBg.position.x, hpBg.position.y, -0.4); skinHP.scale.x=HUD_WMUL;
+  skinMP.visible=inPlay; skinMP.position.set(mpBg.position.x, mpBg.position.y, -0.4); skinMP.scale.x=HUD_WMUL;
+  icoHeart.visible=inPlay; icoHeart.position.set(hpBg.position.x-100*HUD_WMUL, hpBg.position.y, 0.25);
+  icoCrys.visible=inPlay; icoCrys.position.set(mpBg.position.x-75*HUD_WMUL, mpBg.position.y, 0.25);
   if(!icoGold.material.map && TEX.gold){ icoGold.material.map=TEX.gold; icoGold.material.needsUpdate=true; }
   icoGold.visible=inPlay;
   icoGold.position.set(txtGold.mesh.position.x+9, txtGold.mesh.position.y+8, 0.25);
@@ -6821,12 +7971,9 @@ function syncTheme(){
     handIco.position.set(0,-72,0.3);
     handKey.position.set(30,-62,0.35);
   }
-  if(!novaIco.material.map && TEX.snow){ novaIco.material.map=TEX.snow; novaIco.material.needsUpdate=true; }
-  novaIco.visible = inPlay && P.lvl>=5;
-  novaIco.material.opacity = P.novaCool>0 ? 0.28 : 1;
-  novaIco.position.set(txtNova.mesh.position.x+11, txtNova.mesh.position.y+8, 0.25);
   titleLogo.visible = (state.mode==='title'||state.mode==='pause') && !optOpen;
-  const logoY = state.mode==='pause' ? 134 : 96;
+  const _tUp=Math.min(Math.max(0,VH/2-270)*0.45, Math.max(0,VH/2-160));   // title rises on tall screens
+  const logoY = state.mode==='pause' ? 134 : Math.min(96+_tUp, VH/2-64);
   titleLogo.position.set(0,logoY,1.1);
   logoGlow.visible = titleLogo.visible;
   logoGlow.position.set(0,logoY,1.05);
@@ -6839,8 +7986,10 @@ function syncTheme(){
 // ============================================================
 // TEMPORARY TEST FLAG: descend drops straight to TEST_FLOOR (with the LV10
 // loadout). Set TEST_BOSS_JUMP=false to restore the normal run from floor 1.
-const TEST_BOSS_JUMP=false;
-const TEST_FLOOR=3;          // currently: floor 3, to hear 'Lunatic' in place
+const TEST_BOSS_JUMP=false;  // OFF: the normal run from floor 1 (true: descend drops straight into the boss arena)
+const TEST_FLOOR=5;          // the Lord's floor
+const TEST_FIRE=0;           // TEST ONLY: start every run with witchfire at this level (0 = off). Independent of TEST_BOSS_JUMP.
+const TEST_BOSS_HP=0;        // TEST ONLY (with TEST_BOSS_JUMP): the Lord's hp, for hammering his death sequence. 0 = normal 950.
 // ============================================================
 // ---------- boot ----------
 initTex(); setIcons(); resize();
