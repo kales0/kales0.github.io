@@ -1637,6 +1637,7 @@ uniform float uLightning;   // flash intensity 0..1
 uniform vec4  uViewport;    // width, height (css px), dpr, unused
 uniform vec4  uCamera;      // worldLeft, worldTop, worldWidth, worldHeight
 uniform vec4  uSeaCam;      // eye height, ship plane distance, -, -
+uniform float uDiag;        // 1: diagnostics (?diag) — shaders paint faults in flat colours
 #endif
 `,QS=`// Sky as a function of view direction. Used by the sky pass and by the ocean's reflected rays so
 // the two always agree. Requires frame.glsl and the \`sky\` uniform group.
