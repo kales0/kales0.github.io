@@ -2117,6 +2117,13 @@ precision highp float;
 in vec2 aPosition;
 in vec2 aUV;
 
+// Tile-based phone GPUs (Adreno) run a separate position-only binning pass over this shader.
+// The wave sums let its result drift from the render pass's by a pixel or so, and small
+// displaced triangles then fall outside their bin and are never drawn (holes at the screen's
+// edges and along thin far rows, moving with the swell; a flat grid or a coarse one showed
+// none). Invariance forces both passes to the same arithmetic.
+invariant gl_Position;
+
 out vec3 vPos;
 out vec3 vNormal;
 out float vFoam;
